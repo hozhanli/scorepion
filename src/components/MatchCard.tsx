@@ -21,9 +21,9 @@
  * Dependencies dropped: `LinearGradient`, `useTheme`, ad-hoc shadow maps,
  * `Colors.palette.violet` / `gold` / `blue` / `blueSoft`.
  */
-import React, { useState, useEffect, memo } from 'react';
-import { View, Text, StyleSheet, Image, Pressable } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
+import React, { useState, useEffect, memo } from "react";
+import { View, Text, StyleSheet, Image, Pressable } from "react-native";
+import { Ionicons } from "@expo/vector-icons";
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
@@ -32,20 +32,15 @@ import Animated, {
   withSequence,
   Easing,
   useReducedMotion,
-} from 'react-native-reanimated';
-import Colors, { accent, radii } from '@/constants/colors';
-import { useTheme } from '@/contexts/ThemeContext';
-import { Match } from '@/lib/mock-data';
-import { Prediction } from '@/lib/storage';
-import {
-  formatLocalTime,
-  formatLocalDate,
-  formatCountdown,
-  getTimeUntil,
-} from '@/lib/datetime';
-import { PressableScale } from '@/components/ui/PressableScale';
-import { haptics } from '@/lib/motion';
-import { useLanguage } from '@/contexts/LanguageContext';
+} from "react-native-reanimated";
+import Colors, { accent, radii, textRoleLight } from "@/constants/colors";
+import { useTheme } from "@/contexts/ThemeContext";
+import { Match } from "@/lib/mock-data";
+import { Prediction } from "@/lib/storage";
+import { formatLocalTime, formatLocalDate, formatCountdown, getTimeUntil } from "@/lib/datetime";
+import { PressableScale } from "@/components/ui/PressableScale";
+import { haptics } from "@/lib/motion";
+import { useLanguage } from "@/contexts/LanguageContext";
 
 interface MatchCardProps {
   match: Match;
@@ -58,12 +53,12 @@ interface MatchCardProps {
 // Countdown hook
 
 function useCountdown(kickoff: string, status: string) {
-  const [label, setLabel] = useState('');
+  const [label, setLabel] = useState("");
   useEffect(() => {
-    if (status !== 'upcoming') return;
+    if (status !== "upcoming") return;
     const update = () => {
       const timeUntil = getTimeUntil(kickoff);
-      setLabel(timeUntil <= 0 ? 'Soon' : formatCountdown(timeUntil));
+      setLabel(timeUntil <= 0 ? "Soon" : formatCountdown(timeUntil));
     };
     update();
     const id = setInterval(update, 60_000);
@@ -98,13 +93,7 @@ function LivePulseDot() {
 // ─────────────────────────────────────────────────────────────────────────────
 // Team logo well — neutral surface, no gradient ring
 
-function TeamLogo({
-  logo,
-  shortName,
-}: {
-  logo?: string;
-  shortName: string;
-}) {
+function TeamLogo({ logo, shortName }: { logo?: string; shortName: string }) {
   const { surface, textRole } = useTheme();
   if (logo) {
     return (
@@ -135,30 +124,23 @@ function PredictionPill({
   onTap?: () => void;
 }) {
   const { surface, textRole } = useTheme();
-  const isFinished = match.status === 'finished';
-  let outcome: 'exact' | 'result' | 'miss' | 'pending' = 'pending';
+  const isFinished = match.status === "finished";
+  let outcome: "exact" | "result" | "miss" | "pending" = "pending";
   const pts = prediction.points;
 
   if (isFinished && match.homeScore !== null && match.awayScore !== null) {
-    if (
-      prediction.homeScore === match.homeScore &&
-      prediction.awayScore === match.awayScore
-    ) {
-      outcome = 'exact';
+    if (prediction.homeScore === match.homeScore && prediction.awayScore === match.awayScore) {
+      outcome = "exact";
     } else {
       const p =
         prediction.homeScore > prediction.awayScore
-          ? 'H'
+          ? "H"
           : prediction.homeScore < prediction.awayScore
-          ? 'A'
-          : 'D';
+            ? "A"
+            : "D";
       const a =
-        match.homeScore > match.awayScore
-          ? 'H'
-          : match.homeScore < match.awayScore
-          ? 'A'
-          : 'D';
-      outcome = p === a ? 'result' : 'miss';
+        match.homeScore > match.awayScore ? "H" : match.homeScore < match.awayScore ? "A" : "D";
+      outcome = p === a ? "result" : "miss";
     }
   }
 
@@ -168,27 +150,27 @@ function PredictionPill({
   // sub-3:1 for the glyph — this brings it comfortably above 4.5:1.
   const cfg = {
     exact: {
-      bg: 'rgba(0, 166, 81, 0.12)',
+      bg: "rgba(0, 166, 81, 0.12)",
       color: Colors.palette.emeraldDeep,
-      icon: 'star' as const,
+      icon: "star" as const,
       label: `Exact +${pts ?? 10}`,
     },
     result: {
-      bg: 'rgba(0, 166, 81, 0.12)',
+      bg: "rgba(0, 166, 81, 0.12)",
       color: Colors.palette.emeraldDeep,
-      icon: 'checkmark-circle' as const,
-      label: `Correct${pts ? ` +${pts}` : ''}`,
+      icon: "checkmark-circle" as const,
+      label: `Correct${pts ? ` +${pts}` : ""}`,
     },
     miss: {
       bg: surface[2],
       color: textRole.tertiary,
-      icon: 'close-circle' as const,
-      label: 'No points',
+      icon: "close-circle" as const,
+      label: "No points",
     },
     pending: {
       bg: surface[2],
       color: textRole.secondary,
-      icon: 'lock-closed' as const,
+      icon: "lock-closed" as const,
       label: `Locked ${prediction.homeScore}–${prediction.awayScore}`,
     },
   }[outcome];
@@ -200,7 +182,7 @@ function PredictionPill({
     if (!reduceMotion) {
       pillScale.value = withSequence(
         withTiming(1.12, { duration: 120 }),
-        withTiming(1, { duration: 130 })
+        withTiming(1, { duration: 130 }),
       );
     }
     await haptics.light?.().catch(() => {});
@@ -232,12 +214,11 @@ export const MatchCard = memo(function MatchCard({
 }: MatchCardProps) {
   const { t, tt } = useLanguage();
   const { surface, border, textRole } = useTheme();
-  const isLive = match.status === 'live';
-  const isFinished = match.status === 'finished';
+  const isLive = match.status === "live";
+  const isFinished = match.status === "finished";
   const countdown = useCountdown(match.kickoff, match.status);
   const timeUntilMs = getTimeUntil(match.kickoff);
-  const isUrgent =
-    !isLive && !isFinished && timeUntilMs > 0 && timeUntilMs < 3_600_000;
+  const isUrgent = !isLive && !isFinished && timeUntilMs > 0 && timeUntilMs < 3_600_000;
 
   // Determine threshold windows for countdown display
   const isWithin5Min = timeUntilMs > 0 && timeUntilMs < 300_000; // < 5 minutes
@@ -252,19 +233,19 @@ export const MatchCard = memo(function MatchCard({
     const timeUntil = getTimeUntil(match.kickoff);
     const diffDays = Math.floor(timeUntil / 86_400_000);
     if (diffDays < 0) return formatLocalDate(match.kickoff);
-    if (diffDays === 0) return 'Today';
-    if (diffDays === 1) return 'Tomorrow';
+    if (diffDays === 0) return "Today";
+    if (diffDays === 1) return "Tomorrow";
     return formatLocalDate(match.kickoff);
   })();
 
   // Build a rich accessibility label
   const homeTeamName = match.homeTeam?.name || match.homeTeam?.shortName || t.league.team;
   const awayTeamName = match.awayTeam?.name || match.awayTeam?.shortName || t.league.team;
-  const leagueName = match.league?.name || '—';
+  const leagueName = match.league?.name || "—";
 
-  let statusLabel = '';
-  let scoreLabel = '';
-  let timeLabel = '';
+  let statusLabel = "";
+  let scoreLabel = "";
+  let timeLabel = "";
 
   if (isLive) {
     statusLabel = `${t.matches.nowLive}`;
@@ -280,12 +261,19 @@ export const MatchCard = memo(function MatchCard({
       scoreLabel = `${match.homeScore}–${match.awayScore}`;
     }
   } else {
-    statusLabel = 'Upcoming';
+    statusLabel = "Upcoming";
     timeLabel = `${kickoffDay} ${kickoffTime}`;
   }
 
-  const accessibilityLabelParts = [homeTeamName, scoreLabel, awayTeamName, leagueName, statusLabel, timeLabel].filter(Boolean);
-  const fullAccessibilityLabel = accessibilityLabelParts.join(', ');
+  const accessibilityLabelParts = [
+    homeTeamName,
+    scoreLabel,
+    awayTeamName,
+    leagueName,
+    statusLabel,
+    timeLabel,
+  ].filter(Boolean);
+  const fullAccessibilityLabel = accessibilityLabelParts.join(", ");
 
   return (
     <View>
@@ -313,26 +301,20 @@ export const MatchCard = memo(function MatchCard({
               },
             ]}
           >
-            <Text
-              style={[
-                styles.leagueName,
-                { color: textRole.secondary },
-              ]}
-              numberOfLines={1}
-            >
-              {match.league?.name || '—'}
+            <Text style={[styles.leagueName, { color: textRole.secondary }]} numberOfLines={1}>
+              {match.league?.name || "—"}
             </Text>
           </View>
           <View style={styles.metaRight}>
             {isLive ? (
               <View style={styles.liveBadge}>
                 <LivePulseDot />
-                <Text style={styles.liveText}>{t.matches.nowLive} {match.minute ?? 0}&apos;</Text>
+                <Text style={styles.liveText}>
+                  {t.matches.nowLive} {match.minute ?? 0}&apos;
+                </Text>
               </View>
             ) : isFinished ? (
-              <Text style={[styles.metaText, { color: textRole.tertiary }]}>
-                {t.matches.ft}
-              </Text>
+              <Text style={[styles.metaText, { color: textRole.tertiary }]}>{t.matches.ft}</Text>
             ) : (
               <Text style={[styles.metaText, { color: textRole.tertiary }]}>
                 {kickoffDay}, {kickoffTime}
@@ -348,8 +330,13 @@ export const MatchCard = memo(function MatchCard({
               logo={match.homeTeam?.logo}
               shortName={match.homeTeam?.shortName || match.homeTeam?.name || t.league.team}
             />
-            <Text style={[styles.teamName, { color: textRole.primary }]} numberOfLines={1}>
-              {match.homeTeam?.shortName || match.homeTeam?.name || t.league.team}
+            <Text
+              style={[styles.teamName, { color: textRole.primary }]}
+              numberOfLines={2}
+              adjustsFontSizeToFit
+              minimumFontScale={0.8}
+            >
+              {match.homeTeam?.name || match.homeTeam?.shortName || t.league.team}
             </Text>
           </View>
 
@@ -371,7 +358,7 @@ export const MatchCard = memo(function MatchCard({
                 {isWithin5Min && countdown ? (
                   <>
                     <Text style={[styles.scoreTime, { color: accent.streak }]}>
-                      {countdown === 'Soon' ? 'Soon' : countdown}
+                      {countdown === "Soon" ? "Soon" : countdown}
                     </Text>
                   </>
                 ) : isWithin1Hour && countdown ? (
@@ -385,12 +372,7 @@ export const MatchCard = memo(function MatchCard({
                   </>
                 ) : isWithin24Hours && !isBeyond24Hours && countdown ? (
                   <>
-                    <Text
-                      style={[
-                        styles.scoreTime,
-                        { fontSize: 16, color: textRole.primary },
-                      ]}
-                    >
+                    <Text style={[styles.scoreTime, { fontSize: 16, color: textRole.primary }]}>
                       {tt(t.matches.startsIn, { time: countdown })}
                     </Text>
                     <Text style={[styles.scoreCaption, { color: textRole.tertiary }]}>
@@ -416,8 +398,13 @@ export const MatchCard = memo(function MatchCard({
               logo={match.awayTeam?.logo}
               shortName={match.awayTeam?.shortName || match.awayTeam?.name || t.league.team}
             />
-            <Text style={[styles.teamName, { color: textRole.primary }]} numberOfLines={1}>
-              {match.awayTeam?.shortName || match.awayTeam?.name || t.league.team}
+            <Text
+              style={[styles.teamName, { color: textRole.primary }]}
+              numberOfLines={2}
+              adjustsFontSizeToFit
+              minimumFontScale={0.8}
+            >
+              {match.awayTeam?.name || match.awayTeam?.shortName || t.league.team}
             </Text>
           </View>
         </View>
@@ -430,9 +417,9 @@ export const MatchCard = memo(function MatchCard({
         ) : !isFinished && !isLive ? (
           <View style={styles.bottomRow}>
             <View style={styles.ctaPill}>
-              <Ionicons name="flash" size={12} color="#FFFFFF" />
+              <Ionicons name="flash" size={12} color={textRoleLight.inverse} />
               <Text style={styles.ctaText}>{t.match.predict}</Text>
-              <Ionicons name="arrow-forward" size={11} color="#FFFFFF" />
+              <Ionicons name="arrow-forward" size={11} color={textRoleLight.inverse} />
             </View>
           </View>
         ) : null}
@@ -456,9 +443,9 @@ const styles = StyleSheet.create({
 
   // Meta row
   metaRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
     marginBottom: 16,
   },
   leagueChip: {
@@ -467,34 +454,34 @@ const styles = StyleSheet.create({
     borderRadius: radii.xs,
     borderWidth: 1,
     flexShrink: 1,
-    maxWidth: '62%',
+    maxWidth: "62%",
   },
   leagueName: {
     fontSize: 13,
-    fontFamily: 'Inter_600SemiBold',
+    fontFamily: "Inter_600SemiBold",
     letterSpacing: 0.2,
   },
   metaRight: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: 8,
     marginLeft: 12,
   },
   metaText: {
     fontSize: 12,
-    fontFamily: 'Inter_500Medium',
+    fontFamily: "Inter_500Medium",
     letterSpacing: 0.1,
     flexShrink: 1,
   },
   liveBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: 5,
-    backgroundColor: 'rgba(239, 68, 68, 0.10)',
+    backgroundColor: "rgba(239, 68, 68, 0.10)",
     paddingHorizontal: 10,
     paddingVertical: 4,
     borderRadius: 10,
-    alignSelf: 'flex-start',
+    alignSelf: "flex-start",
   },
   liveDot: {
     width: 6,
@@ -504,27 +491,27 @@ const styles = StyleSheet.create({
   },
   liveText: {
     fontSize: 11,
-    fontFamily: 'Inter_700Bold',
+    fontFamily: "Inter_700Bold",
     color: accent.alert,
     letterSpacing: 0.3,
   },
 
   // Match row
   matchRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
   },
   teamSide: {
     flex: 1,
-    alignItems: 'center',
+    alignItems: "center",
     gap: 10,
   },
   teamLogoWrap: {
     width: 52,
     height: 52,
     borderRadius: 26,
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
   },
   teamLogoImg: {
     width: 36,
@@ -534,55 +521,54 @@ const styles = StyleSheet.create({
     width: 52,
     height: 52,
     borderRadius: 26,
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
   },
   teamLogoInitial: {
     fontSize: 20,
-    fontFamily: 'Inter_700Bold',
+    fontFamily: "Inter_700Bold",
   },
   teamName: {
     fontSize: 13,
-    fontFamily: 'Inter_700Bold',
-    textAlign: 'center',
-    maxWidth: 96,
+    fontFamily: "Inter_700Bold",
+    textAlign: "center",
   },
 
   // Score area
   scoreArea: {
     paddingHorizontal: 8,
-    alignItems: 'center',
+    alignItems: "center",
     minWidth: 88,
     gap: 4,
   },
   score: {
     fontSize: 26,
-    fontFamily: 'Inter_700Bold',
+    fontFamily: "Inter_700Bold",
     letterSpacing: -0.4,
   },
   scoreTime: {
     fontSize: 20,
-    fontFamily: 'Inter_700Bold',
+    fontFamily: "Inter_700Bold",
     letterSpacing: -0.3,
   },
   scoreCaption: {
     fontSize: 11,
-    fontFamily: 'Inter_500Medium',
+    fontFamily: "Inter_500Medium",
   },
   countdownRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: 4,
   },
 
   // Bottom row
   bottomRow: {
     marginTop: 16,
-    alignItems: 'center',
+    alignItems: "center",
   },
   predPill: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: 6,
     paddingHorizontal: 14,
     paddingVertical: 6,
@@ -590,12 +576,12 @@ const styles = StyleSheet.create({
   },
   predPillText: {
     fontSize: 12,
-    fontFamily: 'Inter_600SemiBold',
+    fontFamily: "Inter_600SemiBold",
   },
   ctaPill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
     gap: 6,
     paddingHorizontal: 16,
     paddingVertical: 8,
@@ -604,8 +590,8 @@ const styles = StyleSheet.create({
   },
   ctaText: {
     fontSize: 12,
-    fontFamily: 'Inter_700Bold',
-    color: '#FFFFFF',
+    fontFamily: "Inter_700Bold",
+    color: textRoleLight.inverse,
   },
 });
 

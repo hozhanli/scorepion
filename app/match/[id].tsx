@@ -21,7 +21,7 @@ import { useLocalSearchParams, router } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import Animated, { FadeInDown, FadeIn, ZoomIn } from "react-native-reanimated";
 
-import Colors, { accent, radii, type as typeTok } from "@/constants/colors";
+import Colors, { accent, radii, type as typeTok, textRoleLight } from "@/constants/colors";
 import {
   GradientHero,
   PressableScale,
@@ -151,7 +151,7 @@ function H2HMatchRow({ match, index }: { match: H2HMatch; index: number }) {
               style={[
                 h2hStyles.scorePillText,
                 { color: themeTextRole.primary },
-                homeWin && { color: "#fff" },
+                homeWin && { color: textRoleLight.inverse },
               ]}
             >
               {match.homeScore}
@@ -169,7 +169,7 @@ function H2HMatchRow({ match, index }: { match: H2HMatch; index: number }) {
               style={[
                 h2hStyles.scorePillText,
                 { color: themeTextRole.primary },
-                awayWin && { color: "#fff" },
+                awayWin && { color: textRoleLight.inverse },
               ]}
             >
               {match.awayScore}
@@ -218,6 +218,7 @@ export default function MatchScreen() {
   const [submitted, setSubmitted] = useState(!!existingPrediction);
   const [activeSection, setActiveSection] = useState<SectionKey>("prediction");
   const [kickoffCountdown, setKickoffCountdown] = useState("");
+  const [pointsExpanded, setPointsExpanded] = useState(false);
 
   const { data: socialProof } = useCommunityPicks(id);
   const { data: fixtureEvents } = useFixtureEvents(id);
@@ -385,9 +386,11 @@ export default function MatchScreen() {
             isLive && styles.heroTeamNameLive,
             !isLive && { color: themeTextRole.primary },
           ]}
-          numberOfLines={1}
+          numberOfLines={2}
+          adjustsFontSizeToFit
+          minimumFontScale={0.75}
         >
-          {match.homeTeam.shortName || match.homeTeam.name}
+          {match.homeTeam.name || match.homeTeam.shortName}
         </Text>
         {_homeTeamStats && _homeTeamStats.data && _homeTeamStats.data[0] && (
           <FormStrip form={_homeTeamStats.data[0].form} />
@@ -473,9 +476,11 @@ export default function MatchScreen() {
             isLive && styles.heroTeamNameLive,
             !isLive && { color: themeTextRole.primary },
           ]}
-          numberOfLines={1}
+          numberOfLines={2}
+          adjustsFontSizeToFit
+          minimumFontScale={0.75}
         >
-          {match.awayTeam.shortName || match.awayTeam.name}
+          {match.awayTeam.name || match.awayTeam.shortName}
         </Text>
         {_awayTeamStats && _awayTeamStats.data && _awayTeamStats.data[0] && (
           <FormStrip form={_awayTeamStats.data[0].form} />
@@ -506,7 +511,11 @@ export default function MatchScreen() {
             ]}
           />
           <View style={styles.heroMetaInline}>
-            <Ionicons name="today" size={11} color={isLive ? "#fff" : themeAccent.primary} />
+            <Ionicons
+              name="today"
+              size={11}
+              color={isLive ? textRoleLight.inverse : themeAccent.primary}
+            />
             <Text
               style={[
                 styles.heroMetaStrong,
@@ -544,7 +553,7 @@ export default function MatchScreen() {
                           : "trending-up"
               }
               size={11}
-              color={isLive ? "#fff" : themeAccent.primary}
+              color={isLive ? textRoleLight.inverse : themeAccent.primary}
             />
             <Text
               style={[
@@ -697,7 +706,14 @@ export default function MatchScreen() {
                         {homeScore}
                       </Text>
                     </View>
-                    <Text style={[styles.predictDash, { color: themeTextRole.tertiary }]}>—</Text>
+                    <Text
+                      style={[
+                        styles.predictDash,
+                        { color: themeTextRole.tertiary, paddingBottom: 0 },
+                      ]}
+                    >
+                      —
+                    </Text>
                     <View style={styles.predictTeamCol}>
                       <Text
                         style={[styles.predictTeamLabel, { color: themeTextRole.tertiary }]}
@@ -757,10 +773,17 @@ export default function MatchScreen() {
               </>
             ) : (
               <>
-                <View style={styles.predictCardClean}>
+                <View
+                  style={[
+                    styles.predictCardClean,
+                    { backgroundColor: themeSurface[0], borderColor: themeBorder.subtle },
+                  ]}
+                >
                   {/* Header */}
                   <View style={styles.predictHeaderClean}>
-                    <Text style={styles.predictLabelClean}>{t.match.yourPrediction}</Text>
+                    <Text style={[styles.predictLabelClean, { color: themeTextRole.secondary }]}>
+                      {t.match.yourPrediction}
+                    </Text>
                     {kickoffCountdown ? (
                       <View style={styles.predictCountdownChip}>
                         <Ionicons name="time-outline" size={11} color={themeAccent.primary} />
@@ -788,13 +811,15 @@ export default function MatchScreen() {
                           disabled={homeScore <= 0}
                           style={[
                             styles.predictStepMinus,
-                            { backgroundColor: themeSurface[2] },
+                            { backgroundColor: "transparent" },
                             homeScore <= 0 && { opacity: 0.35 },
                           ]}
                           hitSlop={12}
                           haptic="light"
+                          accessibilityLabel={`Decrease ${match.homeTeam.shortName} score`}
+                          accessibilityRole="button"
                         >
-                          <Ionicons name="remove" size={20} color={themeTextRole.primary} />
+                          <Ionicons name="remove" size={20} color={themeAccent.primary} />
                         </PressableScale>
                         <PressableScale
                           onPress={() => homeScore < 15 && setHomeScore((s) => Math.min(s + 1, 15))}
@@ -802,8 +827,10 @@ export default function MatchScreen() {
                           style={[styles.predictStepPlus, homeScore >= 15 && { opacity: 0.35 }]}
                           hitSlop={12}
                           haptic="light"
+                          accessibilityLabel={`Increase ${match.homeTeam.shortName} score`}
+                          accessibilityRole="button"
                         >
-                          <Ionicons name="add" size={20} color="#fff" />
+                          <Ionicons name="add" size={20} color={textRoleLight.inverse} />
                         </PressableScale>
                       </View>
                     </View>
@@ -826,11 +853,17 @@ export default function MatchScreen() {
                         <PressableScale
                           onPress={() => awayScore > 0 && setAwayScore((s) => Math.max(s - 1, 0))}
                           disabled={awayScore <= 0}
-                          style={[styles.predictStepMinus, awayScore <= 0 && { opacity: 0.35 }]}
+                          style={[
+                            styles.predictStepMinus,
+                            { backgroundColor: "transparent" },
+                            awayScore <= 0 && { opacity: 0.35 },
+                          ]}
                           hitSlop={12}
                           haptic="light"
+                          accessibilityLabel={`Decrease ${match.awayTeam.shortName} score`}
+                          accessibilityRole="button"
                         >
-                          <Ionicons name="remove" size={20} color={themeTextRole.primary} />
+                          <Ionicons name="remove" size={20} color={themeAccent.primary} />
                         </PressableScale>
                         <PressableScale
                           onPress={() => awayScore < 15 && setAwayScore((s) => Math.min(s + 1, 15))}
@@ -838,8 +871,10 @@ export default function MatchScreen() {
                           style={[styles.predictStepPlus, awayScore >= 15 && { opacity: 0.35 }]}
                           hitSlop={12}
                           haptic="light"
+                          accessibilityLabel={`Increase ${match.awayTeam.shortName} score`}
+                          accessibilityRole="button"
                         >
-                          <Ionicons name="add" size={20} color="#fff" />
+                          <Ionicons name="add" size={20} color={textRoleLight.inverse} />
                         </PressableScale>
                       </View>
                     </View>
@@ -882,7 +917,7 @@ export default function MatchScreen() {
                       <Ionicons
                         name="flash"
                         size={16}
-                        color={isBoosted ? "#fff" : themeAccent.reward}
+                        color={isBoosted ? textRoleLight.inverse : themeAccent.reward}
                       />
                     </View>
                     <View style={{ flex: 1 }}>
@@ -966,8 +1001,9 @@ export default function MatchScreen() {
               </View>
             )}
 
-            {/* Points system — single emerald accent, no rainbow */}
-            <View
+            {/* Points system — collapsible */}
+            <Pressable
+              onPress={() => setPointsExpanded((v) => !v)}
               style={[
                 styles.pointsCard,
                 { backgroundColor: themeSurface[0], borderColor: themeBorder.subtle },
@@ -978,28 +1014,34 @@ export default function MatchScreen() {
                 <Text style={[styles.pointsTitle, { color: themeTextRole.primary }]}>
                   {t.match.pointsSystem}
                 </Text>
+                <Ionicons
+                  name={pointsExpanded ? "chevron-up" : "chevron-down"}
+                  size={16}
+                  color={themeTextRole.tertiary}
+                />
               </View>
-              {[
-                { icon: "star", text: t.match.exactScore, pts: "10" },
-                { icon: "checkmark-done", text: t.match.resultGoalDiff, pts: "8" },
-                { icon: "checkmark", text: t.match.resultOnly, pts: "5" },
-                { icon: "trending-up", text: t.match.goalDiffOnly, pts: "3" },
-              ].map((item, i) => (
-                <View key={i} style={styles.pointsRow}>
-                  <View style={styles.pointsIconWrap}>
-                    <Ionicons
-                      name={item.icon as keyof typeof Ionicons.glyphMap}
-                      size={13}
-                      color={themeAccent.primary}
-                    />
+              {pointsExpanded &&
+                [
+                  { icon: "star", text: t.match.exactScore, pts: "10" },
+                  { icon: "checkmark-done", text: t.match.resultGoalDiff, pts: "8" },
+                  { icon: "checkmark", text: t.match.resultOnly, pts: "5" },
+                  { icon: "trending-up", text: t.match.goalDiffOnly, pts: "3" },
+                ].map((item, i) => (
+                  <View key={i} style={styles.pointsRow}>
+                    <View style={styles.pointsIconWrap}>
+                      <Ionicons
+                        name={item.icon as keyof typeof Ionicons.glyphMap}
+                        size={13}
+                        color={themeAccent.primary}
+                      />
+                    </View>
+                    <Text style={[styles.pointsText, { color: themeTextRole.secondary }]}>
+                      {item.text}
+                    </Text>
+                    <Text style={styles.pointsPts}>+{item.pts}</Text>
                   </View>
-                  <Text style={[styles.pointsText, { color: themeTextRole.secondary }]}>
-                    {item.text}
-                  </Text>
-                  <Text style={styles.pointsPts}>+{item.pts}</Text>
-                </View>
-              ))}
-            </View>
+                ))}
+            </Pressable>
           </Animated.View>
         )}
 
@@ -1841,9 +1883,8 @@ const styles = StyleSheet.create({
     ...typeTok.caption,
     fontFamily: "Inter_700Bold",
     textAlign: "center",
-    maxWidth: 110,
   },
-  heroTeamNameLive: { color: "#fff" },
+  heroTeamNameLive: { color: textRoleLight.inverse },
   heroCenter: {
     alignItems: "center",
     justifyContent: "center",
@@ -1861,7 +1902,7 @@ const styles = StyleSheet.create({
     letterSpacing: -1,
     lineHeight: 40,
   },
-  heroScoreLive: { color: "#fff" },
+  heroScoreLive: { color: textRoleLight.inverse },
   heroScoreSep: {
     ...typeTok.h2,
     fontFamily: "Inter_400Regular",
@@ -1897,7 +1938,7 @@ const styles = StyleSheet.create({
   heroFtChipText: {
     ...typeTok.micro,
     fontFamily: "Inter_700Bold",
-    color: "#fff",
+    color: textRoleLight.inverse,
     letterSpacing: 0.6,
   },
   heroMetaRow: {
@@ -1921,7 +1962,7 @@ const styles = StyleSheet.create({
     ...typeTok.caption,
     fontFamily: "Inter_700Bold",
   },
-  heroMetaStrongLive: { color: "#fff" },
+  heroMetaStrongLive: { color: textRoleLight.inverse },
   heroMetaDot: {
     width: 3,
     height: 3,
@@ -1952,9 +1993,9 @@ const styles = StyleSheet.create({
   predictCardClean: {
     borderRadius: radii.xl,
     borderWidth: 1,
-    paddingVertical: 22,
+    paddingVertical: 24,
     paddingHorizontal: 22,
-    gap: 20,
+    gap: 18,
   },
   predictHeaderClean: {
     flexDirection: "row",
@@ -1986,12 +2027,13 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-around",
-    gap: 8,
+    gap: 4,
+    paddingVertical: 4,
   },
   predictTeamCol: {
     flex: 1,
     alignItems: "center",
-    gap: 10,
+    gap: 8,
   },
   predictTeamLabel: {
     ...typeTok.micro,
@@ -2000,16 +2042,16 @@ const styles = StyleSheet.create({
     textTransform: "uppercase",
   },
   predictBigScore: {
-    ...typeTok.display,
+    fontSize: 56,
     fontFamily: "Inter_700Bold",
     letterSpacing: -2,
-    lineHeight: 60,
+    lineHeight: 64,
   },
   predictStepperRow: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 12,
-    marginTop: 6,
+    gap: 16,
+    marginTop: 8,
   },
   predictStepMinus: {
     width: 44,
@@ -2017,6 +2059,8 @@ const styles = StyleSheet.create({
     borderRadius: 22,
     alignItems: "center",
     justifyContent: "center",
+    borderWidth: 1.5,
+    borderColor: "rgba(0, 166, 81, 0.35)",
   },
   predictStepPlus: {
     width: 44,
@@ -2027,19 +2071,21 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   predictDash: {
-    ...typeTok.h1,
+    fontSize: 28,
     fontFamily: "Inter_400Regular",
-    paddingBottom: 40,
+    paddingBottom: 44,
+    opacity: 0.4,
   },
   predictOutcomeChip: {
     flexDirection: "row",
     alignItems: "center",
     alignSelf: "center",
-    gap: 8,
-    paddingVertical: 8,
+    gap: 6,
+    paddingVertical: 7,
     paddingHorizontal: 14,
     borderRadius: radii.pill,
     backgroundColor: "rgba(0, 166, 81, 0.10)",
+    marginTop: -8,
   },
   predictOutcomeChipText: {
     ...typeTok.caption,
@@ -2061,6 +2107,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "space-between",
     gap: 12,
+    paddingTop: 2,
   },
   changeLink: {
     flexDirection: "row",
@@ -2120,7 +2167,7 @@ const styles = StyleSheet.create({
     width: 20,
     height: 20,
     borderRadius: 10,
-    backgroundColor: "#fff",
+    backgroundColor: textRoleLight.inverse,
   },
   boostSwitchDotActive: { transform: [{ translateX: 18 }] },
 
@@ -2185,9 +2232,9 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 8,
-    marginBottom: 8,
   },
   pointsTitle: {
+    flex: 1,
     ...typeTok.body,
     fontFamily: "Inter_700Bold",
   },
@@ -2220,17 +2267,18 @@ const styles = StyleSheet.create({
   lockedCard: {
     borderRadius: radii.lg,
     borderWidth: 1,
-    padding: 24,
+    paddingVertical: 28,
+    paddingHorizontal: 24,
     alignItems: "center",
-    gap: 10,
+    gap: 8,
   },
   lockedIconWrap: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
     alignItems: "center",
     justifyContent: "center",
-    marginBottom: 4,
+    marginBottom: 2,
   },
   lockedTitle: {
     ...typeTok.body,
@@ -2240,7 +2288,8 @@ const styles = StyleSheet.create({
     ...typeTok.caption,
     fontFamily: "Inter_400Regular",
     textAlign: "center",
-    lineHeight: 18,
+    lineHeight: 19,
+    maxWidth: 280,
   },
 
   // Sticky prediction bar (bottom)

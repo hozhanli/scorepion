@@ -13,6 +13,7 @@ const MIGRATIONS = [
   "001_social_engine.sql",
   "002_fixture_detail.sql",
   "003_add_indexes.sql",
+  "004_predictions_unique_constraint.sql",
 ];
 
 export async function runMigrations(): Promise<void> {

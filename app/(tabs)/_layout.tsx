@@ -55,135 +55,119 @@ function ClassicTabLayout() {
   return (
     <View style={{ flex: 1 }}>
       <Tabs
-      screenOptions={{
-        headerShown: false,
-        tabBarActiveTintColor: accent.primary,
-        tabBarInactiveTintColor: textRole.tertiary,
-        tabBarStyle: {
-          position: "absolute",
-          backgroundColor: surface[0],
-          borderTopWidth: StyleSheet.hairlineWidth,
-          borderTopColor: border.subtle,
-          elevation: 0,
-          shadowOpacity: 0,
-          ...(isWeb
-            ? {
-                height: 84,
-              }
-            : Platform.OS === "ios"
-            ? {
-                paddingBottom: safeAreaInsets.bottom,
-                height: 84 + safeAreaInsets.bottom,
-              }
-            : {
-                paddingBottom: safeAreaInsets.bottom,
-                height: 72 + safeAreaInsets.bottom,
-              }),
-        },
-        tabBarBackground: () => (
-          <View
-            style={[
-              StyleSheet.absoluteFill,
-              { backgroundColor: surface[0] },
-            ]}
-          />
-        ),
-        tabBarLabelStyle: {
-          fontFamily: "Inter_600SemiBold",
-          fontSize: 13,
-          letterSpacing: 0.3,
-          marginTop: -2,
-        },
-        tabBarIconStyle: {
-          marginBottom: -2,
-        },
-      }}
-    >
-      <Tabs.Screen
-        name="index"
-        options={{
-          title: t.tabs.today,
-          tabBarAccessibilityLabel: t.tabs.today,
-          tabBarIcon: ({ color, focused }) => (
-            <View style={tabStyles.iconWrap}>
-              <Ionicons
-                name={focused ? "today" : "today-outline"}
-                size={22}
-                color={color}
-              />
-              {focused && <View style={tabStyles.activeDot} />}
-            </View>
+        initialRouteName="index"
+        screenOptions={{
+          headerShown: false,
+          tabBarActiveTintColor: accent.primary,
+          tabBarInactiveTintColor: textRole.tertiary,
+          tabBarStyle: {
+            position: "absolute",
+            backgroundColor: surface[0],
+            borderTopWidth: StyleSheet.hairlineWidth,
+            borderTopColor: border.subtle,
+            elevation: 0,
+            shadowOpacity: 0,
+            ...(isWeb
+              ? {
+                  height: 84,
+                }
+              : Platform.OS === "ios"
+                ? {
+                    paddingBottom: safeAreaInsets.bottom,
+                    height: 84 + safeAreaInsets.bottom,
+                  }
+                : {
+                    paddingBottom: safeAreaInsets.bottom,
+                    height: 72 + safeAreaInsets.bottom,
+                  }),
+          },
+          tabBarBackground: () => (
+            <View style={[StyleSheet.absoluteFill, { backgroundColor: surface[0] }]} />
           ),
+          tabBarLabelStyle: {
+            fontFamily: "Inter_600SemiBold",
+            fontSize: 13,
+            letterSpacing: 0.3,
+            marginTop: -2,
+          },
+          tabBarIconStyle: {
+            marginBottom: -2,
+          },
         }}
-      />
-      <Tabs.Screen
-        name="matches"
-        options={{
-          title: t.tabs.matches,
-          tabBarAccessibilityLabel: t.tabs.matches,
-          tabBarIcon: ({ color, focused }) => (
-            <View style={tabStyles.iconWrap}>
-              <Ionicons
-                name={focused ? "football" : "football-outline"}
-                size={22}
-                color={color}
-              />
-              {focused && <View style={tabStyles.activeDot} />}
-            </View>
-          ),
-        }}
-      />
-      <Tabs.Screen
-        name="leaderboard"
-        options={{
-          title: t.tabs.standings,
-          tabBarAccessibilityLabel: t.tabs.standings,
-          tabBarIcon: ({ color, focused }) => (
-            <View style={tabStyles.iconWrap}>
-              <Ionicons
-                name={focused ? "podium" : "podium-outline"}
-                size={22}
-                color={color}
-              />
-              {focused && <View style={tabStyles.activeDot} />}
-            </View>
-          ),
-        }}
-      />
-      <Tabs.Screen
-        name="groups"
-        options={{
-          title: t.tabs.groups,
-          tabBarAccessibilityLabel: t.tabs.groups,
-          tabBarIcon: ({ color, focused }) => (
-            <View style={tabStyles.iconWrap}>
-              <Ionicons
-                name={focused ? "people" : "people-outline"}
-                size={22}
-                color={color}
-              />
-              {focused && <View style={tabStyles.activeDot} />}
-            </View>
-          ),
-        }}
-      />
-      <Tabs.Screen
-        name="profile"
-        options={{
-          title: t.tabs.profile,
-          tabBarAccessibilityLabel: t.tabs.profile,
-          tabBarIcon: ({ color, focused }) => (
-            <View style={tabStyles.iconWrap}>
-              <Ionicons
-                name={focused ? "person-circle" : "person-circle-outline"}
-                size={22}
-                color={color}
-              />
-              {focused && <View style={tabStyles.activeDot} />}
-            </View>
-          ),
-        }}
-      />
+      >
+        <Tabs.Screen
+          name="index"
+          options={{
+            title: t.tabs.today,
+            tabBarAccessibilityLabel: t.tabs.today,
+            tabBarIcon: ({ color, focused }) => (
+              <View style={tabStyles.iconWrap}>
+                <Ionicons name={focused ? "today" : "today-outline"} size={22} color={color} />
+                {focused && <View style={tabStyles.activeDot} />}
+              </View>
+            ),
+          }}
+        />
+        <Tabs.Screen
+          name="matches"
+          options={{
+            title: t.tabs.matches,
+            tabBarAccessibilityLabel: t.tabs.matches,
+            tabBarIcon: ({ color, focused }) => (
+              <View style={tabStyles.iconWrap}>
+                <Ionicons
+                  name={focused ? "football" : "football-outline"}
+                  size={22}
+                  color={color}
+                />
+                {focused && <View style={tabStyles.activeDot} />}
+              </View>
+            ),
+          }}
+        />
+        <Tabs.Screen
+          name="leaderboard"
+          options={{
+            title: t.tabs.standings,
+            tabBarAccessibilityLabel: t.tabs.standings,
+            tabBarIcon: ({ color, focused }) => (
+              <View style={tabStyles.iconWrap}>
+                <Ionicons name={focused ? "podium" : "podium-outline"} size={22} color={color} />
+                {focused && <View style={tabStyles.activeDot} />}
+              </View>
+            ),
+          }}
+        />
+        <Tabs.Screen
+          name="groups"
+          options={{
+            title: t.tabs.groups,
+            tabBarAccessibilityLabel: t.tabs.groups,
+            tabBarIcon: ({ color, focused }) => (
+              <View style={tabStyles.iconWrap}>
+                <Ionicons name={focused ? "people" : "people-outline"} size={22} color={color} />
+                {focused && <View style={tabStyles.activeDot} />}
+              </View>
+            ),
+          }}
+        />
+        <Tabs.Screen
+          name="profile"
+          options={{
+            title: t.tabs.profile,
+            tabBarAccessibilityLabel: t.tabs.profile,
+            tabBarIcon: ({ color, focused }) => (
+              <View style={tabStyles.iconWrap}>
+                <Ionicons
+                  name={focused ? "person-circle" : "person-circle-outline"}
+                  size={22}
+                  color={color}
+                />
+                {focused && <View style={tabStyles.activeDot} />}
+              </View>
+            ),
+          }}
+        />
       </Tabs>
     </View>
   );
@@ -215,15 +199,12 @@ function TabLayoutWithPersistence() {
     (async () => {
       try {
         const lastTab = await loadLastTab();
-        if (lastTab) {
-          // Only navigate if we're at the root tabs level
-          const segs = segments as readonly string[];
-          if (segs.length === 1 && segs[0] === '(tabs)') {
-            router.replace(`/(tabs)/${lastTab}` as any);
-          }
+        if (lastTab && lastTab !== "index") {
+          // Restore to the last visited tab (skip if it's already the default)
+          router.replace(`/(tabs)/${lastTab}` as any);
         }
       } catch (err) {
-        console.error('nav-persistence:restore', err);
+        console.error("nav-persistence:restore", err);
         // Fail silently; app continues with default route
       }
     })();
@@ -235,9 +216,9 @@ function TabLayoutWithPersistence() {
     if (segs.length >= 2) {
       const firstSegment = segs[0];
       const secondSegment = segs[1];
-      if (firstSegment === '(tabs)' && typeof secondSegment === 'string') {
+      if (firstSegment === "(tabs)" && typeof secondSegment === "string") {
         saveLastTab(secondSegment).catch((err) => {
-          console.error('nav-persistence:save', err);
+          console.error("nav-persistence:save", err);
           // Fail silently; user continues without persisting
         });
       }

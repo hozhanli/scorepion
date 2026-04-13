@@ -11,13 +11,18 @@
  * Active pill spring-slides between positions using an animated transform.
  * Each tap fires haptics.selection().
  */
-import React, { useState, useCallback } from 'react';
-import { View, Text, StyleSheet, LayoutChangeEvent, Platform } from 'react-native';
-import Animated, { useAnimatedStyle, useSharedValue, withSpring, useReducedMotion } from 'react-native-reanimated';
-import { accent, radii, type } from '@/constants/colors';
-import { useTheme } from '@/contexts/ThemeContext';
-import { springs, haptics } from '@/lib/motion';
-import { PressableScale } from './PressableScale';
+import React, { useState, useCallback } from "react";
+import { View, Text, StyleSheet, LayoutChangeEvent, Platform } from "react-native";
+import Animated, {
+  useAnimatedStyle,
+  useSharedValue,
+  withSpring,
+  useReducedMotion,
+} from "react-native-reanimated";
+import { accent, radii, type } from "@/constants/colors";
+import { useTheme } from "@/contexts/ThemeContext";
+import { springs, haptics } from "@/lib/motion";
+import { PressableScale } from "./PressableScale";
 
 export interface FilterSegmentedItem<V extends string = string> {
   value: V;
@@ -44,14 +49,17 @@ export function FilterSegmented<V extends string = string>({
   const pillW = useSharedValue(0);
   const reduceMotion = useReducedMotion();
 
-  const handleItemLayout = useCallback((index: number) => (e: LayoutChangeEvent) => {
-    const { x, width } = e.nativeEvent.layout;
-    setLayouts((prev) => ({ ...prev, [index]: { x, width } }));
-    if (index === activeIndex) {
-      pillX.value = x;
-      pillW.value = width;
-    }
-  }, [activeIndex, pillX, pillW]);
+  const handleItemLayout = useCallback(
+    (index: number) => (e: LayoutChangeEvent) => {
+      const { x, width } = e.nativeEvent.layout;
+      setLayouts((prev) => ({ ...prev, [index]: { x, width } }));
+      if (index === activeIndex) {
+        pillX.value = x;
+        pillW.value = width;
+      }
+    },
+    [activeIndex, pillX, pillW],
+  );
 
   React.useEffect(() => {
     const layout = layouts[activeIndex];
@@ -72,13 +80,16 @@ export function FilterSegmented<V extends string = string>({
   }));
 
   const handlePress = (v: V) => {
-    if (Platform.OS !== 'web') haptics.selection?.().catch(() => {});
+    if (Platform.OS !== "web") haptics.selection?.().catch(() => {});
     onChange(v);
   };
 
   return (
     <View style={[styles.container, { backgroundColor: surface[2] }]}>
-      <Animated.View style={[styles.pill, { backgroundColor: accent.primary }, pillStyle]} pointerEvents="none" />
+      <Animated.View
+        style={[styles.pill, { backgroundColor: accent.primary }, pillStyle]}
+        pointerEvents="none"
+      />
       {items.map((item, i) => {
         const active = item.value === value;
         return (
@@ -92,10 +103,28 @@ export function FilterSegmented<V extends string = string>({
             accessibilityRole="button"
             accessibilityState={{ selected: active }}
           >
-            <Text style={[styles.label, { color: textRole.secondary }, active && [styles.labelActive, { color: '#FFFFFF' }]]} numberOfLines={1}>
+            <Text
+              style={[
+                styles.label,
+                { color: textRole.secondary },
+                active && [styles.labelActive, { color: "#FFFFFF" }],
+              ]}
+              numberOfLines={1}
+              adjustsFontSizeToFit
+              minimumFontScale={0.75}
+            >
               {item.label}
-              {typeof item.count === 'number' ? (
-                <Text style={[styles.count, { color: textRole.tertiary }, active && [styles.countActive, { color: 'rgba(255, 255, 255, 0.78)' }]]}>  {item.count}</Text>
+              {typeof item.count === "number" ? (
+                <Text
+                  style={[
+                    styles.count,
+                    { color: textRole.tertiary },
+                    active && [styles.countActive, { color: "rgba(255, 255, 255, 0.78)" }],
+                  ]}
+                >
+                  {" "}
+                  {item.count}
+                </Text>
               ) : null}
             </Text>
           </PressableScale>
@@ -110,15 +139,15 @@ const ITEM_H = 34;
 
 const styles = StyleSheet.create({
   container: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     borderRadius: radii.md,
     padding: CONTAINER_PAD,
     gap: 0,
-    position: 'relative',
+    position: "relative",
   },
   pill: {
-    position: 'absolute',
+    position: "absolute",
     top: CONTAINER_PAD,
     left: CONTAINER_PAD,
     height: ITEM_H,
@@ -127,9 +156,9 @@ const styles = StyleSheet.create({
   item: {
     flex: 1,
     height: ITEM_H,
-    paddingHorizontal: 10,
-    alignItems: 'center',
-    justifyContent: 'center',
+    paddingHorizontal: 6,
+    alignItems: "center",
+    justifyContent: "center",
     borderRadius: radii.sm - 2,
   },
   label: {
@@ -138,7 +167,7 @@ const styles = StyleSheet.create({
     letterSpacing: 0,
   },
   labelActive: {
-    fontFamily: 'Inter_600SemiBold',
+    fontFamily: "Inter_600SemiBold",
   },
   count: {
     fontSize: type.micro.size,
