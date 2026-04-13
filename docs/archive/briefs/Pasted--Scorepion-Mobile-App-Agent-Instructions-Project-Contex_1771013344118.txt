@@ -1,0 +1,49 @@
+# Scorepion Mobile App – Agent Instructions
+
+## Project Context
+- **App**: Scorepion – football score prediction game
+- **Stack**: Flutter (Dart), GetX, Provider, Dio, Firebase (Analytics, Messaging, Firestore, Storage)
+- **Backend**: scorepion-node REST API (base URL in lib/utilities/constants.dart)
+- **Platforms**: iOS, Android, Web (limited – no Firebase init on web)
+- **Localization**: English (en), Turkish (tr) via assets/i18n/*.json
+
+## Architecture Overview
+- **Screens**: lib/screens/ – main UI flows
+- **Services**: lib/services/ – API calls (account, fixture, groups, leagues, prediction, notification, etc.)
+- **Models**: lib/model/ – request/response DTOs
+- **Providers**: lib/providers/ – AppController (GetX), ThemeChanger, LanguageChanger (Provider)
+- **Widgets**: lib/widgets/ – reusable UI (match_chat, group_chat, league_table, etc.)
+- **Utilities**: lib/utilities/ – constants, globals, theme, validation, i18n
+
+## Key Conventions
+1. **API calls**: Use dio* functions from service files (e.g. dioGetUserLeagues, dioPostDailyFixture)
+2. **Auth**: Check k401Error; redirect to LoginScreen and clear SharedPreferences
+3. **Responsive**: Use Globals().getResponsiveWidth/Height for layout
+4. **Theme**: Use Theme.of(context).textTheme.headline1/2, subtitle1/2, primaryColor
+5. **i18n**: AppLocalizations.of(context).translate('KEY')
+6. **Analytics**: FirebaseAnalytics.instance.logScreenView() – skip on kIsWeb
+7. **Chat**: ChatController (GetX) + Firestore for match/group chat
+
+## Feature Map (Quick Reference)
+| Area | Screens | Services |
+|------|---------|----------|
+| Auth | LoginScreen, SignupScreen | account_service |
+| Fixtures | FixtureScreen, MatchScreen | fixture_service, prediction_service |
+| Groups | PublicGroupsScreen, PrivateGroupsScreen, CreateGroupScreen, GroupSearchScreen, GroupStandingsScreen | groups_service |
+| Leagues | LeaguesScreen, FavLeaguesScreen | leagues_service, league_tables_service |
+| Profile | ProfileScreen, VersusScreen | user_stats_service |
+| Settings | SettingsScreen | account_service, notification_service |
+| Standings | GlobalStandingsScreen | group_standings_service |
+
+## Common Tasks
+- **Add API call**: Add dio* in relevant service, handle k401Error
+- **Add screen**: Register in main.dart routes, add navigation
+- **Add i18n key**: Add to assets/i18n/en.json and tr.json
+- **Modify theme**: lib/utilities/theme_styles.dart, ThemeChanger
+- **Chat**: ChatController.getMatchChats / getGroupChats, Firestore collections
+
+## Constraints
+- Portrait-only (SystemChrome.setPreferredOrientations)
+- Web: No Firebase init, no Mobile Ads, no Google Sign-In
+- Social login: Ask username on first login if ASK_USERNAME
+- Guest users: Limited features; upgrade via SignupScreen with isGuess

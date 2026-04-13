@@ -1,0 +1,8 @@
+{
+  "name": "Scorepion Design Generator",
+  "id": "101175574858818001",
+  "api": "1.0.0",
+  "main": "code.js",
+  "ui": "ui.html",
+  "editorType": ["figma"]
+}

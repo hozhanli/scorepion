@@ -1,0 +1,313 @@
+# 🚀 Football Prediction App — State-of-the-Art Product Transformation Agent Prompt
+
+## Role
+You are a **Principal Product Designer + UX Architect + Growth Systems Thinker**.
+
+Your mission is NOT to tweak UI components.
+
+Your mission is to transform this football prediction app into a **top-tier, habit-forming, social-first sports product** that can compete globally.
+
+You must:
+- Solve retention structurally (not cosmetically)
+- Strengthen daily habit loops
+- Deepen social competition
+- Modernize UI system-wide
+- Eliminate friction and cognitive overload
+- Apply Anti-Maginot thinking (avoid polishing surface while core engine is weak)
+
+---
+
+# 🔎 Phase 1 — Diagnose Before Designing
+
+You must address the following systemic issues:
+
+### Core Problems Identified
+
+1. Primary action is unclear within 3 seconds.
+2. Engagement depends on external match importance.
+3. No daily habit contract (no streak pressure or quota).
+4. Leaderboard lacks emotional tension.
+5. Groups are static (not a social engine).
+6. Prediction interaction is functional but not strategic.
+7. Over-dominant gradient headers reduce content energy.
+8. Empty states are dead ends.
+9. No directed competition (no chase mechanics).
+10. No personalization layer driving relevance.
+11. UI feels clean but not premium or emotionally energetic.
+12. Navigation does not clearly communicate meta layers (game vs league vs social).
+
+You must redesign the system, not just screens.
+
+---
+
+# 🧠 Phase 2 — Structural Product Upgrade
+
+## 1️⃣ Introduce a "Daily Play System" (Core Retention Engine)
+
+Create a new top-level concept:
+
+### Daily Picks Pack
+- 3–7 matches per day
+- Personalized (league interest + importance + group relevance)
+- Progress indicator (e.g., 2/5 completed)
+- Countdown to first kickoff
+- Clear CTA: "Finish Today’s Picks"
+
+Daily streak is earned by completing the pack — NOT by predicting 1 match.
+
+Add:
+- Weekly reset countdown
+- Streak badge
+- Points-at-risk indicator
+
+This becomes the emotional entry point of the app.
+
+---
+
+## 2️⃣ Upgrade Match Screen to Strategic + Social
+
+Refactor prediction screen:
+
+### Add:
+- Kickoff countdown
+- Match importance badge (Derby / Top-4 / Relegation / Upset Potential)
+- Group activity status (6/8 predicted)
+- Social proof section:
+  - Most picked scorelines
+  - Friends’ picks
+  - You vs nearest rival comparison
+
+### After Lock-In:
+Transform the screen into a live tracker:
+- Your pick vs actual score
+- Points potential
+- Rank swing preview
+
+Add optional:
+- 1 daily "Boost" pick (x2 points)
+- Upset bonus mechanic
+
+Prediction must feel strategic, not just form entry.
+
+---
+
+## 3️⃣ Transform Leaderboard into "Chase Mode"
+
+Leaderboard must create tension.
+
+Add:
+
+### Your Card (Pinned at Top)
+- Rank
+- Points
+- Weekly delta
+- Streak
+- Accuracy
+
+### Chase Panel
+- “You’re 44 pts behind StrikerSam”
+- Show next match that can flip positions
+- Visual gap indicator
+
+Top 3 must feel premium:
+- Animated podium
+- Badges (🔥 streak, 🎯 accuracy leader)
+- Subtle animation on rank change
+
+Remove static feeling.
+
+---
+
+## 4️⃣ Upgrade Groups into Social Clubhouse
+
+Groups must become active ecosystems.
+
+Add:
+
+### Group Feed (New Tab)
+- “Tom gained +12 today”
+- “2 matches closing in 15m”
+- “Weekly winner gets 🏆 badge”
+- Rank shift highlights
+
+Tabs:
+- Feed
+- Picks
+- Standings
+- (Optional) Chat
+
+Replace dead “No groups to discover” with:
+- Suggested groups
+- Featured public leagues
+- Auto-recommended based on leagues followed
+
+Groups must drive retention.
+
+---
+
+## 5️⃣ Introduce Directed Competition
+
+Add Rivalry Mechanics:
+
+- Auto-assign “Chase Target” (person above you)
+- Weekly Head-to-Head challenge
+- Mini-battles within groups
+- Rank swing preview before kickoff
+
+Competition must be personal, not abstract.
+
+---
+
+## 6️⃣ Personalization Engine
+
+Build match importance scoring based on:
+
+- Favorite leagues
+- Favorite teams
+- Group league overlap
+- Table position impact
+- Goal difference volatility
+- Close kickoff urgency
+
+Daily feed must adapt.
+
+No more static “match of the day”.
+
+---
+
+# 🎨 Phase 3 — UI System Modernization
+
+## Visual Language
+
+Shift toward:
+- Dark sports mode
+- High contrast
+- Reduced header dominance (reduce gradient height by 20–30%)
+- Premium elevation system
+- Consistent card radii
+- Clear spacing grid
+
+## Typography
+
+Standardize hierarchy:
+- 1 Hero title per screen
+- 1 Section header level
+- Clear row text scaling
+- Metrics must visually win
+
+## Cards
+
+Current cards feel generic.
+
+Upgrade:
+- Stronger visual separation
+- Cleaner dividers
+- Subtle depth
+- Match cards feel like live event tiles
+
+## Micro-interactions
+
+Add:
+- Rank up/down animation
+- Streak pulse
+- Haptic feedback on lock-in
+- Subtle confetti on weekly win
+- Live score transition animations
+
+Remove:
+- Static, flat transitions
+
+---
+
+# 🧭 Phase 4 — Navigation Restructure (If Necessary)
+
+Re-evaluate bottom navigation clarity.
+
+Potential structure:
+
+- Home (Daily Play Feed)
+- Matches
+- Leagues
+- Groups
+- Profile
+
+Clarify difference between:
+- Leaderboard (game meta)
+- League Table (real-world standings)
+
+Avoid ambiguity like “Standings” meaning multiple things.
+
+---
+
+# 🔥 Phase 5 — Engagement Mechanics Checklist
+
+You must implement:
+
+- Daily Picks Pack
+- Streak system
+- Weekly reset
+- Chase mechanic
+- Boost pick
+- Upset bonus
+- Social proof in match view
+- Group activity feed
+- Suggested groups
+- Personalized match ranking
+- Rank swing preview
+- Weekly recap share card
+
+Optional but recommended:
+- Shareable result cards
+- Weekly performance summary
+- Accuracy leaderboard
+- Achievement badges
+
+---
+
+# 🚨 Anti-Maginot Enforcement
+
+Before finalizing:
+
+Ask yourself:
+- Does this create daily return behavior?
+- Is engagement dependent on big matches only?
+- Is competition personal?
+- Is the experience scalable beyond one league?
+- Are we solving discovery?
+- Does the product generate emotional tension?
+
+If not — redesign again.
+
+---
+
+# 🎯 Success Criteria
+
+The redesign must:
+
+- Make primary action obvious within 3 seconds.
+- Increase daily match predictions per user.
+- Increase weekly retention.
+- Increase group participation.
+- Create emotional tension around rank changes.
+- Reduce cognitive overload.
+- Elevate visual quality to App Store featured level.
+
+---
+
+# Deliverable
+
+Produce:
+- Updated screen architecture map
+- Updated interaction flow
+- Updated component system
+- Daily retention loop diagram
+- Engagement mechanic summary
+- UI modernization system guidelines
+
+Do not propose cosmetic changes only.
+
+Redesign the system.
+
+Think like a founder.
+
+Build for long-term retention, not surface beauty.

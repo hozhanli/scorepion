@@ -1,0 +1,320 @@
+# 🚀 SCOREPION — AI ERA SURVIVAL & DOMINANCE IMPLEMENTATION PROMPT
+
+## Role
+You are the **Principal Product Architect + Growth Systems Engineer + UX Strategist**.
+
+You are working inside Replit to implement structural upgrades to Scorepion.
+
+Your mission is NOT to polish UI.
+
+Your mission is to transform Scorepion from:
+
+> A clean football prediction app
+
+into:
+
+> A habit-forming, socially tense, defensible sports competition platform that survives in the AI era.
+
+You must implement systemic upgrades, not cosmetic tweaks.
+
+---
+
+# 🧠 CONTEXT: STRATEGIC THREATS
+
+Scorepion faces these structural risks:
+
+1. Low switching cost.
+2. No daily obligation loop.
+3. Engagement depends on external match importance.
+4. Leaderboard lacks emotional tension.
+5. Groups are static (no live social feed).
+6. Prediction is mechanical, not strategic.
+7. No personalization layer.
+8. No seasonal narrative.
+9. No defensible moat against AI pick bots.
+10. No strong outcome positioning (status, identity).
+
+You must solve these at architecture level.
+
+---
+
+# 🎯 PRIMARY OBJECTIVE
+
+Make Scorepion:
+- Habit-forming
+- Socially competitive
+- Emotionally tense
+- AI-enhanced (not AI-replaced)
+- Scalable across leagues and seasons
+
+---
+
+# 🏗 PHASE 1 — CORE RETENTION ENGINE
+
+## 1️⃣ Implement Daily Picks Pack System
+
+Create a new backend + frontend module:
+
+### Daily Picks Pack:
+- Auto-generate 3–7 matches per user per day
+- Based on:
+  - Followed leagues
+  - Group league overlap
+  - Match importance
+  - Kickoff proximity
+  - Table impact
+- Track:
+  - Completion status (x/y predicted)
+  - Countdown to first kickoff
+  - Streak continuity
+
+### Database additions:
+- daily_pack table
+- user_daily_progress table
+- streak_tracking table
+
+### UX:
+- Top banner on home:
+  - “Today’s Picks”
+  - Progress bar
+  - Streak badge
+  - CTA: “Finish Today’s Picks”
+
+Daily streak only increments when pack completed.
+
+This is mandatory.
+
+---
+
+# ⚔️ PHASE 2 — DIRECTED COMPETITION
+
+## 2️⃣ Implement Chase Mode
+
+### Backend:
+For each leaderboard:
+- Assign each user a “chase target” (rank above)
+- Calculate:
+  - Points gap
+  - Matches that can flip rank
+  - Potential swing impact
+
+### Frontend:
+Leaderboard must show:
+- Your pinned card
+- “You’re 38 pts behind Tom”
+- Visual gap indicator
+- Rank swing preview on upcoming matches
+
+Add:
+- Rank change animation
+- Weekly reset countdown
+
+Leaderboard must create tension.
+
+---
+
+# 🔥 PHASE 3 — STRATEGIC PREDICTION LAYER
+
+Prediction must not be a simple score entry.
+
+## 3️⃣ Add Strategy Mechanics
+
+Implement:
+
+### 1 Boost Pick per Day:
+- User selects 1 match
+- Points doubled
+- Cannot change after lock
+
+### Optional Upset Bonus:
+- If picking underdog win
+- Additional points if correct
+
+### After Lock:
+Transform match view into:
+- Live prediction tracker
+- Points at stake
+- Rank impact preview
+
+Prediction becomes a game of risk.
+
+---
+
+# 👥 PHASE 4 — GROUPS AS SOCIAL ENGINE
+
+Groups must evolve.
+
+## 4️⃣ Implement Group Activity Feed
+
+Create new:
+- group_activity table
+
+Log:
+- Rank changes
+- Boost picks
+- Streak milestones
+- Match wins
+- Weekly winners
+
+Frontend:
+Group page tabs:
+- Feed
+- Picks
+- Standings
+
+Feed examples:
+- “Tom gained +12 today”
+- “3 matches closing in 20m”
+- “You overtook Sam”
+
+Groups must feel alive.
+
+---
+
+# 🧬 PHASE 5 — PERSONALIZATION ENGINE
+
+Implement match importance scoring.
+
+### Importance Factors:
+- Top 4 clash
+- Relegation battle
+- Derby match
+- Table impact
+- User favorite team
+- Group participation density
+
+Score each match daily.
+
+Use this to:
+- Generate daily packs
+- Highlight key matches
+- Send smart notifications
+
+Do NOT rely on “Match of the Day”.
+
+---
+
+# 🤖 PHASE 6 — AI ENHANCEMENT (NOT REPLACEMENT)
+
+AI must enhance status.
+
+Implement:
+
+### AI Weekly Recap:
+- Summary of performance
+- Highlight best pick
+- Rival comparison
+- Rank movement narrative
+
+### AI Rival Banter Generator:
+- Optional short humorous messages
+- “You dominated Tom this week.”
+
+### AI Performance Insights:
+- “You perform 22% better on derbies.”
+- “You struggle in Serie A matches.”
+
+AI strengthens identity.
+
+---
+
+# 🏆 PHASE 7 — SEASONAL ARCS
+
+Add:
+
+- Weekly winners
+- Monthly champions
+- Seasonal badges
+- Promotion/relegation tiers (optional advanced)
+
+Add:
+- season_progress table
+- achievement_badges table
+
+Users must have progression beyond points.
+
+---
+
+# 🎨 PHASE 8 — UI MODERNIZATION
+
+## Visual Upgrades:
+
+- Reduce header gradient height by 30%
+- Improve card elevation consistency
+- Add micro-animations:
+  - Rank up/down
+  - Streak pulse
+  - Lock-in confirmation
+- Ensure typography hierarchy consistency
+
+Remove static, flat feeling.
+
+---
+
+# 📲 PHASE 9 — VIRAL LOOPS
+
+Implement shareable assets:
+
+- Weekly recap card
+- Rank change card
+- “You overtook Tom” card
+- Boost win card
+
+Auto-generate shareable images.
+
+Distribution must be built-in.
+
+---
+
+# 📊 PHASE 10 — METRICS TO TRACK
+
+You must instrument:
+
+- Daily pack completion rate
+- Streak length distribution
+- Boost usage rate
+- Rank swing engagement
+- Group feed interactions
+- Weekly retention (W1, W4, W8)
+
+Build event logging properly.
+
+---
+
+# 🚨 ANTI-MAGINOT CHECK
+
+Before finishing implementation:
+
+Ask:
+
+- Does this create daily obligation?
+- Is competition personal?
+- Does user feel tension before kickoff?
+- Is engagement scalable across leagues?
+- Can AI replace this easily?
+- Is this defensible socially?
+
+If answer is no — redesign.
+
+---
+
+# 🎯 FINAL EXPECTATION
+
+Deliver:
+
+1. Updated schema design
+2. Updated API endpoints
+3. Updated navigation structure
+4. Retention loop architecture
+5. UI component upgrades
+6. Engagement feature rollout plan
+
+Do not ship incremental UI polish.
+
+Ship a structurally stronger product.
+
+Think long-term retention.
+Think defensibility.
+Think social tension.
+
+Build the moat.

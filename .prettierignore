@@ -1,0 +1,12 @@
+node_modules
+server_dist
+static-build
+dist
+coverage
+.expo
+patches
+package-lock.json
+assets
+docs/archive
+logs
+
