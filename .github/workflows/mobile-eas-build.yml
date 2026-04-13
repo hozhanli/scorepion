@@ -1,0 +1,76 @@
+name: Mobile · EAS Build (manual)
+
+# Manual-only. EAS free plan has a monthly build quota, so we don't trigger
+# on every push. Run this workflow from the Actions tab when you want a build.
+
+on:
+  workflow_dispatch:
+    inputs:
+      profile:
+        description: "EAS build profile"
+        required: true
+        default: "preview"
+        type: choice
+        options:
+          - development
+          - preview
+          - production
+      platform:
+        description: "Platform"
+        required: true
+        default: "all"
+        type: choice
+        options:
+          - all
+          - ios
+          - android
+      wait:
+        description: "Wait for build to finish (off = queue & exit)"
+        required: true
+        default: false
+        type: boolean
+
+concurrency:
+  group: mobile-eas-build
+  cancel-in-progress: false
+
+env:
+  NODE_VERSION: "20"
+
+jobs:
+  build:
+    name: EAS Build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+
+      - name: Setup Expo / EAS
+        uses: expo/expo-github-action@v8
+        with:
+          eas-version: latest
+          token: ${{ secrets.EXPO_TOKEN }}
+
+      - name: Fail early if EXPO_TOKEN is missing
+        if: env.EXPO_TOKEN == ''
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+        run: |
+          echo "::error::EXPO_TOKEN secret is not set. Add it under Settings → Secrets and variables → Actions."
+          exit 1
+
+      - run: npm ci --ignore-scripts
+
+      - name: EAS Build
+        run: |
+          WAIT_FLAG="--no-wait"
+          if [ "${{ inputs.wait }}" = "true" ]; then WAIT_FLAG=""; fi
+          eas build \
+            --profile "${{ inputs.profile }}" \
+            --platform "${{ inputs.platform }}" \
+            --non-interactive \
+            $WAIT_FLAG

@@ -1,15 +1,11 @@
-name: Mobile CI · EAS
+name: Mobile CI
 
 on:
   push:
     branches: [main]
     paths:
       - "app/**"
-      - "components/**"
-      - "lib/**"
-      - "contexts/**"
-      - "constants/**"
-      - "hooks/**"
+      - "src/**"
       - "shared/**"
       - "assets/**"
       - "app.json"
@@ -19,26 +15,6 @@ on:
       - ".github/workflows/mobile.yml"
   pull_request:
     branches: [main]
-  workflow_dispatch:
-    inputs:
-      profile:
-        description: "EAS build profile"
-        required: true
-        default: "preview"
-        type: choice
-        options:
-          - development
-          - preview
-          - production
-      platform:
-        description: "Platform"
-        required: true
-        default: "all"
-        type: choice
-        options:
-          - all
-          - ios
-          - android
 
 concurrency:
   group: mobile-${{ github.ref }}
@@ -60,30 +36,3 @@ jobs:
       - run: npm ci --ignore-scripts
       - run: npm run lint
       - run: npm run typecheck
-
-  build:
-    name: EAS Build
-    needs: verify
-    if: github.event_name != 'pull_request'
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/setup-node@v4
-        with:
-          node-version: ${{ env.NODE_VERSION }}
-          cache: npm
-
-      - name: Setup Expo / EAS
-        uses: expo/expo-github-action@v8
-        with:
-          eas-version: latest
-          token: ${{ secrets.EXPO_TOKEN }}
-
-      - run: npm ci --ignore-scripts
-
-      - name: EAS Build (non-interactive)
-        run: |
-          PROFILE="${{ github.event.inputs.profile || (github.ref == 'refs/heads/main' && 'production' || 'preview') }}"
-          PLATFORM="${{ github.event.inputs.platform || 'all' }}"
-          eas build --profile "$PROFILE" --platform "$PLATFORM" --non-interactive --no-wait
