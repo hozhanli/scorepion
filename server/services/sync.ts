@@ -60,6 +60,7 @@ const CURRENT_SEASON = 2025;
 // ── Push notification dedup (in-memory Set, resets on server restart) ──────────
 // Key: `${notificationType}:${userId}:${matchId}` or `${notificationType}:${userId}`
 const sentNotifications = new Set<string>();
+const SENT_NOTIFICATIONS_MAX = 10_000;
 
 function makeNotificationKey(type: string, userId: string, matchId?: string): string {
   return `${type}:${userId}:${matchId || ""}`;
@@ -70,6 +71,15 @@ function hasSentNotification(type: string, userId: string, matchId?: string): bo
 }
 
 function markNotificationSent(type: string, userId: string, matchId?: string): void {
+  // Prevent unbounded memory growth: clear the entire set when it gets too large.
+  // A full clear is acceptable because the worst-case consequence is a duplicate
+  // push notification, which is harmless.
+  if (sentNotifications.size >= SENT_NOTIFICATIONS_MAX) {
+    console.log(
+      `[Notifications] sentNotifications Set reached ${SENT_NOTIFICATIONS_MAX} entries, clearing`,
+    );
+    sentNotifications.clear();
+  }
   sentNotifications.add(makeNotificationKey(type, userId, matchId));
 }
 
@@ -403,8 +413,24 @@ export async function syncFixtureStatsById(fixtureApiId: number): Promise<void> 
         updatedAt: Date.now(),
       })
       .onConflictDoUpdate({
-        target: footballFixtureStats.id,
-        set: { updatedAt: Date.now() },
+        target: [footballFixtureStats.fixtureId, footballFixtureStats.teamId],
+        set: {
+          shotsOnGoal: stat(s, "Shots on Goal"),
+          shotsTotal: stat(s, "Total Shots"),
+          blockedShots: stat(s, "Blocked Shots"),
+          shotsInsideBox: stat(s, "Shots insidebox"),
+          shotsOutsideBox: stat(s, "Shots outsidebox"),
+          fouls: stat(s, "Fouls"),
+          cornerKicks: stat(s, "Corner Kicks"),
+          offsides: stat(s, "Offsides"),
+          ballPossession: stat(s, "Ball Possession"),
+          yellowCards: stat(s, "Yellow Cards"),
+          redCards: stat(s, "Red Cards"),
+          goalkeeperSaves: stat(s, "Goalkeeper Saves"),
+          totalPasses: stat(s, "Total passes"),
+          accuratePasses: stat(s, "Passes accurate"),
+          updatedAt: Date.now(),
+        },
       });
   }
 }
