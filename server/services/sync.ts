@@ -403,8 +403,24 @@ export async function syncFixtureStatsById(fixtureApiId: number): Promise<void> 
         updatedAt: Date.now(),
       })
       .onConflictDoUpdate({
-        target: footballFixtureStats.id,
-        set: { updatedAt: Date.now() },
+        target: [footballFixtureStats.fixtureId, footballFixtureStats.teamId],
+        set: {
+          shotsOnGoal: stat(s, "Shots on Goal"),
+          shotsTotal: stat(s, "Total Shots"),
+          blockedShots: stat(s, "Blocked Shots"),
+          shotsInsideBox: stat(s, "Shots insidebox"),
+          shotsOutsideBox: stat(s, "Shots outsidebox"),
+          fouls: stat(s, "Fouls"),
+          cornerKicks: stat(s, "Corner Kicks"),
+          offsides: stat(s, "Offsides"),
+          ballPossession: stat(s, "Ball Possession"),
+          yellowCards: stat(s, "Yellow Cards"),
+          redCards: stat(s, "Red Cards"),
+          goalkeeperSaves: stat(s, "Goalkeeper Saves"),
+          totalPasses: stat(s, "Total passes"),
+          accuratePasses: stat(s, "Passes accurate"),
+          updatedAt: Date.now(),
+        },
       });
   }
 }
