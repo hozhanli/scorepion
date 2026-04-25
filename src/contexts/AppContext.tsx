@@ -28,12 +28,21 @@ import {
   setIsPremium as storePremium,
   getDailyPack,
   saveDailyPack,
+  pruneStaleDrafts,
 } from "@/lib/storage";
-import { MOCK_MATCHES, Match, LEAGUES, League, generateDailyPicks } from "@/lib/mock-data";
-import { useFootballMatches, useDailyPack as useBackendDailyPack } from "@/lib/football-api";
+import type { Match, League } from "@/lib/types";
+import { generateDailyPicks } from "@/lib/daily-picks";
+import {
+  useFootballMatches,
+  useFootballLeagues,
+  useDailyPack as useBackendDailyPack,
+} from "@/lib/football-api";
 import { queryClient, apiRequest } from "@/lib/query-client";
 import { getTodayString, getWeekStart } from "@/lib/time-utils";
 import { useDailyPackInit } from "@/lib/hooks/useDailyPackInit";
+import { useAuth } from "@/contexts/AuthContext";
+import { showErrorToast } from "@/lib/error-toast";
+import { useCelebration } from "@/components/ui/CelebrationToast";
 
 interface ErrorState {
   message: string;
@@ -54,6 +63,7 @@ interface AppContextValue {
   dailyPack: DailyPackState | null;
   dailyPickMatches: Match[];
   lastError: ErrorState | null;
+  liveMatchCount: number;
   submitPrediction: (
     matchId: string,
     homeScore: number,
@@ -69,11 +79,14 @@ interface AppContextValue {
   upgradeToPremium: () => Promise<void>;
   refreshData: () => Promise<void>;
   toggleBoostPick: (matchId: string) => Promise<void>;
+  deleteAccount: () => Promise<void>;
 }
 
 const AppContext = createContext<AppContextValue | null>(null);
 
 export function AppProvider({ children }: { children: ReactNode }) {
+  const { isAuthenticated, isLoading: authLoading } = useAuth();
+  const { celebrate } = useCelebration();
   const [predictions, setPredictions] = useState<Record<string, Prediction>>({});
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [groups, setGroups] = useState<Group[]>([]);
@@ -87,16 +100,30 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const pendingMatchIds = useRef(new Set<string>());
   const dailyPackRef = useRef(dailyPack);
   const profileRef = useRef(profile);
+  // Dedup sets for commiseration toasts
+  const announcedMisses = useRef(new Set<string>());
+  const lastStreakResetAnnounced = useRef<number | null>(null);
+  const lastRankDropAnnounced = useRef<{ timestamp: number; rank: number } | null>(null);
+  const previousStreak = useRef<number>(0);
+  const previousRank = useRef<number>(0);
 
   const {
     data: apiMatches,
     isLoading: matchesLoading,
     refetch: refetchMatches,
   } = useFootballMatches();
-  const matches = useMemo(() => {
-    if (apiMatches && apiMatches.length > 0) return apiMatches;
-    return MOCK_MATCHES;
-  }, [apiMatches]);
+  const { data: apiLeagues } = useFootballLeagues();
+  // Matches + leagues come exclusively from the backend (fed by API-Football
+  // sync → Postgres → /api/football/*). No client-side fallback data — an
+  // empty array surfaces honestly as an empty state in the UI.
+  const matches = useMemo<Match[]>(
+    () => (apiMatches && apiMatches.length > 0 ? apiMatches : []),
+    [apiMatches],
+  );
+  const leagues = useMemo<League[]>(
+    () => (Array.isArray(apiLeagues) ? (apiLeagues as League[]) : []),
+    [apiLeagues],
+  );
 
   const dailyPickMatches = useMemo(() => {
     if (!dailyPack) return generateDailyPicks(matches, favoriteLeagues);
@@ -113,6 +140,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
     return generateDailyPicks(matches, favoriteLeagues);
   }, [dailyPack, favoriteLeagues, matches]);
 
+  // Compute live match count for tab badge
+  const liveMatchCount = useMemo(
+    () => matches.filter((m) => m.status === "live").length,
+    [matches],
+  );
+
   const { initDailyPack: _initDailyPackFromHook } = useDailyPackInit(matches);
 
   // Update dailyPackRef whenever dailyPack changes
@@ -125,6 +158,74 @@ export function AppProvider({ children }: { children: ReactNode }) {
     profileRef.current = profile;
   }, [profile]);
 
+  // Observe prediction settlements for miss toast
+  useEffect(() => {
+    const now = Date.now();
+    Object.entries(predictions).forEach(([matchId, pred]) => {
+      // Fire miss toast if: prediction settled with 0 points AND not yet announced
+      if (pred.settled && pred.points === 0 && !announcedMisses.current.has(matchId)) {
+        announcedMisses.current.add(matchId);
+        // Find the match to get team names
+        const match = matches.find((m) => m.id === matchId);
+        if (match) {
+          const homeScore = match.homeScore ?? 0;
+          const awayScore = match.awayScore ?? 0;
+          celebrate({
+            variant: "miss",
+            title: "Close, but no.",
+            subtitle: `${match.homeTeam} ${homeScore}–${awayScore} ${match.awayTeam} — you picked ${pred.homeScore}–${pred.awayScore}`,
+          });
+        }
+      }
+    });
+  }, [predictions, matches, celebrate]);
+
+  // Observe streak resets for streak_reset toast (only if streak >= 2 days previously)
+  useEffect(() => {
+    if (!dailyPackRef.current) return;
+    const currentStreak = dailyPackRef.current.streak ?? 0;
+
+    // Fire if streak went from >= 2 to 0 AND not yet announced this session
+    if (
+      previousStreak.current >= 2 &&
+      currentStreak === 0 &&
+      lastStreakResetAnnounced.current === null
+    ) {
+      lastStreakResetAnnounced.current = Date.now();
+      celebrate({
+        variant: "streak_reset",
+        title: "Streak ended",
+        subtitle: `Your ${previousStreak.current}-day streak reset. Start fresh this week.`,
+      });
+    }
+    previousStreak.current = currentStreak;
+  }, [dailyPack, celebrate]);
+
+  // Observe rank drops for rank_drop toast (drop of 2+ spots)
+  useEffect(() => {
+    if (!profile) return;
+    const currentRank = profile.rank ?? 0;
+    const rankDelta = currentRank - previousRank.current;
+
+    // Fire if rank dropped by 2+ spots AND not already announced within 5 seconds
+    if (
+      rankDelta >= 2 &&
+      previousRank.current > 0 && // Skip on initial mount when previousRank is 0
+      (lastRankDropAnnounced.current === null ||
+        Date.now() - lastRankDropAnnounced.current.timestamp > 5000)
+    ) {
+      lastRankDropAnnounced.current = { timestamp: Date.now(), rank: currentRank };
+      celebrate({
+        variant: "rank_drop",
+        title: `Down ${rankDelta} spots`,
+        subtitle: `You dropped from #${previousRank.current} to #${currentRank}. Climb back this weekend.`,
+      });
+    }
+    if (rankDelta !== 0) {
+      previousRank.current = currentRank;
+    }
+  }, [profile, celebrate]);
+
   const initDailyPack = useCallback(
     async (favLeagues: string[]) => {
       await _initDailyPackFromHook(favLeagues, setDailyPack);
@@ -136,6 +237,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     let cancelled = false;
     (async () => {
       setIsLoading(true);
+      await pruneStaleDrafts();
       const [localPreds, prof, grps, obDone, favLeagues, premium] = await Promise.all([
         getPredictions(),
         getUserProfile(),
@@ -197,7 +299,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
           }
         }
       } catch (error) {
-        console.error("AppContext:loadData auth/me", { error });
+        console.warn("AppContext:loadData auth/me", { error });
       }
 
       if (!cancelled) {
@@ -210,9 +312,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, [initDailyPack]);
 
   useEffect(() => {
+    // Only fetch server data when the user is authenticated and auth is resolved
+    if (authLoading || !isAuthenticated) {
+      setIsLoading(false);
+      return;
+    }
     const cleanup = loadData();
     return cleanup;
-  }, [loadData]);
+  }, [loadData, isAuthenticated, authLoading]);
 
   const completeOnboarding = useCallback(
     async (username: string, leagueIds: string[]) => {
@@ -279,6 +386,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
           setLastError({
             message: `Failed to sync prediction to server: ${errMsg}`,
             timestamp: Date.now(),
+          });
+          showErrorToast({
+            title: "Prediction didn't save",
+            message: "We'll retry automatically. Check back soon.",
+            retry: () => submitPrediction(matchId, homeScore, awayScore, boosted),
           });
         }
 
@@ -368,8 +480,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     await saveDailyPack(updatedPack);
     setDailyPack(updatedPack);
 
-    // Sync to server; on failure, roll back and propagate the error so the
-    // caller can surface a toast instead of silently pretending to succeed.
+    // Sync to server; on failure, roll back and show error toast.
     try {
       await apiRequest("POST", "/api/retention/boost", { matchId });
     } catch (err) {
@@ -379,6 +490,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
       setLastError({
         message: "Failed to toggle boost; reverted",
         timestamp: Date.now(),
+      });
+      showErrorToast({
+        title: "Boost didn't apply",
+        message: "Your prediction is still safe. Try again?",
+        retry: () => apiRequest("POST", "/api/retention/boost", { matchId }).catch(() => {}),
       });
       throw err;
     }
@@ -455,10 +571,27 @@ export function AppProvider({ children }: { children: ReactNode }) {
     await loadData();
   }, [refetchMatches, loadData]);
 
+  const { logout } = useAuth();
+
+  const deleteAccount = useCallback(async () => {
+    try {
+      const res = await apiRequest("DELETE", "/api/account");
+      if (!res.ok) throw new Error("Delete failed");
+      // Clear all local state + storage
+      await import("@react-native-async-storage/async-storage").then(({ default: AsyncStorage }) =>
+        AsyncStorage.clear(),
+      );
+      logout();
+    } catch (err) {
+      const errMsg = err instanceof Error ? err.message : String(err);
+      throw new Error(`Failed to delete account: ${errMsg}`);
+    }
+  }, [logout]);
+
   const value = useMemo(
     () => ({
       matches,
-      leagues: LEAGUES,
+      leagues,
       predictions,
       profile,
       groups,
@@ -469,6 +602,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       dailyPack,
       dailyPickMatches,
       lastError,
+      liveMatchCount,
       submitPrediction,
       updateProfile,
       joinGroup,
@@ -479,9 +613,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
       upgradeToPremium,
       refreshData: refreshDataWithApi,
       toggleBoostPick,
+      deleteAccount,
     }),
     [
       matches,
+      leagues,
       predictions,
       profile,
       groups,
@@ -492,6 +628,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       dailyPack,
       dailyPickMatches,
       lastError,
+      liveMatchCount,
       submitPrediction,
       updateProfile,
       joinGroup,
@@ -502,6 +639,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       upgradeToPremium,
       refreshDataWithApi,
       toggleBoostPick,
+      deleteAccount,
     ],
   );
 

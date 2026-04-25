@@ -15,11 +15,20 @@
  *   • Removed useTheme, softShadow, importanceColor, washFlame, violet pill.
  */
 import React, { useState, useMemo, useEffect, useRef } from "react";
-import { View, Text, Pressable, StyleSheet, Platform, ScrollView, Alert } from "react-native";
+import { View, Text, Pressable, StyleSheet, Platform, ScrollView, Share } from "react-native";
+import { crossAlert } from "@/lib/cross-alert";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useLocalSearchParams, router } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
-import Animated, { FadeInDown, FadeIn, ZoomIn } from "react-native-reanimated";
+import Animated, {
+  FadeInDown,
+  FadeIn,
+  ZoomIn,
+  withTiming,
+  useSharedValue,
+  useAnimatedStyle,
+  FadeOut,
+} from "react-native-reanimated";
 
 import Colors, { accent, radii, type as typeTok, textRoleLight } from "@/constants/colors";
 import {
@@ -30,14 +39,20 @@ import {
   FilterSegmented,
   Button,
   EmptyState,
+  SyncIndicator,
   useCelebration,
+  HelpTip,
 } from "@/components/ui";
+import PitchDiagram from "@/components/ui/PitchDiagram";
 import { PredictionReceiptCard } from "@/components/ui/share/PredictionReceiptCard";
+import { PredictionDisplayCard } from "@/components/ui/PredictionDisplayCard";
 import { haptics } from "@/lib/motion";
 import { useApp } from "@/contexts/AppContext";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useTheme } from "@/contexts/ThemeContext";
 import { formatLocalTime, formatLocalDate, formatCountdown, getTimeUntil } from "@/lib/datetime";
+import { getPredictionDraft, savePredictionDraft, clearPredictionDraft } from "@/lib/storage";
+import { useFilterPersistence } from "@/lib/hooks/useFilterPersistence";
 import {
   useFixtureEvents,
   useFixtureLineups,
@@ -45,7 +60,10 @@ import {
   useFixtureH2H,
   useTeamStats,
   useCommunityPicks,
+  useFootballTopScorers,
+  useFixtureById,
 } from "@/lib/football-api";
+import PlayerProfileSheet, { type PlayerProfileData } from "@/components/PlayerProfileSheet";
 
 // ── Form Strip Component ──────────────────────────────────────────────────────
 
@@ -210,15 +228,42 @@ export default function MatchScreen() {
   const receiptCardRef = useRef<View>(null);
   const [showShareButton, setShowShareButton] = useState(false);
 
+  // Long-press acceleration refs for score stepper
+  const homePlusIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const homeMinusIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const awayPlusIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const awayMinusIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const LONG_PRESS_INTERVAL = 140;
+
+  // Feature A: Community picks histogram
+  const [communityPicksExpanded, setCommunityPicksExpanded] = useFilterPersistence<boolean>(
+    `match.${id}.communityPicks.expanded`,
+    true,
+    [true, false],
+  );
+
+  // Feature B: Post-lock-in share CTA
+  const [showShareCTA, setShowShareCTA] = useState(false);
+  const [predictionLockedAt, setPredictionLockedAt] = useState<number | null>(null);
+  const dismissedShareCTARef = useRef(false);
+  const shareCtaTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const shareCtaFadeAnim = useSharedValue(1);
+
   const match = useMemo(() => matches.find((m) => m.id === id), [matches, id]);
   const existingPrediction = predictions[id || ""];
 
   const [homeScore, setHomeScore] = useState(existingPrediction?.homeScore ?? 0);
   const [awayScore, setAwayScore] = useState(existingPrediction?.awayScore ?? 0);
   const [submitted, setSubmitted] = useState(!!existingPrediction);
+  // `isEditing` is a temporary override that flips the locked card back to
+  // the score selector. Needed because `existingPrediction` comes from
+  // AppContext and can't be flipped by the child; toggling `submitted` alone
+  // isn't enough to override the display card in the render branch below.
+  const [isEditing, setIsEditing] = useState(false);
   const [activeSection, setActiveSection] = useState<SectionKey>("prediction");
   const [kickoffCountdown, setKickoffCountdown] = useState("");
   const [pointsExpanded, setPointsExpanded] = useState(false);
+  const [selectedPlayer, setSelectedPlayer] = useState<PlayerProfileData | null>(null);
 
   const { data: socialProof } = useCommunityPicks(id);
   const { data: fixtureEvents } = useFixtureEvents(id);
@@ -227,14 +272,20 @@ export default function MatchScreen() {
   const { data: _homeTeamStats } = useTeamStats(match?.homeTeam?.id);
   const { data: _awayTeamStats } = useTeamStats(match?.awayTeam?.id);
   const { data: h2hData } = useFixtureH2H(match?.homeTeam?.id, match?.awayTeam?.id);
+  const { data: topScorers } = useFootballTopScorers(match?.league?.id || "");
+
+  // Get fetch metadata for SyncIndicator (isFetching, dataUpdatedAt)
+  const { isFetching: matchIsFetching, dataUpdatedAt: matchDataUpdatedAt } = useFixtureById(id);
 
   const h2hMatches = useMemo(() => h2hData ?? [], [h2hData]);
 
   const h2hSummary = useMemo(() => {
-    if (!match || h2hMatches.length === 0) return { homeWins: 0, draws: 0, awayWins: 0 };
+    if (!match || h2hMatches.length === 0)
+      return { homeWins: 0, draws: 0, awayWins: 0, avgGoals: 0 };
     let homeWins = 0,
       draws = 0,
-      awayWins = 0;
+      awayWins = 0,
+      totalGoals = 0;
     h2hMatches.forEach((m) => {
       const isHomeTeamHome = m.homeTeam.id === match.homeTeam.id;
       if (m.homeScore === m.awayScore) {
@@ -247,8 +298,11 @@ export default function MatchScreen() {
       } else {
         awayWins++;
       }
+      totalGoals += m.homeScore + m.awayScore;
     });
-    return { homeWins, draws, awayWins };
+    const avgGoals =
+      h2hMatches.length > 0 ? Math.round((totalGoals / h2hMatches.length) * 10) / 10 : 0;
+    return { homeWins, draws, awayWins, avgGoals };
   }, [h2hMatches, match]);
 
   const isDailyPick = useMemo(
@@ -260,6 +314,60 @@ export default function MatchScreen() {
     [dailyPack, id],
   );
   const boostAvailable = useMemo(() => !dailyPack?.boostUsed || isBoosted, [dailyPack, isBoosted]);
+
+  const handlePlayerPress = useMemo(
+    () => (playerId: number | string) => {
+      // Find the player from the lineups data
+      if (!fixtureLineups) return;
+
+      let playerData = null;
+      for (const teamLineup of fixtureLineups) {
+        const allPlayers = [...(teamLineup.startXI || []), ...(teamLineup.subs || [])];
+        const foundPlayer = allPlayers.find((p: any) => p.id === playerId);
+        if (foundPlayer) {
+          playerData = foundPlayer;
+          break;
+        }
+      }
+
+      if (!playerData) return;
+
+      // Look up season stats from top scorers if available
+      let seasonStats: PlayerProfileData["seasonStats"] | undefined;
+      if (topScorers && Array.isArray(topScorers)) {
+        const scorerEntry = topScorers.find(
+          (s: any) => s.playerName?.toLowerCase() === playerData.name?.toLowerCase(),
+        );
+        if (scorerEntry) {
+          seasonStats = {
+            goals: scorerEntry.goals,
+            assists: scorerEntry.assists,
+            matches: scorerEntry.matches,
+          };
+        }
+      }
+
+      // Find the team from lineups
+      let playerTeam = null;
+      for (const teamLineup of fixtureLineups) {
+        const allPlayers = [...(teamLineup.startXI || []), ...(teamLineup.subs || [])];
+        if (allPlayers.some((p: any) => p.id === playerId)) {
+          playerTeam = teamLineup.team;
+          break;
+        }
+      }
+
+      setSelectedPlayer({
+        playerId,
+        playerName: playerData.name,
+        playerNumber: playerData.number,
+        playerPos: playerData.pos,
+        team: playerTeam,
+        seasonStats,
+      });
+    },
+    [fixtureLineups, topScorers],
+  );
 
   useEffect(() => {
     if (!match || match.status !== "upcoming") return;
@@ -275,6 +383,44 @@ export default function MatchScreen() {
     const interval = setInterval(update, 1000);
     return () => clearInterval(interval);
   }, [match]);
+
+  // Cleanup long-press intervals on unmount
+  useEffect(() => {
+    return () => {
+      if (homePlusIntervalRef.current) clearInterval(homePlusIntervalRef.current);
+      if (homeMinusIntervalRef.current) clearInterval(homeMinusIntervalRef.current);
+      if (awayPlusIntervalRef.current) clearInterval(awayPlusIntervalRef.current);
+      if (awayMinusIntervalRef.current) clearInterval(awayMinusIntervalRef.current);
+    };
+  }, []);
+
+  // Restore draft on mount if no finalized prediction exists
+  useEffect(() => {
+    if (!id || existingPrediction) return;
+    (async () => {
+      const draft = await getPredictionDraft(id);
+      if (draft) {
+        setHomeScore(draft.home);
+        setAwayScore(draft.away);
+      }
+    })();
+  }, [id, existingPrediction]);
+
+  // Debounced draft-save on score changes (300ms)
+  useEffect(() => {
+    if (!id || submitted) return;
+    const timer = setTimeout(() => {
+      savePredictionDraft(id, homeScore, awayScore);
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [id, homeScore, awayScore, submitted]);
+
+  // Cleanup share CTA timer on unmount
+  useEffect(() => {
+    return () => {
+      if (shareCtaTimerRef.current) clearTimeout(shareCtaTimerRef.current);
+    };
+  }, []);
 
   if (!match) {
     return (
@@ -297,7 +443,7 @@ export default function MatchScreen() {
 
   const handleSubmit = async () => {
     if (matchStarted) {
-      Alert.alert(t.match.predictionsLocked, t.match.matchStarted);
+      crossAlert(t.match.predictionsLocked, t.match.matchStarted);
       return;
     }
     // Race condition guard: prevent double-submit
@@ -312,8 +458,29 @@ export default function MatchScreen() {
 
     try {
       await submitPrediction(match.id, homeScore, awayScore, isBoosted);
+      await clearPredictionDraft(match.id);
       setSubmitted(true);
+      setIsEditing(false); // exit edit mode once the new prediction is saved
       setShowShareButton(true);
+
+      // Feature B: Show share CTA after lock-in
+      const now = Date.now();
+      setPredictionLockedAt(now);
+      setShowShareCTA(true);
+      dismissedShareCTARef.current = false;
+      shareCtaFadeAnim.value = 1;
+
+      // Auto-dismiss share CTA after 10 seconds
+      if (shareCtaTimerRef.current) clearTimeout(shareCtaTimerRef.current);
+      shareCtaTimerRef.current = setTimeout(() => {
+        if (!dismissedShareCTARef.current) {
+          // Fade out over 300ms then hide
+          shareCtaFadeAnim.value = withTiming(0, { duration: 300 }, () => {
+            setShowShareCTA(false);
+          });
+        }
+      }, 10000);
+
       // Canonical gradient celebration moment #1 — prediction locked in.
       // The toast fires its own haptics.success(); we don't double-fire here.
       celebrate({
@@ -330,7 +497,7 @@ export default function MatchScreen() {
         }
       }, 650);
     } catch (_error) {
-      Alert.alert(t.match.error, t.match.submitError);
+      crossAlert(t.match.error, t.match.submitError);
     } finally {
       submitInFlight.current = false;
     }
@@ -338,18 +505,32 @@ export default function MatchScreen() {
 
   const handleEdit = () => {
     if (matchStarted) {
-      Alert.alert(t.match.predictionsLocked, t.match.matchStarted);
+      crossAlert(t.match.predictionsLocked, t.match.matchStarted);
       return;
     }
+    // Pre-fill the selector with the existing prediction's scores so the
+    // user can tweak from their saved pick rather than 0-0.
+    if (existingPrediction) {
+      setHomeScore(existingPrediction.homeScore);
+      setAwayScore(existingPrediction.awayScore);
+    }
+    setIsEditing(true);
     setSubmitted(false);
   };
 
   const timeStr = formatLocalTime(match.kickoff);
   const dateStr = formatLocalDate(match.kickoff);
 
-  const sections: { value: SectionKey; label: string }[] = [
+  const sections: { value: SectionKey; label: string | React.ReactNode }[] = [
     { value: "prediction", label: t.match.predict },
-    { value: "h2h", label: t.match.h2h },
+    {
+      value: "h2h",
+      // Use plain string label so the segmented control renders cleanly.
+      // The H2H HelpTip now lives on the H2H content section header (see below)
+      // where it has room to breathe — a 44px Pressable doesn't fit inside a
+      // 34px-tall tab.
+      label: t.match.h2h,
+    },
     { value: "events", label: t.match.events },
     { value: "lineups", label: t.match.lineups },
     { value: "stats", label: t.match.stats },
@@ -431,7 +612,10 @@ export default function MatchScreen() {
               </Text>
             </View>
             {isLive ? (
-              <LiveBadge minute={match.minute} />
+              <View style={styles.liveBadgeRow}>
+                <LiveBadge minute={match.minute} />
+                <SyncIndicator isFetching={matchIsFetching} lastUpdated={matchDataUpdatedAt} />
+              </View>
             ) : (
               <View style={styles.heroFtChip}>
                 <Text style={styles.heroFtChipText}>FULL TIME</Text>
@@ -650,7 +834,103 @@ export default function MatchScreen() {
         {/* ── PREDICTION ── */}
         {activeSection === "prediction" && (
           <Animated.View entering={FadeInDown.duration(400)} style={styles.predictionSection}>
-            {matchStarted && !existingPrediction ? (
+            {(existingPrediction || submitted) && !isEditing ? (
+              <Animated.View entering={ZoomIn.duration(300)}>
+                <PredictionDisplayCard
+                  homeTeam={match.homeTeam.name}
+                  awayTeam={match.awayTeam.name}
+                  homeScore={existingPrediction?.homeScore ?? homeScore}
+                  awayScore={existingPrediction?.awayScore ?? awayScore}
+                  league={match.league.name}
+                  kickoffLabel={`${formatLocalDate(match.kickoff)} · ${formatLocalTime(match.kickoff)}`}
+                  matchStatus={match.status as "upcoming" | "live" | "finished"}
+                  actualScore={
+                    isFinished && match.homeScore !== null && match.awayScore !== null
+                      ? { home: match.homeScore, away: match.awayScore }
+                      : undefined
+                  }
+                  onEdit={handleEdit}
+                  username={profile?.username}
+                />
+
+                {/* Feature B: Post-lock-in share CTA */}
+                {showShareCTA &&
+                  submitted &&
+                  predictionLockedAt &&
+                  Date.now() - predictionLockedAt < 20000 &&
+                  !isFinished && (
+                    <Animated.View
+                      entering={FadeInDown.duration(300)}
+                      exiting={FadeOut.duration(300)}
+                      style={[
+                        styles.shareCTACard,
+                        { backgroundColor: themeSurface[0], borderColor: themeBorder.subtle },
+                      ]}
+                    >
+                      {/* Header */}
+                      <View style={styles.shareCTAHeader}>
+                        <Ionicons
+                          name="chatbubbles-outline"
+                          size={20}
+                          color={themeAccent.primary}
+                        />
+                        <Text style={[styles.shareCTATitle, { color: themeTextRole.primary }]}>
+                          Share this pick
+                        </Text>
+                      </View>
+
+                      {/* Subtitle */}
+                      <Text style={[styles.shareCTASubtitle, { color: themeTextRole.secondary }]}>
+                        Let your group know you&apos;ve locked in.
+                      </Text>
+
+                      {/* CTA Buttons */}
+                      <View style={styles.shareCTAButtons}>
+                        <PressableScale
+                          onPress={async () => {
+                            haptics.light();
+                            try {
+                              await Share.share({
+                                message: `I predicted ${match.homeTeam.shortName} ${existingPrediction?.homeScore ?? homeScore} – ${existingPrediction?.awayScore ?? awayScore} ${match.awayTeam.shortName} in ${match.league.name}!`,
+                              });
+                            } catch (err) {
+                              console.error("Share error:", err);
+                            }
+                          }}
+                          style={[styles.shareCTAPrimary, { backgroundColor: themeAccent.primary }]}
+                          accessibilityLabel="Share prediction to your group"
+                          accessibilityRole="button"
+                        >
+                          <Text style={styles.shareCTAPrimaryText}>Share →</Text>
+                        </PressableScale>
+
+                        <PressableScale
+                          onPress={() => {
+                            haptics.light();
+                            dismissedShareCTARef.current = true;
+                            if (shareCtaTimerRef.current) clearTimeout(shareCtaTimerRef.current);
+                            shareCtaFadeAnim.value = withTiming(0, { duration: 300 }, () => {
+                              setShowShareCTA(false);
+                            });
+                          }}
+                          style={styles.shareCTASecondary}
+                          accessibilityLabel="Dismiss share prompt"
+                          accessibilityRole="button"
+                        >
+                          <Text
+                            style={[
+                              styles.shareCTASecondaryText,
+                              { color: themeTextRole.tertiary },
+                            ]}
+                          >
+                            Dismiss
+                          </Text>
+                        </PressableScale>
+                      </View>
+                    </Animated.View>
+                  )}
+              </Animated.View>
+            ) : matchStarted ? (
               <View
                 style={[
                   styles.lockedCard,
@@ -671,106 +951,6 @@ export default function MatchScreen() {
                       : "This match has started. Predictions can only be made before kickoff."}
                 </Text>
               </View>
-            ) : submitted ? (
-              <>
-                <Animated.View
-                  entering={ZoomIn.duration(300)}
-                  style={[
-                    styles.predictCardClean,
-                    { backgroundColor: themeSurface[0], borderColor: themeBorder.subtle },
-                  ]}
-                >
-                  {/* Header */}
-                  <View style={styles.predictHeaderClean}>
-                    <Text style={[styles.predictLabelClean, { color: themeTextRole.secondary }]}>
-                      {t.match.yourPrediction}
-                    </Text>
-                    <View style={styles.predictCountdownChip}>
-                      <Ionicons name="lock-closed" size={11} color={themeAccent.primary} />
-                      <Text style={[styles.predictCountdownText, { color: themeAccent.primary }]}>
-                        Locked
-                      </Text>
-                    </View>
-                  </View>
-
-                  {/* Score row */}
-                  <View style={styles.predictScoreRow}>
-                    <View style={styles.predictTeamCol}>
-                      <Text
-                        style={[styles.predictTeamLabel, { color: themeTextRole.tertiary }]}
-                        numberOfLines={1}
-                      >
-                        {match.homeTeam.shortName}
-                      </Text>
-                      <Text style={[styles.predictBigScore, { color: themeTextRole.primary }]}>
-                        {homeScore}
-                      </Text>
-                    </View>
-                    <Text
-                      style={[
-                        styles.predictDash,
-                        { color: themeTextRole.tertiary, paddingBottom: 0 },
-                      ]}
-                    >
-                      —
-                    </Text>
-                    <View style={styles.predictTeamCol}>
-                      <Text
-                        style={[styles.predictTeamLabel, { color: themeTextRole.tertiary }]}
-                        numberOfLines={1}
-                      >
-                        {match.awayTeam.shortName}
-                      </Text>
-                      <Text style={[styles.predictBigScore, { color: themeTextRole.primary }]}>
-                        {awayScore}
-                      </Text>
-                    </View>
-                  </View>
-
-                  {/* Footer */}
-                  <View style={styles.submittedFooter}>
-                    <View style={styles.predictOutcomeChip}>
-                      <Ionicons
-                        name={homeScore === awayScore ? "remove-circle" : "checkmark-circle"}
-                        size={14}
-                        color={themeAccent.primary}
-                      />
-                      <Text style={[styles.predictOutcomeChipText, { color: themeAccent.primary }]}>
-                        {homeScore === awayScore
-                          ? t.match.draw
-                          : homeScore > awayScore
-                            ? `${match.homeTeam.shortName} win`
-                            : `${match.awayTeam.shortName} win`}
-                      </Text>
-                    </View>
-                    {!matchStarted && (
-                      <Pressable
-                        onPress={handleEdit}
-                        style={({ pressed }) => [styles.changeLink, pressed && { opacity: 0.6 }]}
-                        hitSlop={8}
-                      >
-                        <Ionicons name="create-outline" size={14} color={themeAccent.primary} />
-                        <Text style={[styles.changeLinkText, { color: themeAccent.primary }]}>
-                          {t.match.change}
-                        </Text>
-                      </Pressable>
-                    )}
-                  </View>
-                </Animated.View>
-
-                {/* PredictionReceiptCard — shown after lock-in */}
-                <View style={styles.receiptSection}>
-                  <PredictionReceiptCard
-                    homeTeam={match.homeTeam.name}
-                    awayTeam={match.awayTeam.name}
-                    homeScore={homeScore}
-                    awayScore={awayScore}
-                    league={match.league.name}
-                    kickoffLabel={`${formatLocalDate(match.kickoff)} · ${formatLocalTime(match.kickoff)}`}
-                    username={profile?.username}
-                  />
-                </View>
-              </>
             ) : (
               <>
                 <View
@@ -808,6 +988,18 @@ export default function MatchScreen() {
                       <View style={styles.predictStepperRow}>
                         <PressableScale
                           onPress={() => homeScore > 0 && setHomeScore((s) => Math.max(s - 1, 0))}
+                          onPressIn={() => {
+                            if (homeScore <= 0) return;
+                            homeMinusIntervalRef.current = setInterval(() => {
+                              setHomeScore((s) => Math.max(s - 1, 0));
+                            }, LONG_PRESS_INTERVAL);
+                          }}
+                          onPressOut={() => {
+                            if (homeMinusIntervalRef.current) {
+                              clearInterval(homeMinusIntervalRef.current);
+                              homeMinusIntervalRef.current = null;
+                            }
+                          }}
                           disabled={homeScore <= 0}
                           style={[
                             styles.predictStepMinus,
@@ -823,6 +1015,18 @@ export default function MatchScreen() {
                         </PressableScale>
                         <PressableScale
                           onPress={() => homeScore < 15 && setHomeScore((s) => Math.min(s + 1, 15))}
+                          onPressIn={() => {
+                            if (homeScore >= 15) return;
+                            homePlusIntervalRef.current = setInterval(() => {
+                              setHomeScore((s) => Math.min(s + 1, 15));
+                            }, LONG_PRESS_INTERVAL);
+                          }}
+                          onPressOut={() => {
+                            if (homePlusIntervalRef.current) {
+                              clearInterval(homePlusIntervalRef.current);
+                              homePlusIntervalRef.current = null;
+                            }
+                          }}
                           disabled={homeScore >= 15}
                           style={[styles.predictStepPlus, homeScore >= 15 && { opacity: 0.35 }]}
                           hitSlop={12}
@@ -852,6 +1056,18 @@ export default function MatchScreen() {
                       <View style={styles.predictStepperRow}>
                         <PressableScale
                           onPress={() => awayScore > 0 && setAwayScore((s) => Math.max(s - 1, 0))}
+                          onPressIn={() => {
+                            if (awayScore <= 0) return;
+                            awayMinusIntervalRef.current = setInterval(() => {
+                              setAwayScore((s) => Math.max(s - 1, 0));
+                            }, LONG_PRESS_INTERVAL);
+                          }}
+                          onPressOut={() => {
+                            if (awayMinusIntervalRef.current) {
+                              clearInterval(awayMinusIntervalRef.current);
+                              awayMinusIntervalRef.current = null;
+                            }
+                          }}
                           disabled={awayScore <= 0}
                           style={[
                             styles.predictStepMinus,
@@ -867,6 +1083,18 @@ export default function MatchScreen() {
                         </PressableScale>
                         <PressableScale
                           onPress={() => awayScore < 15 && setAwayScore((s) => Math.min(s + 1, 15))}
+                          onPressIn={() => {
+                            if (awayScore >= 15) return;
+                            awayPlusIntervalRef.current = setInterval(() => {
+                              setAwayScore((s) => Math.min(s + 1, 15));
+                            }, LONG_PRESS_INTERVAL);
+                          }}
+                          onPressOut={() => {
+                            if (awayPlusIntervalRef.current) {
+                              clearInterval(awayPlusIntervalRef.current);
+                              awayPlusIntervalRef.current = null;
+                            }
+                          }}
                           disabled={awayScore >= 15}
                           style={[styles.predictStepPlus, awayScore >= 15 && { opacity: 0.35 }]}
                           hitSlop={12}
@@ -901,6 +1129,174 @@ export default function MatchScreen() {
                   </View>
                 </View>
 
+                {/* Feature A: Community picks histogram */}
+                {socialProof && socialProof.totalPredictions > 0 && !isFinished && !submitted && (
+                  <View
+                    style={[
+                      styles.communityPicksCard,
+                      { backgroundColor: themeSurface[0], borderColor: themeBorder.subtle },
+                    ]}
+                  >
+                    {/* Header with expand/collapse */}
+                    <Pressable
+                      onPress={() => setCommunityPicksExpanded(!communityPicksExpanded)}
+                      style={styles.communityPicksHeader}
+                      accessibilityRole="button"
+                      accessibilityLabel={`Community picks, ${socialProof.totalPredictions} predictions`}
+                      accessibilityHint="Double tap to toggle"
+                    >
+                      <View style={styles.communityPicksHeaderLeft}>
+                        <Text
+                          style={[styles.communityPicksLabel, { color: themeTextRole.tertiary }]}
+                        >
+                          COMMUNITY PICKS
+                        </Text>
+                        <Text
+                          style={[
+                            styles.communityPicksLabelText,
+                            { color: themeTextRole.tertiary },
+                          ]}
+                        >
+                          {" "}
+                          ·{" "}
+                        </Text>
+                        <Text
+                          style={[styles.communityPicksCount, { color: themeTextRole.secondary }]}
+                        >
+                          {socialProof.totalPredictions} predictions
+                        </Text>
+                      </View>
+                      <Ionicons
+                        name={communityPicksExpanded ? "chevron-up" : "chevron-down"}
+                        size={16}
+                        color={themeTextRole.tertiary}
+                      />
+                    </Pressable>
+
+                    {/* Histogram bars (shown when expanded) */}
+                    {communityPicksExpanded && (
+                      <View style={styles.communityPicksBars}>
+                        {socialProof.communityPicks.map(
+                          (pick: { score: string; percent: number }, i: number) => {
+                            const isTopPick = i === 0;
+                            const isUserMatch = `${homeScore}-${awayScore}` === pick.score;
+
+                            return (
+                              <PressableScale
+                                key={i}
+                                onPress={() => {
+                                  haptics.light();
+                                  const [h, a] = pick.score.split("-").map(Number);
+                                  setHomeScore(h);
+                                  setAwayScore(a);
+                                }}
+                                style={[
+                                  styles.communityPicksRow,
+                                  isUserMatch && styles.communityPicksRowHighlight,
+                                ]}
+                                accessibilityLabel={`${pick.percent}% of users picked ${pick.score}`}
+                                accessibilityHint="Double tap to copy this score"
+                                accessibilityRole="button"
+                              >
+                                <Text
+                                  style={[
+                                    styles.communityPicksScore,
+                                    { color: themeTextRole.primary },
+                                  ]}
+                                >
+                                  {pick.score}
+                                </Text>
+                                <View style={styles.communityPicksBarContainer}>
+                                  <View
+                                    style={[
+                                      styles.communityPicksBarTrack,
+                                      { backgroundColor: themeSurface[2] },
+                                    ]}
+                                  >
+                                    <Animated.View
+                                      style={[
+                                        styles.communityPicksBarFill,
+                                        {
+                                          width: `${pick.percent}%`,
+                                          backgroundColor: isTopPick
+                                            ? "rgba(0, 166, 81, 0.30)"
+                                            : "rgba(0, 166, 81, 0.16)",
+                                        },
+                                      ]}
+                                    />
+                                  </View>
+                                </View>
+                                <Text
+                                  style={[
+                                    styles.communityPicksPercent,
+                                    { color: themeTextRole.secondary },
+                                  ]}
+                                >
+                                  {pick.percent}%
+                                </Text>
+                              </PressableScale>
+                            );
+                          },
+                        )}
+
+                        {/* "Other scores" row if necessary */}
+                        {socialProof.communityPicks.reduce(
+                          (sum: number, p: any) => sum + p.percent,
+                          0,
+                        ) < 100 && (
+                          <View style={styles.communityPicksRow}>
+                            <Text
+                              style={[styles.communityPicksScore, { color: themeTextRole.primary }]}
+                            >
+                              Other scores
+                            </Text>
+                            <View style={styles.communityPicksBarContainer}>
+                              <View
+                                style={[
+                                  styles.communityPicksBarTrack,
+                                  { backgroundColor: themeSurface[2] },
+                                ]}
+                              >
+                                <View
+                                  style={[
+                                    styles.communityPicksBarFill,
+                                    {
+                                      width: `${100 - socialProof.communityPicks.reduce((sum: number, p: any) => sum + p.percent, 0)}%`,
+                                      backgroundColor: "rgba(0, 166, 81, 0.16)",
+                                    },
+                                  ]}
+                                />
+                              </View>
+                            </View>
+                            <Text
+                              style={[
+                                styles.communityPicksPercent,
+                                { color: themeTextRole.secondary },
+                              ]}
+                            >
+                              {100 -
+                                socialProof.communityPicks.reduce(
+                                  (sum: number, p: any) => sum + p.percent,
+                                  0,
+                                )}
+                              %
+                            </Text>
+                          </View>
+                        )}
+                      </View>
+                    )}
+
+                    {/* Empty state */}
+                    {!communityPicksExpanded && (
+                      <Text
+                        style={[styles.communityPicksEmpty, { color: themeTextRole.secondary }]}
+                      >
+                        Be the first to predict this match.
+                      </Text>
+                    )}
+                  </View>
+                )}
+
                 {isDailyPick && boostAvailable && !isFinished && (
                   <PressableScale
                     onPress={() => {
@@ -921,15 +1317,18 @@ export default function MatchScreen() {
                       />
                     </View>
                     <View style={{ flex: 1 }}>
-                      <Text
-                        style={[
-                          styles.boostText,
-                          { color: themeTextRole.primary },
-                          isBoosted && styles.boostTextActive,
-                        ]}
-                      >
-                        {isBoosted ? t.match.boostActive : t.match.useBoost}
-                      </Text>
+                      <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
+                        <Text
+                          style={[
+                            styles.boostText,
+                            { color: themeTextRole.primary },
+                            isBoosted && styles.boostTextActive,
+                          ]}
+                        >
+                          {isBoosted ? t.match.boostActive : t.match.useBoost}
+                        </Text>
+                        <HelpTip term="boost" iconSize={12} />
+                      </View>
                       <Text style={[styles.boostSub, { color: themeTextRole.tertiary }]}>
                         {t.match.boostPerDay}
                       </Text>
@@ -957,48 +1356,6 @@ export default function MatchScreen() {
                   fullWidth
                 />
               </>
-            )}
-
-            {socialProof && socialProof.totalPredictions > 0 && !isFinished && (
-              <View
-                style={[
-                  styles.socialProofCard,
-                  { backgroundColor: themeSurface[0], borderColor: themeBorder.subtle },
-                ]}
-              >
-                <View style={styles.socialProofHeader}>
-                  <Ionicons name="people-outline" size={14} color={themeAccent.primary} />
-                  <Text style={[styles.socialProofTitle, { color: themeTextRole.primary }]}>
-                    {t.match.communityPicks}
-                  </Text>
-                  <Text style={[styles.socialProofCount, { color: themeTextRole.tertiary }]}>
-                    {socialProof.totalPredictions} predictions
-                  </Text>
-                </View>
-                <View style={styles.socialProofPicks}>
-                  {socialProof.communityPicks.map(
-                    (pick: { score: string; percent: number }, i: number) => (
-                      <View key={i} style={styles.socialProofRow}>
-                        <Text style={[styles.socialProofScore, { color: themeTextRole.primary }]}>
-                          {pick.score}
-                        </Text>
-                        <View
-                          style={[styles.socialProofBarTrack, { backgroundColor: themeSurface[2] }]}
-                        >
-                          <View
-                            style={[styles.socialProofBarFill, { width: `${pick.percent}%` }]}
-                          />
-                        </View>
-                        <Text
-                          style={[styles.socialProofPercent, { color: themeTextRole.secondary }]}
-                        >
-                          {pick.percent}%
-                        </Text>
-                      </View>
-                    ),
-                  )}
-                </View>
-              </View>
             )}
 
             {/* Points system — collapsible */}
@@ -1056,15 +1413,23 @@ export default function MatchScreen() {
                 ]}
               >
                 <View style={[styles.lockedIconWrap, { backgroundColor: themeSurface[2] }]}>
-                  <Ionicons name="list-outline" size={22} color={themeTextRole.tertiary} />
+                  <Ionicons
+                    name={match.status === "upcoming" ? "football-outline" : "list-outline"}
+                    size={22}
+                    color={themeTextRole.tertiary}
+                  />
                 </View>
                 <Text style={[styles.lockedTitle, { color: themeTextRole.primary }]}>
-                  {t.match.noEventsYet}
+                  {match.status === "upcoming"
+                    ? `Kicks off in ${kickoffCountdown || "soon"}`
+                    : t.match.noEventsYet}
                 </Text>
                 <Text style={[styles.lockedText, { color: themeTextRole.secondary }]}>
                   {match.status === "upcoming"
-                    ? t.match.eventsComingSoon
-                    : t.match.eventsSyncedAfter}
+                    ? "Events will appear once the match starts"
+                    : isFinished
+                      ? "Events still syncing. Pull to refresh."
+                      : t.match.eventsSyncedAfter}
                 </Text>
               </View>
             ) : (
@@ -1077,84 +1442,181 @@ export default function MatchScreen() {
                 {fixtureEvents.map((ev: any, i: number) => {
                   const isHome =
                     ev.team.id === match.homeTeam.id || String(ev.team.id) === match.homeTeam.id;
-                  const iconName: keyof typeof Ionicons.glyphMap =
-                    ev.type === "Goal"
-                      ? "football"
-                      : ev.detail?.includes("Yellow")
-                        ? "square"
-                        : ev.detail?.includes("Red")
-                          ? "square-sharp"
-                          : ev.type === "subst"
-                            ? "swap-horizontal"
-                            : "flash";
-                  const iconColor =
-                    ev.type === "Goal"
-                      ? themeAccent.primary
-                      : ev.detail?.includes("Yellow")
-                        ? themeAccent.reward
-                        : ev.detail?.includes("Red")
-                          ? themeAccent.alert
-                          : ev.type === "subst"
-                            ? themeTextRole.secondary
-                            : themeTextRole.secondary;
+
+                  // Enhanced icon mapping for event subtypes
+                  let iconName: keyof typeof Ionicons.glyphMap;
+                  let iconColor: string;
+                  let eventSuffix = "";
+                  const isGoal = ev.type === "Goal";
+
+                  if (isGoal) {
+                    if (ev.detail?.includes("Penalty")) {
+                      iconName = "flag";
+                      iconColor = themeAccent.primary;
+                      eventSuffix = "(P)";
+                    } else if (ev.detail?.includes("Own Goal")) {
+                      iconName = "football-outline";
+                      iconColor = themeTextRole.tertiary;
+                      eventSuffix = "(OG)";
+                    } else {
+                      iconName = "football-outline";
+                      iconColor = themeAccent.primary;
+                    }
+                  } else if (ev.detail?.includes("Yellow")) {
+                    iconName = "square";
+                    iconColor = themeAccent.reward;
+                  } else if (ev.detail?.includes("Red")) {
+                    iconName = "square-sharp";
+                    iconColor = themeAccent.alert;
+                  } else if (ev.detail?.includes("Missed Penalty")) {
+                    iconName = "close-circle-outline";
+                    iconColor = themeAccent.alert;
+                    eventSuffix = "(MP)";
+                  } else if (ev.detail?.includes("VAR") || ev.type === "Var") {
+                    iconName = "eye-outline";
+                    iconColor = themeTextRole.tertiary;
+                  } else if (ev.type === "subst") {
+                    iconName = "swap-horizontal";
+                    iconColor = themeTextRole.secondary;
+                  } else {
+                    iconName = "flash";
+                    iconColor = themeTextRole.secondary;
+                  }
+
+                  // Check for half-time divider
+                  const prevElapsed = i > 0 ? fixtureEvents[i - 1].elapsed : 0;
+                  const showHalfTimeDivider = ev.elapsed >= 45 && prevElapsed < 45;
 
                   return (
-                    <View
-                      key={i}
-                      style={[
-                        eventsStyles.row,
-                        { borderBottomColor: themeBorder.subtle },
-                        i === fixtureEvents.length - 1 && { borderBottomWidth: 0 },
-                      ]}
-                    >
-                      <View style={eventsStyles.side}>
-                        {isHome && (
-                          <View style={eventsStyles.eventContent}>
-                            <Text
-                              style={[eventsStyles.playerName, { color: themeTextRole.primary }]}
-                              numberOfLines={1}
-                            >
-                              {ev.player?.name ?? ""}
-                            </Text>
-                            {ev.assist?.name && (
+                    <React.Fragment key={i}>
+                      {showHalfTimeDivider && (
+                        <Animated.View
+                          entering={FadeInDown.duration(300)}
+                          style={[
+                            eventsStyles.halfTimeDivider,
+                            { borderColor: themeBorder.subtle },
+                          ]}
+                        >
+                          <View
+                            style={[
+                              eventsStyles.halfTimeLine,
+                              { backgroundColor: themeBorder.subtle },
+                            ]}
+                          />
+                          <Text
+                            style={[eventsStyles.halfTimeText, { color: themeTextRole.tertiary }]}
+                          >
+                            HALF TIME · 45&apos;
+                          </Text>
+                          <View
+                            style={[
+                              eventsStyles.halfTimeLine,
+                              { backgroundColor: themeBorder.subtle },
+                            ]}
+                          />
+                        </Animated.View>
+                      )}
+                      <Animated.View
+                        entering={FadeInDown.delay(i * 30).duration(300)}
+                        style={[
+                          eventsStyles.row,
+                          {
+                            borderBottomColor: themeBorder.subtle,
+                            borderLeftWidth: 4,
+                            borderLeftColor: ev.team.color || themeTextRole.tertiary,
+                            backgroundColor: isGoal ? "rgba(0, 166, 81, 0.05)" : "transparent",
+                          },
+                          i === fixtureEvents.length - 1 && { borderBottomWidth: 0 },
+                        ]}
+                      >
+                        <View style={eventsStyles.side}>
+                          {isHome && (
+                            <View style={eventsStyles.eventContent}>
                               <Text
-                                style={[eventsStyles.assistName, { color: themeTextRole.tertiary }]}
+                                style={[eventsStyles.playerName, { color: themeTextRole.primary }]}
+                                numberOfLines={1}
                               >
-                                + {ev.assist.name}
+                                {ev.player?.name ?? ""}
+                                {eventSuffix && ` ${eventSuffix}`}
                               </Text>
-                            )}
-                          </View>
-                        )}
-                      </View>
+                              {ev.assist?.name && (
+                                <Text
+                                  style={[
+                                    eventsStyles.assistName,
+                                    { color: themeTextRole.tertiary },
+                                  ]}
+                                >
+                                  + {ev.assist.name}
+                                </Text>
+                              )}
+                              {ev.comments && (
+                                <Text
+                                  style={[
+                                    eventsStyles.commentText,
+                                    { color: themeTextRole.tertiary },
+                                  ]}
+                                  numberOfLines={2}
+                                >
+                                  {ev.comments}
+                                </Text>
+                              )}
+                            </View>
+                          )}
+                        </View>
 
-                      <View style={eventsStyles.center}>
-                        <Text style={[eventsStyles.time, { color: themeTextRole.tertiary }]}>
-                          {ev.elapsed}
-                          {ev.extraTime ? `+${ev.extraTime}` : ""}&apos;
-                        </Text>
-                        <Ionicons name={iconName} size={16} color={iconColor} />
-                      </View>
+                        <View style={eventsStyles.center}>
+                          <Text style={[eventsStyles.time, { color: themeTextRole.tertiary }]}>
+                            {ev.elapsed}
+                            {ev.extraTime ? (
+                              <>
+                                <Text style={[eventsStyles.time, { color: themeAccent.primary }]}>
+                                  +{ev.extraTime}
+                                </Text>
+                              </>
+                            ) : null}
+                            &apos;
+                          </Text>
+                          <Ionicons name={iconName} size={16} color={iconColor} />
+                        </View>
 
-                      <View style={[eventsStyles.side, eventsStyles.sideAway]}>
-                        {!isHome && (
-                          <View style={[eventsStyles.eventContent, eventsStyles.eventContentAway]}>
-                            <Text
-                              style={[eventsStyles.playerName, { color: themeTextRole.primary }]}
-                              numberOfLines={1}
+                        <View style={[eventsStyles.side, eventsStyles.sideAway]}>
+                          {!isHome && (
+                            <View
+                              style={[eventsStyles.eventContent, eventsStyles.eventContentAway]}
                             >
-                              {ev.player?.name ?? ""}
-                            </Text>
-                            {ev.assist?.name && (
                               <Text
-                                style={[eventsStyles.assistName, { color: themeTextRole.tertiary }]}
+                                style={[eventsStyles.playerName, { color: themeTextRole.primary }]}
+                                numberOfLines={1}
                               >
-                                + {ev.assist.name}
+                                {ev.player?.name ?? ""}
+                                {eventSuffix && ` ${eventSuffix}`}
                               </Text>
-                            )}
-                          </View>
-                        )}
-                      </View>
-                    </View>
+                              {ev.assist?.name && (
+                                <Text
+                                  style={[
+                                    eventsStyles.assistName,
+                                    { color: themeTextRole.tertiary },
+                                  ]}
+                                >
+                                  + {ev.assist.name}
+                                </Text>
+                              )}
+                              {ev.comments && (
+                                <Text
+                                  style={[
+                                    eventsStyles.commentText,
+                                    { color: themeTextRole.tertiary },
+                                  ]}
+                                  numberOfLines={2}
+                                >
+                                  {ev.comments}
+                                </Text>
+                              )}
+                            </View>
+                          )}
+                        </View>
+                      </Animated.View>
+                    </React.Fragment>
                   );
                 })}
               </View>
@@ -1166,143 +1628,154 @@ export default function MatchScreen() {
         {activeSection === "lineups" && (
           <View style={styles.predictionSection}>
             {!fixtureLineups || fixtureLineups.length === 0 ? (
-              <View
-                style={[
-                  styles.lockedCard,
-                  { backgroundColor: themeSurface[0], borderColor: themeBorder.subtle },
-                ]}
-              >
-                <View style={[styles.lockedIconWrap, { backgroundColor: themeSurface[2] }]}>
-                  <Ionicons name="people-outline" size={22} color={themeTextRole.tertiary} />
-                </View>
-                <Text style={[styles.lockedTitle, { color: themeTextRole.primary }]}>
-                  {t.match.noLineupsYet}
-                </Text>
-                <Text style={[styles.lockedText, { color: themeTextRole.secondary }]}>
-                  {match.status === "upcoming"
-                    ? t.match.lineupsComingSoon
-                    : t.match.lineupsSyncedAfter}
-                </Text>
-              </View>
-            ) : (
-              <View style={{ gap: 12 }}>
-                {fixtureLineups.map((teamData: any, ti: number) => (
+              // Empty state: show countdown if upcoming, static message otherwise
+              (() => {
+                const timeUntilKickoff = match.kickoff ? getTimeUntil(match.kickoff) : null;
+                const isUpcoming = match.status === "upcoming";
+                const withinHour = timeUntilKickoff && timeUntilKickoff <= 3600000; // 3600000ms = 1 hour
+
+                return (
                   <View
-                    key={ti}
                     style={[
-                      lineupsStyles.teamCard,
+                      styles.lockedCard,
                       { backgroundColor: themeSurface[0], borderColor: themeBorder.subtle },
                     ]}
                   >
-                    <View style={lineupsStyles.teamHeader}>
-                      {teamData.team?.logo ? (
-                        <TeamLogo
-                          logo={teamData.team.logo}
-                          name={teamData.team.name}
-                          shortName={teamData.team.name?.substring(0, 3)}
-                          color={teamData.team.color}
-                          size={28}
-                        />
-                      ) : null}
-                      <Text style={[lineupsStyles.teamName, { color: themeTextRole.primary }]}>
-                        {teamData.team?.name}
-                      </Text>
-                      <View
-                        style={[lineupsStyles.formationBadge, { backgroundColor: themeSurface[2] }]}
-                      >
-                        <Text
-                          style={[lineupsStyles.formationText, { color: themeTextRole.secondary }]}
-                        >
-                          {teamData.formation}
-                        </Text>
-                      </View>
+                    <View style={[styles.lockedIconWrap, { backgroundColor: themeSurface[2] }]}>
+                      <Ionicons name="people-outline" size={22} color={themeTextRole.tertiary} />
                     </View>
-
-                    <Text style={[lineupsStyles.subheader, { color: themeTextRole.tertiary }]}>
-                      Starting XI
+                    <Text style={[styles.lockedTitle, { color: themeTextRole.primary }]}>
+                      {t.match.noLineupsYet}
                     </Text>
-                    {(teamData.startXI ?? []).map((p: any, i: number) => (
-                      <View
-                        key={i}
-                        style={[
-                          lineupsStyles.playerRow,
-                          { borderBottomColor: themeBorder.subtle },
-                          i === (teamData.startXI ?? []).length - 1 && { borderBottomWidth: 0 },
-                        ]}
-                      >
-                        <View
-                          style={[lineupsStyles.numBadge, { backgroundColor: themeSurface[2] }]}
-                        >
-                          <Text style={[lineupsStyles.numText, { color: themeTextRole.primary }]}>
-                            {p.number ?? "–"}
-                          </Text>
-                        </View>
-                        <Text
-                          style={[lineupsStyles.playerName, { color: themeTextRole.primary }]}
-                          numberOfLines={1}
-                        >
-                          {p.name}
-                        </Text>
-                        <Text style={[lineupsStyles.pos, { color: themeTextRole.tertiary }]}>
-                          {p.pos}
+                    <Text style={[styles.lockedText, { color: themeTextRole.secondary }]}>
+                      {isUpcoming && withinHour && timeUntilKickoff
+                        ? `Lineups expected in ${formatCountdown(timeUntilKickoff)}`
+                        : isUpcoming
+                          ? "Lineups drop ~30min before kickoff"
+                          : t.match.lineupsSyncedAfter}
+                    </Text>
+                  </View>
+                );
+              })()
+            ) : (
+              <View style={{ gap: 16 }}>
+                {fixtureLineups.map((teamData: any, ti: number) => {
+                  // Adapt hook data to PitchDiagram props
+                  const pitchPlayers = (teamData.startXI ?? []).map((p: any) => ({
+                    playerId: p.id,
+                    playerName: p.name,
+                    playerNumber: p.number,
+                    playerPos: p.pos,
+                    grid: p.grid,
+                    isCaptain: p.isCaptain,
+                  }));
+
+                  return (
+                    <View
+                      key={ti}
+                      style={[
+                        lineupsStyles.teamCard,
+                        { backgroundColor: themeSurface[0], borderColor: themeBorder.subtle },
+                      ]}
+                    >
+                      {/* Team Header */}
+                      <View style={lineupsStyles.teamHeader}>
+                        {teamData.team?.logo ? (
+                          <TeamLogo
+                            logo={teamData.team.logo}
+                            name={teamData.team.name}
+                            shortName={teamData.team.name?.substring(0, 3)}
+                            color={teamData.team.color}
+                            size={28}
+                          />
+                        ) : null}
+                        <Text style={[lineupsStyles.teamName, { color: themeTextRole.primary }]}>
+                          {teamData.team?.name}
                         </Text>
                       </View>
-                    ))}
 
-                    {(teamData.subs ?? []).length > 0 && (
-                      <>
-                        <Text
-                          style={[
-                            lineupsStyles.subheader,
-                            { marginTop: 12, color: themeTextRole.tertiary },
-                          ]}
-                        >
-                          Substitutes
+                      {/* Pitch Diagram with starting XI */}
+                      <PitchDiagram
+                        team={teamData.team}
+                        formation={teamData.formation}
+                        players={pitchPlayers}
+                        orientation={ti === 0 ? "up" : "down"}
+                        onPlayerPress={handlePlayerPress}
+                      />
+
+                      {/* Coach info if available */}
+                      {teamData.coach?.name && (
+                        <Text style={[lineupsStyles.coachText, { color: themeTextRole.tertiary }]}>
+                          Manager: {teamData.coach.name}
                         </Text>
-                        {(teamData.subs ?? []).map((p: any, i: number) => (
-                          <View
-                            key={i}
+                      )}
+
+                      {/* Substitutes section */}
+                      {(teamData.subs ?? []).length > 0 && (
+                        <>
+                          <Text
                             style={[
-                              lineupsStyles.playerRow,
-                              lineupsStyles.subRow,
-                              { borderBottomColor: themeBorder.subtle },
-                              i === (teamData.subs ?? []).length - 1 && { borderBottomWidth: 0 },
+                              lineupsStyles.subheader,
+                              { marginTop: 12, marginBottom: 6, color: themeTextRole.tertiary },
                             ]}
                           >
+                            Substitutes ({(teamData.subs ?? []).length})
+                          </Text>
+                          {(teamData.subs ?? []).map((p: any, i: number) => (
                             <View
-                              style={[lineupsStyles.numBadge, { backgroundColor: themeSurface[2] }]}
+                              key={i}
+                              style={[
+                                lineupsStyles.playerRow,
+                                lineupsStyles.subRow,
+                                { borderBottomColor: themeBorder.subtle },
+                                i === (teamData.subs ?? []).length - 1 && { borderBottomWidth: 0 },
+                              ]}
                             >
-                              <Text
+                              <View
                                 style={[
-                                  lineupsStyles.numTextMuted,
-                                  { color: themeTextRole.secondary },
+                                  lineupsStyles.numBadge,
+                                  { backgroundColor: themeSurface[2] },
                                 ]}
                               >
-                                {p.number ?? "–"}
+                                <Text
+                                  style={[
+                                    lineupsStyles.numTextMuted,
+                                    { color: themeTextRole.secondary },
+                                  ]}
+                                >
+                                  {p.number ?? "–"}
+                                </Text>
+                              </View>
+                              <Text
+                                style={[
+                                  lineupsStyles.playerNameMuted,
+                                  { color: themeTextRole.secondary },
+                                ]}
+                                numberOfLines={1}
+                              >
+                                {p.name}
+                              </Text>
+                              <Text style={[lineupsStyles.pos, { color: themeTextRole.tertiary }]}>
+                                {p.pos}
                               </Text>
                             </View>
-                            <Text
-                              style={[
-                                lineupsStyles.playerNameMuted,
-                                { color: themeTextRole.secondary },
-                              ]}
-                              numberOfLines={1}
-                            >
-                              {p.name}
-                            </Text>
-                            <Text style={[lineupsStyles.pos, { color: themeTextRole.tertiary }]}>
-                              {p.pos}
-                            </Text>
-                          </View>
-                        ))}
-                      </>
-                    )}
-                  </View>
-                ))}
+                          ))}
+                        </>
+                      )}
+                    </View>
+                  );
+                })}
               </View>
             )}
           </View>
         )}
+
+        {/* Player Profile Sheet — wired to lineup taps */}
+        <PlayerProfileSheet
+          visible={!!selectedPlayer}
+          onClose={() => setSelectedPlayer(null)}
+          player={selectedPlayer}
+        />
 
         {/* ── H2H ── */}
         {activeSection === "h2h" && (
@@ -1326,10 +1799,10 @@ export default function MatchScreen() {
                   />
                 </View>
                 <Text style={[styles.lockedTitle, { color: themeTextRole.primary }]}>
-                  No previous meetings
+                  First ever meeting between these two
                 </Text>
                 <Text style={[styles.lockedText, { color: themeTextRole.secondary }]}>
-                  These teams haven&apos;t played each other recently.
+                  Make history. No previous records to draw from.
                 </Text>
               </View>
             ) : null}
@@ -1350,12 +1823,15 @@ export default function MatchScreen() {
                       color={match.homeTeam.color}
                       size={40}
                     />
-                    <Text style={[h2hStyles.summaryCount, { color: themeTextRole.primary }]}>
-                      {h2hSummary.homeWins}
-                    </Text>
-                    <Text style={[h2hStyles.summaryLabel, { color: themeTextRole.tertiary }]}>
-                      Wins
-                    </Text>
+                    <View style={h2hStyles.summaryTeamContent}>
+                      <Text style={[h2hStyles.summaryCount, { color: themeTextRole.primary }]}>
+                        {h2hSummary.homeWins}
+                      </Text>
+                      <Text style={[h2hStyles.summaryLabel, { color: themeTextRole.tertiary }]}>
+                        Wins
+                      </Text>
+                      <FormStrip form={_homeTeamStats?.data?.[0]?.form} />
+                    </View>
                   </View>
                   <View style={h2hStyles.summaryMiddle}>
                     <View style={[h2hStyles.drawCircle, { backgroundColor: themeSurface[2] }]}>
@@ -1375,12 +1851,15 @@ export default function MatchScreen() {
                       color={match.awayTeam.color}
                       size={40}
                     />
-                    <Text style={[h2hStyles.summaryCount, { color: themeTextRole.primary }]}>
-                      {h2hSummary.awayWins}
-                    </Text>
-                    <Text style={[h2hStyles.summaryLabel, { color: themeTextRole.tertiary }]}>
-                      Wins
-                    </Text>
+                    <View style={h2hStyles.summaryTeamContent}>
+                      <Text style={[h2hStyles.summaryCount, { color: themeTextRole.primary }]}>
+                        {h2hSummary.awayWins}
+                      </Text>
+                      <Text style={[h2hStyles.summaryLabel, { color: themeTextRole.tertiary }]}>
+                        Wins
+                      </Text>
+                      <FormStrip form={_awayTeamStats?.data?.[0]?.form} />
+                    </View>
                   </View>
                 </View>
 
@@ -1455,6 +1934,9 @@ export default function MatchScreen() {
                       </Text>
                     </View>
                   </View>
+                  <Text style={[h2hStyles.avgGoalsText, { color: themeTextRole.tertiary }]}>
+                    Avg {h2hSummary.avgGoals} goals
+                  </Text>
                 </View>
 
                 <Text style={h2hStyles.recentTitle}>Recent meetings</Text>
@@ -1544,74 +2026,246 @@ export default function MatchScreen() {
                   fixtureStats.find((t: any) => t.team.id !== home?.team?.id) ?? fixtureStats[1];
                 if (!home || !away) return null;
 
-                const statRows: {
+                // Build stat rows with pass accuracy computed on the fly
+                const statRowsRaw: {
                   label: string;
                   homeVal: number | null;
                   awayVal: number | null;
                   isPct?: boolean;
+                  category?: string;
                 }[] = [
                   {
                     label: t.match.possession,
                     homeVal: home.statistics.possession,
                     awayVal: away.statistics.possession,
                     isPct: true,
+                    category: "possession",
                   },
                   {
                     label: t.match.shotsOnGoal,
                     homeVal: home.statistics.shotsOnGoal,
                     awayVal: away.statistics.shotsOnGoal,
+                    category: "attack",
                   },
                   {
                     label: t.match.totalShots,
                     homeVal: home.statistics.shotsTotal,
                     awayVal: away.statistics.shotsTotal,
+                    category: "attack",
                   },
                   {
                     label: t.match.shotsInsideBox,
                     homeVal: home.statistics.shotsInsideBox,
                     awayVal: away.statistics.shotsInsideBox,
+                    category: "attack",
+                  },
+                  {
+                    label: "Shots outside box",
+                    homeVal: home.statistics.shotsOutsideBox,
+                    awayVal: away.statistics.shotsOutsideBox,
+                    category: "attack",
                   },
                   {
                     label: t.match.cornerKicks,
                     homeVal: home.statistics.cornerKicks,
                     awayVal: away.statistics.cornerKicks,
-                  },
-                  {
-                    label: t.match.offsides,
-                    homeVal: home.statistics.offsides,
-                    awayVal: away.statistics.offsides,
-                  },
-                  {
-                    label: t.match.fouls,
-                    homeVal: home.statistics.fouls,
-                    awayVal: away.statistics.fouls,
-                  },
-                  {
-                    label: t.match.yellowCards,
-                    homeVal: home.statistics.yellowCards,
-                    awayVal: away.statistics.yellowCards,
-                  },
-                  {
-                    label: t.match.redCards,
-                    homeVal: home.statistics.redCards,
-                    awayVal: away.statistics.redCards,
-                  },
-                  {
-                    label: t.match.gkSaves,
-                    homeVal: home.statistics.saves,
-                    awayVal: away.statistics.saves,
+                    category: "attack",
                   },
                   {
                     label: t.match.totalPasses,
                     homeVal: home.statistics.totalPasses,
                     awayVal: away.statistics.totalPasses,
+                    category: "passing",
                   },
                   {
                     label: t.match.accuratePasses,
                     homeVal: home.statistics.accuratePasses,
                     awayVal: away.statistics.accuratePasses,
+                    category: "passing",
                   },
-                ].filter((r) => r.homeVal != null || r.awayVal != null);
+                  {
+                    label: "Pass accuracy",
+                    homeVal:
+                      home.statistics.totalPasses && home.statistics.accuratePasses
+                        ? Math.round(
+                            (home.statistics.accuratePasses / home.statistics.totalPasses) * 100,
+                          )
+                        : null,
+                    awayVal:
+                      away.statistics.totalPasses && away.statistics.accuratePasses
+                        ? Math.round(
+                            (away.statistics.accuratePasses / away.statistics.totalPasses) * 100,
+                          )
+                        : null,
+                    isPct: true,
+                    category: "passing",
+                  },
+                  {
+                    label: t.match.fouls,
+                    homeVal: home.statistics.fouls,
+                    awayVal: away.statistics.fouls,
+                    category: "discipline",
+                  },
+                  {
+                    label: t.match.yellowCards,
+                    homeVal: home.statistics.yellowCards,
+                    awayVal: away.statistics.yellowCards,
+                    category: "discipline",
+                  },
+                  {
+                    label: t.match.redCards,
+                    homeVal: home.statistics.redCards,
+                    awayVal: away.statistics.redCards,
+                    category: "discipline",
+                  },
+                  {
+                    label: t.match.offsides,
+                    homeVal: home.statistics.offsides,
+                    awayVal: away.statistics.offsides,
+                    category: "discipline",
+                  },
+                  {
+                    label: t.match.gkSaves,
+                    homeVal: home.statistics.saves,
+                    awayVal: away.statistics.saves,
+                    category: "goalkeeping",
+                  },
+                ];
+
+                // Filter to only show rows where at least one side has data
+                const statRows = statRowsRaw.filter((r) => r.homeVal != null || r.awayVal != null);
+
+                // Separate possession (hero) from other rows
+                const possessionRow = statRows.find((r) => r.category === "possession");
+                const otherRows = statRows.filter((r) => r.category !== "possession");
+
+                // Group other rows by category
+                const categories = [
+                  { id: "attack", label: "ATTACK", icon: "football-outline" },
+                  { id: "passing", label: "PASSING", icon: "arrow-forward-outline" },
+                  { id: "discipline", label: "DISCIPLINE", icon: "shield-half-outline" },
+                  { id: "goalkeeping", label: "GOALKEEPING", icon: "hand-right-outline" },
+                ];
+
+                const groupedStats = categories
+                  .map((cat) => ({
+                    ...cat,
+                    rows: otherRows.filter((r) => r.category === cat.id),
+                  }))
+                  .filter((cat) => cat.rows.length > 0);
+
+                // Helper: render a stat row
+                const renderStatRow = (
+                  row: (typeof statRows)[0],
+                  rowIndex: number,
+                  isZeroBoth: boolean,
+                ) => {
+                  const hv = row.homeVal ?? 0;
+                  const av = row.awayVal ?? 0;
+                  const tot = hv + av;
+                  const hPct = tot > 0 ? hv / tot : 0.5;
+                  const homeWins = hv > av;
+                  const awayWins = av > hv;
+                  const isTied = hv === av;
+
+                  return (
+                    <View
+                      key={rowIndex}
+                      style={[
+                        matchStatsStyles.statRow,
+                        { borderBottomColor: themeBorder.subtle },
+                        isZeroBoth && matchStatsStyles.rowFaded,
+                      ]}
+                    >
+                      <Text
+                        style={[
+                          matchStatsStyles.statVal,
+                          {
+                            color: homeWins ? themeAccent.primary : themeTextRole.secondary,
+                            fontFamily: homeWins ? "Inter_700Bold" : "Inter_500Medium",
+                          },
+                        ]}
+                      >
+                        {row.isPct ? `${hv}%` : hv}
+                      </Text>
+                      <View style={matchStatsStyles.barWrap}>
+                        <Text
+                          style={[matchStatsStyles.statLabel, { color: themeTextRole.secondary }]}
+                        >
+                          {row.label}
+                        </Text>
+                        <View
+                          style={[matchStatsStyles.barTrack, { backgroundColor: themeSurface[2] }]}
+                        >
+                          <View
+                            style={[
+                              matchStatsStyles.barHome,
+                              {
+                                flex: hPct,
+                                backgroundColor: homeWins
+                                  ? themeAccent.primary
+                                  : isTied
+                                    ? themeTextRole.tertiary
+                                    : `rgba(${parseInt(themeTextRole.tertiary.slice(1, 3), 16)}, ${parseInt(themeTextRole.tertiary.slice(3, 5), 16)}, ${parseInt(themeTextRole.tertiary.slice(5, 7), 16)}, 0.3)`,
+                              },
+                            ]}
+                          />
+                          <View
+                            style={[
+                              matchStatsStyles.barAway,
+                              {
+                                flex: 1 - hPct,
+                                backgroundColor: awayWins
+                                  ? themeAccent.primary
+                                  : isTied
+                                    ? themeTextRole.tertiary
+                                    : `rgba(${parseInt(themeTextRole.tertiary.slice(1, 3), 16)}, ${parseInt(themeTextRole.tertiary.slice(3, 5), 16)}, ${parseInt(themeTextRole.tertiary.slice(5, 7), 16)}, 0.3)`,
+                              },
+                            ]}
+                          />
+                        </View>
+                      </View>
+                      <Text
+                        style={[
+                          matchStatsStyles.statVal,
+                          matchStatsStyles.statValRight,
+                          {
+                            color: awayWins ? themeAccent.primary : themeTextRole.secondary,
+                            fontFamily: awayWins ? "Inter_700Bold" : "Inter_500Medium",
+                          },
+                        ]}
+                      >
+                        {row.isPct ? `${av}%` : av}
+                      </Text>
+                    </View>
+                  );
+                };
+
+                // Helper: render a section header
+                const renderSectionHeader = (cat: (typeof categories)[0]) => (
+                  <View
+                    key={`header-${cat.id}`}
+                    style={[
+                      matchStatsStyles.sectionHeader,
+                      { borderBottomColor: themeTextRole.tertiary },
+                    ]}
+                  >
+                    <Ionicons
+                      name={cat.icon as any}
+                      size={14}
+                      color={themeTextRole.tertiary}
+                      style={{ marginRight: 6 }}
+                    />
+                    <Text
+                      style={[
+                        matchStatsStyles.sectionHeaderText,
+                        { color: themeTextRole.tertiary },
+                      ]}
+                    >
+                      {cat.label}
+                    </Text>
+                  </View>
+                );
 
                 return (
                   <View
@@ -1620,6 +2274,7 @@ export default function MatchScreen() {
                       { backgroundColor: themeSurface[0], borderColor: themeBorder.subtle },
                     ]}
                   >
+                    {/* Header row */}
                     <View
                       style={[
                         matchStatsStyles.headerRow,
@@ -1671,82 +2326,116 @@ export default function MatchScreen() {
                       </View>
                     </View>
 
-                    {statRows.map((row, i) => {
-                      const hv = row.homeVal ?? 0;
-                      const av = row.awayVal ?? 0;
-                      const tot = hv + av;
-                      const hPct = tot > 0 ? hv / tot : 0.5;
-                      const homeWins = hv > av;
-                      const awayWins = av > hv;
+                    {/* Match context line */}
+                    <View
+                      style={[
+                        matchStatsStyles.contextLine,
+                        { borderBottomColor: themeBorder.subtle },
+                      ]}
+                    >
+                      <Text
+                        style={[matchStatsStyles.contextText, { color: themeTextRole.tertiary }]}
+                      >
+                        {match.status === "live"
+                          ? `Live ${match.minute}'`
+                          : match.status === "finished"
+                            ? "Final"
+                            : "Upcoming"}
+                        {match.round ? ` · Matchday ${match.round}` : ""}
+                      </Text>
+                    </View>
 
-                      return (
-                        <View
-                          key={i}
-                          style={[
-                            matchStatsStyles.statRow,
-                            { borderBottomColor: themeBorder.subtle },
-                          ]}
-                        >
-                          <Text
+                    {/* Possession hero section */}
+                    {possessionRow &&
+                      (() => {
+                        const hv = possessionRow.homeVal ?? 0;
+                        const av = possessionRow.awayVal ?? 0;
+                        const tot = hv + av;
+                        const hPct = tot > 0 ? hv / tot : 0.5;
+                        const homeWins = hv > av;
+                        const awayWins = av > hv;
+                        const isTied = hv === av;
+                        const isZeroBoth = hv === 0 && av === 0;
+
+                        return (
+                          <View
                             style={[
-                              matchStatsStyles.statVal,
-                              { color: themeTextRole.secondary },
-                              homeWins && matchStatsStyles.statValWin,
+                              matchStatsStyles.possessionHero,
+                              { backgroundColor: themeSurface[1] },
+                              isZeroBoth && matchStatsStyles.rowFaded,
                             ]}
                           >
-                            {row.isPct ? `${hv}%` : hv}
-                          </Text>
-                          <View style={matchStatsStyles.barWrap}>
-                            <Text
-                              style={[
-                                matchStatsStyles.statLabel,
-                                { color: themeTextRole.secondary },
-                              ]}
-                            >
-                              {row.label}
-                            </Text>
+                            <View style={matchStatsStyles.possessionNumbers}>
+                              <Text
+                                style={[
+                                  matchStatsStyles.possessionVal,
+                                  {
+                                    color: homeWins ? themeAccent.primary : themeTextRole.secondary,
+                                    fontFamily: homeWins ? "Inter_700Bold" : "Inter_500Medium",
+                                  },
+                                ]}
+                              >
+                                {hv}%
+                              </Text>
+                              <Text
+                                style={[
+                                  matchStatsStyles.possessionVal,
+                                  {
+                                    color: awayWins ? themeAccent.primary : themeTextRole.secondary,
+                                    fontFamily: awayWins ? "Inter_700Bold" : "Inter_500Medium",
+                                  },
+                                ]}
+                              >
+                                {av}%
+                              </Text>
+                            </View>
                             <View
                               style={[
-                                matchStatsStyles.barTrack,
+                                matchStatsStyles.possessionBar,
                                 { backgroundColor: themeSurface[2] },
                               ]}
                             >
                               <View
                                 style={[
-                                  matchStatsStyles.barHome,
+                                  matchStatsStyles.possessionBarHome,
                                   {
                                     flex: hPct,
                                     backgroundColor: homeWins
                                       ? themeAccent.primary
-                                      : themeTextRole.tertiary,
+                                      : isTied
+                                        ? themeTextRole.tertiary
+                                        : `rgba(${parseInt(themeTextRole.tertiary.slice(1, 3), 16)}, ${parseInt(themeTextRole.tertiary.slice(3, 5), 16)}, ${parseInt(themeTextRole.tertiary.slice(5, 7), 16)}, 0.3)`,
                                   },
                                 ]}
                               />
                               <View
                                 style={[
-                                  matchStatsStyles.barAway,
+                                  matchStatsStyles.possessionBarAway,
                                   {
                                     flex: 1 - hPct,
                                     backgroundColor: awayWins
                                       ? themeAccent.primary
-                                      : themeTextRole.tertiary,
+                                      : isTied
+                                        ? themeTextRole.tertiary
+                                        : `rgba(${parseInt(themeTextRole.tertiary.slice(1, 3), 16)}, ${parseInt(themeTextRole.tertiary.slice(3, 5), 16)}, ${parseInt(themeTextRole.tertiary.slice(5, 7), 16)}, 0.3)`,
                                   },
                                 ]}
                               />
                             </View>
                           </View>
-                          <Text
-                            style={[
-                              matchStatsStyles.statVal,
-                              matchStatsStyles.statValRight,
-                              awayWins && matchStatsStyles.statValWin,
-                            ]}
-                          >
-                            {row.isPct ? `${av}%` : av}
-                          </Text>
-                        </View>
-                      );
-                    })}
+                        );
+                      })()}
+
+                    {/* Grouped stat sections */}
+                    {groupedStats.map((cat) => (
+                      <View key={cat.id}>
+                        {renderSectionHeader(cat)}
+                        {cat.rows.map((row, idx) => {
+                          const isZeroBoth = (row.homeVal ?? 0) === 0 && (row.awayVal ?? 0) === 0;
+                          return renderStatRow(row, idx, isZeroBoth);
+                        })}
+                      </View>
+                    ))}
                   </View>
                 );
               })()
@@ -1941,6 +2630,11 @@ const styles = StyleSheet.create({
     color: textRoleLight.inverse,
     letterSpacing: 0.6,
   },
+  liveBadgeRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
   heroMetaRow: {
     flexDirection: "row",
     alignItems: "center",
@@ -1979,6 +2673,7 @@ const styles = StyleSheet.create({
   // Section container
   predictionSection: { gap: 16, paddingHorizontal: 16 },
   receiptSection: { gap: 16, paddingHorizontal: 16, marginVertical: 16, alignItems: "center" },
+  shareAccordionSection: { gap: 16, paddingHorizontal: 16, marginVertical: 16 },
   h2hSection: { gap: 12, paddingHorizontal: 16 },
   detailsSection: { paddingHorizontal: 16, paddingTop: 4 },
 
@@ -2171,7 +2866,87 @@ const styles = StyleSheet.create({
   },
   boostSwitchDotActive: { transform: [{ translateX: 18 }] },
 
-  // Social proof
+  // Community picks histogram (Feature A)
+  communityPicksCard: {
+    borderRadius: radii.lg,
+    borderWidth: 1,
+    padding: 16,
+    marginTop: 16,
+  },
+  communityPicksHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: 12,
+  },
+  communityPicksHeaderLeft: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 0,
+  },
+  communityPicksLabel: {
+    ...typeTok.micro,
+    fontFamily: "Inter_700Bold",
+    letterSpacing: 1.5,
+    textTransform: "uppercase",
+    fontSize: 11,
+  },
+  communityPicksLabelText: {
+    ...typeTok.micro,
+    fontFamily: "Inter_700Bold",
+  },
+  communityPicksCount: {
+    ...typeTok.body,
+    fontFamily: "Inter_400Regular",
+    fontSize: 12,
+  },
+  communityPicksBars: {
+    gap: 8,
+  },
+  communityPicksRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    paddingVertical: 8,
+    paddingHorizontal: 0,
+  },
+  communityPicksRowHighlight: {
+    borderLeftWidth: 3,
+    borderLeftColor: accent.primary,
+    paddingLeft: 8,
+  },
+  communityPicksScore: {
+    width: 44,
+    fontSize: 15,
+    fontFamily: "Inter_600SemiBold",
+    textAlign: "left",
+  },
+  communityPicksBarContainer: {
+    flex: 1,
+  },
+  communityPicksBarTrack: {
+    flex: 1,
+    height: 8,
+    borderRadius: 4,
+    overflow: "hidden",
+  },
+  communityPicksBarFill: {
+    height: 8,
+    borderRadius: 4,
+  },
+  communityPicksPercent: {
+    width: 38,
+    fontSize: 13,
+    fontFamily: "Inter_600SemiBold",
+    textAlign: "right",
+  },
+  communityPicksEmpty: {
+    ...typeTok.body,
+    fontFamily: "Inter_400Regular",
+    fontSize: 12,
+  },
+
+  // Social proof (legacy, kept for backward compatibility)
   socialProofCard: {
     borderRadius: radii.lg,
     borderWidth: 1,
@@ -2219,6 +2994,56 @@ const styles = StyleSheet.create({
     ...typeTok.caption,
     fontFamily: "Inter_600SemiBold",
     textAlign: "right",
+  },
+
+  // Share CTA (Feature B)
+  shareCTACard: {
+    borderRadius: radii.lg,
+    borderWidth: 1,
+    padding: 16,
+    marginTop: 12,
+  },
+  shareCTAHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    marginBottom: 8,
+  },
+  shareCTATitle: {
+    fontSize: 15,
+    fontFamily: "Inter_600SemiBold",
+  },
+  shareCTASubtitle: {
+    fontSize: 13,
+    fontFamily: "Inter_400Regular",
+    marginBottom: 12,
+  },
+  shareCTAButtons: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+  },
+  shareCTAPrimary: {
+    flex: 1,
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    borderRadius: radii.pill,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  shareCTAPrimaryText: {
+    fontSize: 13,
+    fontFamily: "Inter_600SemiBold",
+    color: textRoleLight.inverse,
+  },
+  shareCTASecondary: {
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    borderRadius: radii.pill,
+  },
+  shareCTASecondaryText: {
+    fontSize: 13,
+    fontFamily: "Inter_600SemiBold",
   },
 
   // Points card
@@ -2403,6 +3228,7 @@ const h2hStyles = StyleSheet.create({
     letterSpacing: 0.2,
     textTransform: "uppercase",
   },
+  summaryTeamContent: { alignItems: "center", gap: 4 },
   summaryMiddle: { alignItems: "center", gap: 6 },
   drawCircle: {
     width: 44,
@@ -2425,6 +3251,12 @@ const h2hStyles = StyleSheet.create({
     borderRadius: radii.lg,
     borderWidth: 1,
     padding: 16,
+  },
+  avgGoalsText: {
+    ...typeTok.caption,
+    fontFamily: "Inter_500Medium",
+    marginTop: 8,
+    textAlign: "center",
   },
   gaugeLabels: {
     flexDirection: "row",
@@ -2536,17 +3368,70 @@ const matchStatsStyles = StyleSheet.create({
     letterSpacing: 0.3,
     textTransform: "uppercase",
   },
+  contextLine: {
+    paddingVertical: 8,
+    alignItems: "center",
+    borderBottomWidth: StyleSheet.hairlineWidth,
+  },
+  contextText: {
+    ...typeTok.micro,
+    fontFamily: "Inter_500Medium",
+    fontSize: 12,
+  },
+  sectionHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    marginTop: 16,
+  },
+  sectionHeaderText: {
+    fontSize: 11,
+    fontFamily: "Inter_700Bold",
+    letterSpacing: 1.5,
+    textTransform: "uppercase",
+  },
+  possessionHero: {
+    paddingHorizontal: 16,
+    paddingVertical: 20,
+    marginBottom: 8,
+  },
+  possessionNumbers: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 16,
+    paddingHorizontal: 12,
+  },
+  possessionVal: {
+    fontSize: 28,
+    fontFamily: "Inter_700Bold",
+    textAlign: "center",
+  },
+  possessionBar: {
+    width: "100%",
+    height: 10,
+    borderRadius: 5,
+    flexDirection: "row",
+    overflow: "hidden",
+  },
+  possessionBarHome: { height: 10 },
+  possessionBarAway: { height: 10 },
   statRow: {
     flexDirection: "row",
     alignItems: "center",
     gap: 10,
     paddingHorizontal: 16,
     paddingVertical: 12,
-    borderTopWidth: StyleSheet.hairlineWidth,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+  },
+  rowFaded: {
+    opacity: 0.4,
   },
   statVal: {
     width: 42,
-    ...typeTok.caption,
+    fontSize: 18,
     fontFamily: "Inter_500Medium",
     textAlign: "center",
   },
@@ -2562,13 +3447,13 @@ const matchStatsStyles = StyleSheet.create({
   },
   barTrack: {
     width: "100%",
-    height: 4,
-    borderRadius: 2,
+    height: 6,
+    borderRadius: 3,
     flexDirection: "row",
     overflow: "hidden",
   },
-  barHome: { height: 4 },
-  barAway: { height: 4 },
+  barHome: { height: 6 },
+  barAway: { height: 6 },
 });
 
 const eventsStyles = StyleSheet.create({
@@ -2576,6 +3461,25 @@ const eventsStyles = StyleSheet.create({
     borderRadius: radii.lg,
     borderWidth: 1,
     overflow: "hidden",
+  },
+  halfTimeDivider: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingVertical: 16,
+    paddingHorizontal: 16,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    gap: 8,
+  },
+  halfTimeLine: {
+    flex: 1,
+    height: StyleSheet.hairlineWidth,
+  },
+  halfTimeText: {
+    ...typeTok.micro,
+    fontFamily: "Inter_700Bold",
+    letterSpacing: 0.2,
+    textAlign: "center",
   },
   row: {
     flexDirection: "row",
@@ -2606,6 +3510,11 @@ const eventsStyles = StyleSheet.create({
     ...typeTok.micro,
     fontFamily: "Inter_400Regular",
   },
+  commentText: {
+    ...typeTok.micro,
+    fontFamily: "Inter_400Regular",
+    marginTop: 2,
+  },
 });
 
 const lineupsStyles = StyleSheet.create({
@@ -2634,6 +3543,12 @@ const lineupsStyles = StyleSheet.create({
     ...typeTok.caption,
     fontFamily: "Inter_700Bold",
     letterSpacing: 1,
+  },
+  coachText: {
+    ...typeTok.micro,
+    fontFamily: "Inter_500Medium",
+    marginTop: 8,
+    marginBottom: 8,
   },
   subheader: {
     ...typeTok.micro,

@@ -1,1 +1,8 @@
 npx lint-staged
+
+# i18n diacritic guard — prevents regressions where someone types
+# "Espanol" instead of "Español" or "icin" instead of "için".
+# Only runs when translations.ts is in the staged change set.
+if git diff --cached --name-only | grep -q "src/lib/i18n/translations.ts"; then
+  npm run i18n:check
+fi

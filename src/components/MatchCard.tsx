@@ -21,7 +21,7 @@
  * Dependencies dropped: `LinearGradient`, `useTheme`, ad-hoc shadow maps,
  * `Colors.palette.violet` / `gold` / `blue` / `blueSoft`.
  */
-import React, { useState, useEffect, memo } from "react";
+import React, { useState, useEffect, memo, useRef } from "react";
 import { View, Text, StyleSheet, Image, Pressable } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import Animated, {
@@ -35,10 +35,11 @@ import Animated, {
 } from "react-native-reanimated";
 import Colors, { accent, radii, textRoleLight } from "@/constants/colors";
 import { useTheme } from "@/contexts/ThemeContext";
-import { Match } from "@/lib/mock-data";
+import type { Match } from "@/lib/types";
 import { Prediction } from "@/lib/storage";
 import { formatLocalTime, formatLocalDate, formatCountdown, getTimeUntil } from "@/lib/datetime";
 import { PressableScale } from "@/components/ui/PressableScale";
+import { SyncIndicator } from "@/components/ui/SyncIndicator";
 import { haptics } from "@/lib/motion";
 import { useLanguage } from "@/contexts/LanguageContext";
 
@@ -47,6 +48,28 @@ interface MatchCardProps {
   prediction?: Prediction;
   onPress: () => void;
   index?: number;
+  isFetching?: boolean; // React Query's isFetching state
+  dataUpdatedAt?: number; // Unix timestamp (ms) of last fetch
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Score change flash animation hook
+
+function useScoreFlash() {
+  const homeFlash = useSharedValue(1);
+  const awayFlash = useSharedValue(1);
+  const reduceMotion = useReducedMotion();
+
+  const flashScore = (type: "home" | "away") => {
+    if (reduceMotion) return;
+    const target = type === "home" ? homeFlash : awayFlash;
+    target.value = withSequence(
+      withTiming(1.2, { duration: 200 }),
+      withTiming(1, { duration: 200 }),
+    );
+  };
+
+  return { homeFlash, awayFlash, flashScore };
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -148,6 +171,15 @@ function PredictionPill({
   // (#00A651) so the combo on the 10% emerald tint over white passes WCAG AA.
   // Kenji's Round 2 quantitative audit flagged the original pairing as
   // sub-3:1 for the glyph — this brings it comfortably above 4.5:1.
+  const stateDescription =
+    outcome === "exact"
+      ? `Exact prediction: ${prediction.homeScore} to ${prediction.awayScore}, earned ${pts} points`
+      : outcome === "result"
+        ? `Correct outcome: ${prediction.homeScore} to ${prediction.awayScore}, earned ${pts} points`
+        : outcome === "miss"
+          ? `Missed: you predicted ${prediction.homeScore}–${prediction.awayScore}, no points`
+          : `Locked in: ${prediction.homeScore} to ${prediction.awayScore}, waiting for result`;
+
   const cfg = {
     exact: {
       bg: "rgba(0, 166, 81, 0.12)",
@@ -194,7 +226,12 @@ function PredictionPill({
   }));
 
   return (
-    <Pressable onPress={handlePillPress}>
+    <Pressable
+      onPress={handlePillPress}
+      accessibilityRole="button"
+      accessibilityLabel={stateDescription}
+      accessibilityHint={outcome === "pending" ? "Double tap to edit prediction" : undefined}
+    >
       <Animated.View style={[styles.predPill, { backgroundColor: cfg.bg }, pillAnimStyle]}>
         <Ionicons name={cfg.icon} size={12} color={cfg.color} />
         <Text style={[styles.predPillText, { color: cfg.color }]}>{cfg.label}</Text>
@@ -211,6 +248,8 @@ export const MatchCard = memo(function MatchCard({
   prediction,
   onPress,
   index = 0,
+  isFetching = false,
+  dataUpdatedAt,
 }: MatchCardProps) {
   const { t, tt } = useLanguage();
   const { surface, border, textRole } = useTheme();
@@ -219,6 +258,22 @@ export const MatchCard = memo(function MatchCard({
   const countdown = useCountdown(match.kickoff, match.status);
   const timeUntilMs = getTimeUntil(match.kickoff);
   const isUrgent = !isLive && !isFinished && timeUntilMs > 0 && timeUntilMs < 3_600_000;
+
+  const { homeFlash, awayFlash, flashScore } = useScoreFlash();
+  const prevScores = useRef({ home: match.homeScore, away: match.awayScore });
+
+  // Trigger flash on score changes (skip first mount)
+  useEffect(() => {
+    if (!isLive) return;
+    if (match.homeScore !== prevScores.current.home && match.homeScore !== null) {
+      flashScore("home");
+      prevScores.current.home = match.homeScore;
+    }
+    if (match.awayScore !== prevScores.current.away && match.awayScore !== null) {
+      flashScore("away");
+      prevScores.current.away = match.awayScore;
+    }
+  }, [match.homeScore, match.awayScore, isLive, flashScore]);
 
   // Determine threshold windows for countdown display
   const isWithin5Min = timeUntilMs > 0 && timeUntilMs < 300_000; // < 5 minutes
@@ -275,6 +330,10 @@ export const MatchCard = memo(function MatchCard({
   ].filter(Boolean);
   const fullAccessibilityLabel = accessibilityLabelParts.join(", ");
 
+  const scoreFlashStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: homeFlash.value }],
+  }));
+
   return (
     <View>
       <PressableScale
@@ -286,7 +345,10 @@ export const MatchCard = memo(function MatchCard({
             borderColor: border.subtle,
           },
         ]}
-        accessibilityRole="button"
+        // Use "link" on the outer card (it navigates to detail) so web renders as <a>,
+        // not <button>. The inner PredictionPill is a real action button — HTML allows
+        // a <button> nested inside an <a>, but forbids <button> inside <button>.
+        accessibilityRole="link"
         accessibilityLabel={fullAccessibilityLabel}
         haptic="light"
       >
@@ -301,18 +363,33 @@ export const MatchCard = memo(function MatchCard({
               },
             ]}
           >
+            {match.league?.logo ? (
+              <Image
+                source={{ uri: match.league.logo }}
+                style={styles.leagueLogoIcon}
+                resizeMode="contain"
+              />
+            ) : null}
             <Text style={[styles.leagueName, { color: textRole.secondary }]} numberOfLines={1}>
               {match.league?.name || "—"}
             </Text>
           </View>
           <View style={styles.metaRight}>
             {isLive ? (
-              <View style={styles.liveBadge}>
-                <LivePulseDot />
-                <Text style={styles.liveText}>
-                  {t.matches.nowLive} {match.minute ?? 0}&apos;
-                </Text>
-              </View>
+              <>
+                <View
+                  style={styles.liveBadge}
+                  accessible
+                  accessibilityRole="text"
+                  accessibilityLabel={`Live, ${match.minute ?? 0} minutes played`}
+                >
+                  <LivePulseDot />
+                  <Text style={styles.liveText} accessibilityElementsHidden>
+                    {t.matches.nowLive} {match.minute ?? 0}&apos;
+                  </Text>
+                </View>
+                <SyncIndicator isFetching={isFetching} lastUpdated={dataUpdatedAt} />
+              </>
             ) : isFinished ? (
               <Text style={[styles.metaText, { color: textRole.tertiary }]}>{t.matches.ft}</Text>
             ) : (
@@ -343,9 +420,11 @@ export const MatchCard = memo(function MatchCard({
           <View style={styles.scoreArea}>
             {isLive || isFinished ? (
               <>
-                <Text style={[styles.score, { color: textRole.primary }]}>
-                  {match.homeScore ?? 0} : {match.awayScore ?? 0}
-                </Text>
+                <Animated.View style={scoreFlashStyle}>
+                  <Text style={[styles.score, { color: textRole.primary }]}>
+                    {match.homeScore ?? 0} : {match.awayScore ?? 0}
+                  </Text>
+                </Animated.View>
                 {isLive && match.minute != null && (
                   <Text style={[styles.scoreCaption, { color: textRole.tertiary }]}>
                     {match.minute}&apos;
@@ -414,6 +493,20 @@ export const MatchCard = memo(function MatchCard({
           <View style={styles.bottomRow}>
             <PredictionPill prediction={prediction} match={match} />
           </View>
+        ) : isLive ? (
+          <View style={styles.bottomRow}>
+            <View style={[styles.ctaPill, { backgroundColor: accent.primary, opacity: 0.85 }]}>
+              <Ionicons name="play" size={12} color={textRoleLight.inverse} />
+              <Text style={styles.ctaText}>Watch live</Text>
+            </View>
+          </View>
+        ) : isFinished ? (
+          <View style={styles.bottomRow}>
+            <View style={[styles.ctaPill, { backgroundColor: accent.primary, opacity: 0.6 }]}>
+              <Ionicons name="checkmark-done" size={12} color={textRoleLight.inverse} />
+              <Text style={styles.ctaText}>Match ended</Text>
+            </View>
+          </View>
         ) : !isFinished && !isLive ? (
           <View style={styles.bottomRow}>
             <View style={styles.ctaPill}>
@@ -449,6 +542,9 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   leagueChip: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
     paddingHorizontal: 10,
     paddingVertical: 4,
     borderRadius: radii.xs,
@@ -460,6 +556,10 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontFamily: "Inter_600SemiBold",
     letterSpacing: 0.2,
+  },
+  leagueLogoIcon: {
+    width: 16,
+    height: 16,
   },
   metaRight: {
     flexDirection: "row",

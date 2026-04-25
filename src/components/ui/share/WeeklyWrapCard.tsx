@@ -3,19 +3,20 @@
  *
  * Two modes:
  *   inline (profile page) — compact, themed, matches Emerald Minimalism cards.
- *   export (share image)  — fixed-width, branded footer with scorepion.app.
+ *   export (share image)  — fixed-width, branded footer with scorepion.app + crest.
  *
  * Inline variant uses the same surface/border/hairline pattern as StatCard
  * and AchievementCard on the profile page for visual consistency.
  */
-import React from 'react';
-import { View, Text, StyleSheet } from 'react-native';
-import { type ViewStyle, type StyleProp } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
-import { accent, spacing, type as typeScale, radii } from '@/constants/colors';
-import { useTheme } from '@/contexts/ThemeContext';
-import { TierBadge } from '../TierBadge';
-import type { TierName } from '../TierBadge';
+import React from "react";
+import { View, Text, StyleSheet } from "react-native";
+import { type ViewStyle, type StyleProp } from "react-native";
+import { Ionicons } from "@expo/vector-icons";
+import { accent, spacing, type as typeScale, radii } from "@/constants/colors";
+import { useTheme } from "@/contexts/ThemeContext";
+import { TierBadge } from "../TierBadge";
+import type { TierName } from "../TierBadge";
+import { ScorpionCrest } from "../ScorpionCrest";
 
 export type WeeklyWrapCardProps = {
   weekLabel: string; // e.g. "Apr 6 — 12"
@@ -50,7 +51,13 @@ export function WeeklyWrapCard({
   // ── Inline variant (profile page) ──
   if (inline) {
     return (
-      <View style={[styles.inlineCard, { backgroundColor: surface[0], borderColor: border.subtle }, style]}>
+      <View
+        style={[
+          styles.inlineCard,
+          { backgroundColor: surface[0], borderColor: border.subtle },
+          style,
+        ]}
+      >
         {/* Emerald left accent */}
         <View style={styles.inlineAccent} />
 
@@ -59,7 +66,10 @@ export function WeeklyWrapCard({
           <View style={styles.inlineHeaderRow}>
             <View style={styles.inlineHeaderLeft}>
               <Text style={[styles.inlineHeaderText, { color: textRole.secondary }]}>
-                Your week · <Text style={{ fontFamily: 'Inter_700Bold', color: textRole.primary }}>{weekLabel}</Text>
+                Your week ·{" "}
+                <Text style={{ fontFamily: "Inter_700Bold", color: textRole.primary }}>
+                  {weekLabel}
+                </Text>
               </Text>
             </View>
             <View style={[styles.inlineRankPill, { backgroundColor: `${accent.primary}14` }]}>
@@ -73,7 +83,9 @@ export function WeeklyWrapCard({
               <View style={styles.inlineIconWrap}>
                 <Ionicons name="star-outline" size={14} color={accent.primary} />
               </View>
-              <Text style={[styles.inlineStatValue, { color: textRole.primary }]}>{weeklyPoints}</Text>
+              <Text style={[styles.inlineStatValue, { color: textRole.primary }]}>
+                {weeklyPoints}
+              </Text>
               <Text style={[styles.inlineStatLabel, { color: textRole.tertiary }]}>Points</Text>
             </View>
 
@@ -93,7 +105,9 @@ export function WeeklyWrapCard({
               <View style={styles.inlineIconWrap}>
                 <Ionicons name="flame-outline" size={14} color={accent.primary} />
               </View>
-              <Text style={[styles.inlineStatValue, { color: textRole.primary }]}>{bestStreak}</Text>
+              <Text style={[styles.inlineStatValue, { color: textRole.primary }]}>
+                {bestStreak}
+              </Text>
               <Text style={[styles.inlineStatLabel, { color: textRole.tertiary }]}>Streak</Text>
             </View>
 
@@ -106,7 +120,9 @@ export function WeeklyWrapCard({
 
           {/* Optional flavor text */}
           {flavorText && (
-            <Text style={[styles.inlineFlavorText, { color: textRole.tertiary }]}>{flavorText}</Text>
+            <Text style={[styles.inlineFlavorText, { color: textRole.tertiary }]}>
+              {flavorText}
+            </Text>
           )}
         </View>
       </View>
@@ -117,12 +133,25 @@ export function WeeklyWrapCard({
   return (
     <View style={[styles.outerContainer, style]}>
       <View style={[styles.card, { backgroundColor: surface[0] }]}>
+        {/* Watermark crest — bottom-right background, subtle */}
+        <View pointerEvents="none" style={styles.watermarkContainer}>
+          <ScorpionCrest
+            size={180}
+            fill={`${accent.primary}14`}
+            glyphColor={`${accent.primary}08`}
+          />
+        </View>
+
         <View style={styles.leftRail} />
 
         <View style={styles.content}>
-          <Text style={[styles.header, { color: textRole.secondary }]}>
-            Your week · <Text style={[styles.headerBold, { color: textRole.primary }]}>{weekLabel}</Text>
-          </Text>
+          <View style={styles.headerContainer}>
+            <ScorpionCrest size={24} />
+            <Text style={[styles.header, { color: textRole.secondary }]}>
+              Your week ·{" "}
+              <Text style={[styles.headerBold, { color: textRole.primary }]}>{weekLabel}</Text>
+            </Text>
+          </View>
 
           <View style={styles.rankSection}>
             <Text style={[styles.rankLabel, { color: textRole.tertiary }]}>Current Rank</Text>
@@ -152,7 +181,10 @@ export function WeeklyWrapCard({
           )}
 
           <View style={[styles.footer, { borderTopColor: border.subtle }]}>
-            <Text style={[styles.footerText, { color: textRole.secondary }]}>scorepion.app</Text>
+            <View style={styles.footerBrandingRow}>
+              <ScorpionCrest size={16} />
+              <Text style={[styles.footerText, { color: textRole.secondary }]}>scorepion.app</Text>
+            </View>
             {username && (
               <Text style={[styles.usernameText, { color: textRole.tertiary }]}>@{username}</Text>
             )}
@@ -168,8 +200,8 @@ const styles = StyleSheet.create({
   inlineCard: {
     borderRadius: 20,
     borderWidth: 1,
-    overflow: 'hidden',
-    flexDirection: 'row',
+    overflow: "hidden",
+    flexDirection: "row",
   },
   inlineAccent: {
     width: 3,
@@ -181,16 +213,16 @@ const styles = StyleSheet.create({
     gap: 14,
   },
   inlineHeaderRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
   },
   inlineHeaderLeft: {
     flex: 1,
   },
   inlineHeaderText: {
     fontSize: 14,
-    fontFamily: 'Inter_500Medium',
+    fontFamily: "Inter_500Medium",
   },
   inlineRankPill: {
     paddingHorizontal: 10,
@@ -199,17 +231,17 @@ const styles = StyleSheet.create({
   },
   inlineRankText: {
     fontSize: 15,
-    fontFamily: 'Inter_700Bold',
+    fontFamily: "Inter_700Bold",
     color: accent.primary,
     letterSpacing: -0.3,
   },
   inlineStatsRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
   },
   inlineStat: {
     flex: 1,
-    alignItems: 'center',
+    alignItems: "center",
     gap: 4,
   },
   inlineIconWrap: {
@@ -217,19 +249,19 @@ const styles = StyleSheet.create({
     height: 28,
     borderRadius: 14,
     backgroundColor: `${accent.primary}14`,
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
   },
   inlineStatValue: {
     fontSize: 16,
-    fontFamily: 'Inter_700Bold',
+    fontFamily: "Inter_700Bold",
     letterSpacing: -0.3,
   },
   inlineStatLabel: {
     fontSize: 10,
-    fontFamily: 'Inter_500Medium',
+    fontFamily: "Inter_500Medium",
     letterSpacing: 0.3,
-    textTransform: 'uppercase' as const,
+    textTransform: "uppercase" as const,
   },
   inlineDivider: {
     width: 1,
@@ -238,22 +270,28 @@ const styles = StyleSheet.create({
   },
   inlineFlavorText: {
     fontSize: 12,
-    fontFamily: 'Inter_400Regular',
-    textAlign: 'center',
+    fontFamily: "Inter_400Regular",
+    textAlign: "center",
   },
 
   // ── Export variant (share card) ──
   outerContainer: {
     width: 320,
-    alignSelf: 'center',
+    alignSelf: "center",
   },
   card: {
     borderRadius: radii.lg,
-    flexDirection: 'row',
+    flexDirection: "row",
     minHeight: 480,
-    overflow: 'hidden',
+    overflow: "hidden",
     borderLeftWidth: 2,
     borderLeftColor: accent.primary,
+  },
+  watermarkContainer: {
+    position: "absolute",
+    right: -30,
+    bottom: -30,
+    pointerEvents: "none",
   },
   leftRail: {
     width: 0,
@@ -262,18 +300,23 @@ const styles = StyleSheet.create({
     flex: 1,
     paddingVertical: spacing[5],
     paddingHorizontal: spacing[4],
-    justifyContent: 'space-between',
+    justifyContent: "space-between",
+  },
+  headerContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing[2],
+    marginBottom: spacing[4],
   },
   header: {
     fontSize: typeScale.micro.size,
     fontFamily: typeScale.micro.family,
     fontWeight: typeScale.micro.weight,
     letterSpacing: 1,
-    textTransform: 'uppercase',
-    marginBottom: spacing[4],
+    textTransform: "uppercase",
   },
   headerBold: {
-    fontWeight: '700',
+    fontWeight: "700",
   },
   rankSection: {
     marginBottom: spacing[4],
@@ -285,21 +328,21 @@ const styles = StyleSheet.create({
   },
   rankNumber: {
     fontSize: 44,
-    fontFamily: 'Inter_700Bold',
+    fontFamily: "Inter_700Bold",
     color: accent.primary,
     letterSpacing: -1,
     lineHeight: 48,
   },
   statsGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
+    flexDirection: "row",
+    flexWrap: "wrap",
     gap: spacing[3],
     marginBottom: spacing[4],
   },
   statCell: {
     flex: 1,
-    minWidth: '45%',
-    alignItems: 'center',
+    minWidth: "45%",
+    alignItems: "center",
     paddingVertical: spacing[3],
     paddingHorizontal: spacing[2],
     borderRadius: radii.sm,
@@ -313,20 +356,25 @@ const styles = StyleSheet.create({
   statLabel: {
     fontSize: typeScale.caption.size,
     fontFamily: typeScale.caption.family,
-    textAlign: 'center',
+    textAlign: "center",
   },
   flavorText: {
     fontSize: typeScale.body.size,
     fontFamily: typeScale.body.family,
-    textAlign: 'center',
+    textAlign: "center",
     marginBottom: spacing[3],
     lineHeight: typeScale.body.lineHeight,
   },
   footer: {
-    alignItems: 'center',
+    alignItems: "center",
     gap: spacing[1],
     borderTopWidth: 1,
     paddingTop: spacing[3],
+  },
+  footerBrandingRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing[1],
   },
   footerText: {
     fontSize: typeScale.micro.size,
@@ -337,6 +385,6 @@ const styles = StyleSheet.create({
   usernameText: {
     fontSize: typeScale.micro.size,
     fontFamily: typeScale.micro.family,
-    fontWeight: '500',
+    fontWeight: "500",
   },
 });

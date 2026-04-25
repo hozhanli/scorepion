@@ -10,7 +10,7 @@ predictionsRouter.get(
   "/",
   requireAuth,
   asyncHandler(async (req: Request, res: Response) => {
-    const preds = await predictionService.getUserPredictions(req.session.userId!);
+    const preds = await predictionService.getUserPredictions(req.userId!);
     return res.json(preds);
   }),
 );
@@ -26,7 +26,7 @@ predictionsRouter.post(
 
     try {
       const pred = await predictionService.submitPrediction(
-        req.session.userId!,
+        req.userId!,
         matchId,
         homeScore,
         awayScore,

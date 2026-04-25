@@ -6,25 +6,33 @@
  * no softShadow helpers. Create flow uses the Button primitive and the
  * standard 54px input treatment.
  */
-import React, { useState, useCallback, useMemo } from 'react';
+import React, { useState, useCallback, useMemo } from "react";
 import {
-  View, Text, FlatList, StyleSheet, Platform, TextInput, Modal, Alert,
-  ScrollView, Image, KeyboardAvoidingView, Pressable,
-} from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useRouter } from 'expo-router';
-import { Ionicons } from '@expo/vector-icons';
+  View,
+  Text,
+  FlatList,
+  StyleSheet,
+  Platform,
+  TextInput,
+  Modal,
+  ScrollView,
+  Image,
+  KeyboardAvoidingView,
+  Pressable,
+} from "react-native";
+import { crossAlert } from "@/lib/cross-alert";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useRouter } from "expo-router";
+import { Ionicons } from "@expo/vector-icons";
 // Animated import removed — tab screen renders instantly, no entry animations
-import { useQuery, useMutation } from '@tanstack/react-query';
-import Colors, { accent, radii } from '@/constants/colors';
-import { useLanguage } from '@/contexts/LanguageContext';
-import { useTheme } from '@/contexts/ThemeContext';
-import { apiRequest, queryClient } from '@/lib/query-client';
-import { haptics } from '@/lib/motion';
-import {
-  PressableScale, ScreenHeader, FilterSegmented, Button, EmptyState,
-} from '@/components/ui';
-import { LEAGUES } from '@/lib/mock-data';
+import { useQuery, useMutation } from "@tanstack/react-query";
+import Colors, { accent, radii } from "@/constants/colors";
+import { useLanguage } from "@/contexts/LanguageContext";
+import { useTheme } from "@/contexts/ThemeContext";
+import { apiRequest, queryClient } from "@/lib/query-client";
+import { haptics } from "@/lib/motion";
+import { PressableScale, ScreenHeader, FilterSegmented, Button, EmptyState } from "@/components/ui";
+import { useApp } from "@/contexts/AppContext";
 
 interface ApiGroup {
   id: string;
@@ -38,23 +46,22 @@ interface ApiGroup {
   joined?: boolean;
 }
 
-function getLeagueLogo(leagueId: string): string | undefined {
-  const apiIdMap: Record<string, number> = {
-    pl: 39, la: 140, sa: 135, bl: 78, l1: 61, ucl: 2, uel: 3,
-  };
-  const apiId = apiIdMap[leagueId];
-  return apiId ? `https://media.api-sports.io/football/leagues/${apiId}.png` : undefined;
-}
-
 function LeagueTag({ leagueId, small }: { leagueId: string; small?: boolean }) {
   const { surface, textRole } = useTheme();
-  const league = LEAGUES.find(l => l.id === leagueId);
+  const { leagues } = useApp();
+  const league = leagues.find((l) => l.id === leagueId);
   if (!league) return null;
-  const logo = getLeagueLogo(leagueId);
+  const logo = league.logo || undefined;
   return (
-    <View style={[styles.leagueTag, { backgroundColor: surface[2] }, small && styles.leagueTagSmall]}>
-      {logo && <Image source={{ uri: logo }} style={{ width: 14, height: 14 }} resizeMode="contain" />}
-      {!small && <Text style={[styles.leagueTagText, { color: textRole.secondary }]}>{league.name}</Text>}
+    <View
+      style={[styles.leagueTag, { backgroundColor: surface[2] }, small && styles.leagueTagSmall]}
+    >
+      {logo && (
+        <Image source={{ uri: logo }} style={{ width: 14, height: 14 }} resizeMode="contain" />
+      )}
+      {!small && (
+        <Text style={[styles.leagueTagText, { color: textRole.secondary }]}>{league.name}</Text>
+      )}
     </View>
   );
 }
@@ -64,56 +71,57 @@ export default function GroupsScreen() {
   const router = useRouter();
   const { t, tt } = useLanguage();
   const { surface, border, textRole } = useTheme();
+  const { leagues } = useApp();
   const [showCreate, setShowCreate] = useState(false);
-  const [newGroupName, setNewGroupName] = useState('');
+  const [newGroupName, setNewGroupName] = useState("");
   const [isPublic, setIsPublic] = useState(true);
   const [selectedLeagues, setSelectedLeagues] = useState<string[]>([]);
-  const [tab, setTab] = useState<'my' | 'discover'>('my');
-  const [searchQuery, setSearchQuery] = useState('');
+  const [tab, setTab] = useState<"my" | "discover">("my");
+  const [searchQuery, setSearchQuery] = useState("");
   const [searchFocused, setSearchFocused] = useState(false);
   const [newlyCreatedGroupId, setNewlyCreatedGroupId] = useState<string | null>(null);
-  const topPad = Platform.OS === 'web' ? 24 : insets.top;
+  const topPad = Platform.OS === "web" ? 24 : insets.top;
 
   const { data: myGroups = [] } = useQuery<ApiGroup[]>({
-    queryKey: ['/api/groups'],
+    queryKey: ["/api/groups"],
     retry: false,
   });
 
   const { data: discoverGroups = [] } = useQuery<ApiGroup[]>({
-    queryKey: ['/api/groups/discover'],
+    queryKey: ["/api/groups/discover"],
   });
 
-  const joinedIds = new Set(myGroups.map(g => g.id));
-  const publicGroupsFiltered = discoverGroups.filter(g => !joinedIds.has(g.id));
+  const joinedIds = new Set(myGroups.map((g) => g.id));
+  const publicGroupsFiltered = discoverGroups.filter((g) => !joinedIds.has(g.id));
 
   const joinMutation = useMutation({
     mutationFn: async (groupId: string) => {
-      await apiRequest('POST', `/api/groups/${groupId}/join`);
+      await apiRequest("POST", `/api/groups/${groupId}/join`);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/groups'] });
-      queryClient.invalidateQueries({ queryKey: ['/api/groups/discover'] });
+      queryClient.invalidateQueries({ queryKey: ["/api/groups"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/groups/discover"] });
     },
   });
 
   const leaveMutation = useMutation({
     mutationFn: async (groupId: string) => {
-      await apiRequest('POST', `/api/groups/${groupId}/leave`);
+      await apiRequest("POST", `/api/groups/${groupId}/leave`);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/groups'] });
-      queryClient.invalidateQueries({ queryKey: ['/api/groups/discover'] });
+      queryClient.invalidateQueries({ queryKey: ["/api/groups"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/groups/discover"] });
     },
   });
 
   const createMutation = useMutation({
     mutationFn: async (data: { name: string; isPublic: boolean; leagueIds: string[] }) => {
-      const res = await apiRequest('POST', '/api/groups', data);
+      const res = await apiRequest("POST", "/api/groups", data);
       return res.json();
     },
     onSuccess: (data: any) => {
-      queryClient.invalidateQueries({ queryKey: ['/api/groups'] });
-      queryClient.invalidateQueries({ queryKey: ['/api/groups/discover'] });
+      queryClient.invalidateQueries({ queryKey: ["/api/groups"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/groups/discover"] });
       if (data?.id) {
         setNewlyCreatedGroupId(data.id);
         setTimeout(() => setNewlyCreatedGroupId(null), 4000);
@@ -122,8 +130,8 @@ export default function GroupsScreen() {
   });
 
   const toggleLeague = (id: string) => {
-    setSelectedLeagues(prev =>
-      prev.includes(id) ? prev.filter(l => l !== id) : [...prev, id]
+    setSelectedLeagues((prev) =>
+      prev.includes(id) ? prev.filter((l) => l !== id) : [...prev, id],
     );
   };
 
@@ -131,66 +139,76 @@ export default function GroupsScreen() {
     if (!newGroupName.trim() || selectedLeagues.length === 0) return;
     haptics.success();
     createMutation.mutate({ name: newGroupName.trim(), isPublic, leagueIds: selectedLeagues });
-    setNewGroupName('');
+    setNewGroupName("");
     setSelectedLeagues([]);
     setShowCreate(false);
   }, [newGroupName, isPublic, selectedLeagues, createMutation]);
 
-  const handleJoin = useCallback(async (group: ApiGroup) => {
-    haptics.medium();
-    joinMutation.mutate(group.id);
-  }, [joinMutation]);
+  const handleJoin = useCallback(
+    async (group: ApiGroup) => {
+      haptics.medium();
+      joinMutation.mutate(group.id);
+    },
+    [joinMutation],
+  );
 
-  const handleLeave = useCallback(async (groupId: string) => {
-    Alert.alert('Leave Group', 'Are you sure you want to leave this group?', [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Leave',
-        style: 'destructive',
-        onPress: async () => {
-          haptics.medium();
-          leaveMutation.mutate(groupId);
+  const handleLeave = useCallback(
+    async (groupId: string) => {
+      crossAlert("Leave Group", "Are you sure you want to leave this group?", [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Leave",
+          style: "destructive",
+          onPress: async () => {
+            haptics.medium();
+            leaveMutation.mutate(groupId);
+          },
         },
-      },
-    ]);
-  }, [leaveMutation]);
+      ]);
+    },
+    [leaveMutation],
+  );
   void handleLeave;
 
-  const navigateToGroup = useCallback((group: ApiGroup) => {
-    haptics.light();
-    router.push({
-      pathname: '/group/[id]',
-      params: {
-        id: group.id,
-        name: group.name,
-        code: group.code,
-        memberCount: String(group.memberCount),
-        isPublic: String(group.isPublic),
-        leagueIds: JSON.stringify(group.leagueIds || []),
-      },
-    });
-  }, [router]);
+  const navigateToGroup = useCallback(
+    (group: ApiGroup) => {
+      haptics.light();
+      router.push({
+        pathname: "/group/[id]",
+        params: {
+          id: group.id,
+          name: group.name,
+          code: group.code,
+          memberCount: String(group.memberCount),
+          isPublic: String(group.isPublic),
+          leagueIds: JSON.stringify(group.leagueIds || []),
+        },
+      });
+    },
+    [router],
+  );
 
   const filteredMyGroups = useMemo(() => {
     if (!searchQuery.trim()) return myGroups;
     const q = searchQuery.trim().toLowerCase();
-    return myGroups.filter(g =>
-      g.code.toLowerCase().includes(q) ||
-      g.name.toLowerCase().includes(q)
+    return myGroups.filter(
+      (g) => g.code.toLowerCase().includes(q) || g.name.toLowerCase().includes(q),
     );
   }, [myGroups, searchQuery]);
 
   const filteredDiscoverGroups = useMemo(() => {
     if (!searchQuery.trim()) return publicGroupsFiltered;
     const q = searchQuery.trim().toLowerCase();
-    return publicGroupsFiltered.filter(g =>
-      g.code.toLowerCase().includes(q) ||
-      g.name.toLowerCase().includes(q)
+    return publicGroupsFiltered.filter(
+      (g) => g.code.toLowerCase().includes(q) || g.name.toLowerCase().includes(q),
     );
   }, [publicGroupsFiltered, searchQuery]);
 
-  const renderGroupCard = (group: ApiGroup, idx: number, variant: 'joined' | 'discover') => {
-    const leagueLogo = group.leagueIds?.length === 1 ? getLeagueLogo(group.leagueIds[0]) : undefined;
+  const renderGroupCard = (group: ApiGroup, idx: number, variant: "joined" | "discover") => {
+    const leagueLogo =
+      group.leagueIds?.length === 1
+        ? leagues.find((l) => l.id === group.leagueIds[0])?.logo
+        : undefined;
     const isNewlyCreated = group.id === newlyCreatedGroupId;
 
     return (
@@ -202,31 +220,46 @@ export default function GroupsScreen() {
           </View>
         )}
         <PressableScale onPress={() => navigateToGroup(group)}>
-          <View style={[styles.groupCard, { backgroundColor: surface[0], borderColor: border.subtle }, isNewlyCreated && styles.groupCardHighlighted]}>
+          <View
+            style={[
+              styles.groupCard,
+              { backgroundColor: surface[0], borderColor: border.subtle },
+              isNewlyCreated && styles.groupCardHighlighted,
+            ]}
+          >
             <View style={styles.groupCardTop}>
               <View style={styles.groupIcon}>
                 {leagueLogo ? (
-                  <Image source={{ uri: leagueLogo }} style={{ width: 24, height: 24 }} resizeMode="contain" />
+                  <Image
+                    source={{ uri: leagueLogo }}
+                    style={{ width: 24, height: 24 }}
+                    resizeMode="contain"
+                  />
                 ) : (
                   <Ionicons
-                    name={group.isPublic ? 'people' : 'lock-closed'}
+                    name={group.isPublic ? "people" : "lock-closed"}
                     size={20}
                     color={accent.primary}
                   />
                 )}
               </View>
               <View style={styles.groupInfo}>
-                <Text style={[styles.groupName, { color: textRole.primary }]} numberOfLines={1}>{group.name}</Text>
+                <Text style={[styles.groupName, { color: textRole.primary }]} numberOfLines={1}>
+                  {group.name}
+                </Text>
                 <View style={styles.groupMetaRow}>
                   <Ionicons name="people-outline" size={12} color={textRole.tertiary} />
                   <Text style={[styles.groupMetaText, { color: textRole.tertiary }]}>
-                    {group.memberCount} {group.memberCount === 1 ? t.groups.member : t.groups.members}
+                    {group.memberCount}{" "}
+                    {group.memberCount === 1 ? t.groups.member : t.groups.members}
                   </Text>
                   <Text style={[styles.groupMetaDot, { color: textRole.tertiary }]}>·</Text>
-                  <Text style={[styles.groupMetaText, { color: textRole.tertiary }]}>{group.code}</Text>
+                  <Text style={[styles.groupMetaText, { color: textRole.tertiary }]}>
+                    {group.code}
+                  </Text>
                 </View>
               </View>
-              {variant === 'discover' ? (
+              {variant === "discover" ? (
                 <PressableScale
                   onPress={() => handleJoin(group)}
                   hitSlop={6}
@@ -244,7 +277,7 @@ export default function GroupsScreen() {
 
             {group.leagueIds && group.leagueIds.length > 0 && (
               <View style={styles.leagueTagsRow}>
-                {group.leagueIds.map(lid => (
+                {group.leagueIds.map((lid) => (
                   <LeagueTag key={lid} leagueId={lid} />
                 ))}
               </View>
@@ -255,7 +288,7 @@ export default function GroupsScreen() {
     );
   };
 
-  const activeList = tab === 'my' ? filteredMyGroups : filteredDiscoverGroups;
+  const activeList = tab === "my" ? filteredMyGroups : filteredDiscoverGroups;
   const myCount = myGroups.length;
   const discoverCount = publicGroupsFiltered.length;
 
@@ -280,7 +313,13 @@ export default function GroupsScreen() {
       />
 
       <View style={styles.searchWrap}>
-        <View style={[styles.searchBar, { backgroundColor: surface[0], borderColor: border.subtle }, searchFocused && { borderColor: accent.primary }]}>
+        <View
+          style={[
+            styles.searchBar,
+            { backgroundColor: surface[0], borderColor: border.subtle },
+            searchFocused && { borderColor: accent.primary },
+          ]}
+        >
           <Ionicons
             name="search"
             size={16}
@@ -301,7 +340,7 @@ export default function GroupsScreen() {
           />
           {searchQuery.length > 0 && (
             <Pressable
-              onPress={() => setSearchQuery('')}
+              onPress={() => setSearchQuery("")}
               hitSlop={8}
               accessibilityRole="button"
               accessibilityLabel={t.a11y.close}
@@ -315,40 +354,42 @@ export default function GroupsScreen() {
       <View style={styles.filterWrap}>
         <FilterSegmented
           items={[
-            { value: 'my', label: t.groups.myGroups, count: myCount },
-            { value: 'discover', label: t.groups.discover, count: discoverCount },
+            { value: "my", label: t.groups.myGroups, count: myCount },
+            { value: "discover", label: t.groups.discover, count: discoverCount },
           ]}
           value={tab}
-          onChange={(v) => setTab(v as 'my' | 'discover')}
+          onChange={(v) => setTab(v as "my" | "discover")}
         />
       </View>
 
       <FlatList
         data={activeList}
-        renderItem={({ item, index }) => renderGroupCard(item as ApiGroup, index, tab === 'my' ? 'joined' : 'discover')}
-        keyExtractor={item => item.id}
-        contentContainerStyle={[styles.list, { paddingBottom: Platform.OS === 'web' ? 110 : 120 }]}
+        renderItem={({ item, index }) =>
+          renderGroupCard(item as ApiGroup, index, tab === "my" ? "joined" : "discover")
+        }
+        keyExtractor={(item) => item.id}
+        contentContainerStyle={[styles.list, { paddingBottom: Platform.OS === "web" ? 110 : 120 }]}
         showsVerticalScrollIndicator={false}
         ListEmptyComponent={
           <View style={styles.emptyWrap}>
             <EmptyState
-              icon={tab === 'my' ? 'people-outline' : 'compass-outline'}
+              icon={tab === "my" ? "people-outline" : "compass-outline"}
               title={
                 searchQuery.trim()
                   ? t.groups.noMatching
-                  : tab === 'my'
-                  ? t.groups.noGroups
-                  : t.groups.noPublic
+                  : tab === "my"
+                    ? t.groups.noGroups
+                    : t.groups.noPublic
               }
               subtitle={
                 searchQuery.trim()
                   ? t.groups.tryDifferentSearch
-                  : tab === 'my'
-                  ? t.groups.createOrJoin
-                  : t.groups.beFirst
+                  : tab === "my"
+                    ? t.groups.createOrJoin
+                    : t.groups.beFirst
               }
             />
-            {!searchQuery.trim() && tab === 'my' && (
+            {!searchQuery.trim() && tab === "my" && (
               <View style={styles.emptyCta}>
                 <Button
                   title={t.groups.createGroupBtn}
@@ -365,14 +406,26 @@ export default function GroupsScreen() {
       />
 
       <Modal visible={showCreate} animationType="slide" transparent>
-        <KeyboardAvoidingView style={styles.modalOverlay} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
+        <KeyboardAvoidingView
+          style={styles.modalOverlay}
+          behavior={Platform.OS === "ios" ? "padding" : "height"}
+        >
           <View style={[styles.modalContent, { backgroundColor: surface[0] }]}>
             <View style={[styles.modalHandle, { backgroundColor: surface[2] }]} />
             <Text style={[styles.modalTitle, { color: textRole.primary }]}>{t.groups.create}</Text>
 
-            <Text style={[styles.inputLabel, { color: textRole.secondary }]}>{t.groups.groupName}</Text>
+            <Text style={[styles.inputLabel, { color: textRole.secondary }]}>
+              {t.groups.groupName}
+            </Text>
             <TextInput
-              style={[styles.input, { backgroundColor: surface[1], borderColor: border.subtle, color: textRole.primary }]}
+              style={[
+                styles.input,
+                {
+                  backgroundColor: surface[1],
+                  borderColor: border.subtle,
+                  color: textRole.primary,
+                },
+              ]}
               value={newGroupName}
               onChangeText={setNewGroupName}
               placeholder={t.groups.enterGroupName}
@@ -381,15 +434,19 @@ export default function GroupsScreen() {
               selectionColor={accent.primary}
             />
 
-            <Text style={[styles.inputLabel, { marginTop: 20, color: textRole.secondary }]}>{t.groups.leaguesLabel}</Text>
-            <Text style={[styles.inputHint, { color: textRole.tertiary }]}>{t.groups.selectLeagues}</Text>
+            <Text style={[styles.inputLabel, { marginTop: 20, color: textRole.secondary }]}>
+              {t.groups.leaguesLabel}
+            </Text>
+            <Text style={[styles.inputHint, { color: textRole.tertiary }]}>
+              {t.groups.selectLeagues}
+            </Text>
             <ScrollView
               horizontal
               showsHorizontalScrollIndicator={false}
               style={styles.leagueSelectScroll}
               contentContainerStyle={styles.leagueSelectRow}
             >
-              {LEAGUES.map(league => {
+              {leagues.map((league) => {
                 const selected = selectedLeagues.includes(league.id);
                 return (
                   <Pressable
@@ -404,31 +461,36 @@ export default function GroupsScreen() {
                       selected && styles.leagueSelectChipActive,
                     ]}
                   >
-                    <Text style={[
-                      styles.leagueSelectText,
-                      { color: textRole.secondary },
-                      selected && styles.leagueSelectTextActive,
-                    ]}>{league.name}</Text>
+                    <Text
+                      style={[
+                        styles.leagueSelectText,
+                        { color: textRole.secondary },
+                        selected && styles.leagueSelectTextActive,
+                      ]}
+                    >
+                      {league.name}
+                    </Text>
                   </Pressable>
                 );
               })}
             </ScrollView>
 
-            <Text style={[styles.inputLabel, { marginTop: 20, color: textRole.secondary }]}>{t.groups.visibility}</Text>
+            <Text style={[styles.inputLabel, { marginTop: 20, color: textRole.secondary }]}>
+              {t.groups.visibility}
+            </Text>
             <View style={styles.visibilityRow}>
               <Pressable
                 onPress={() => setIsPublic(true)}
-                style={[styles.visibilityBtn, { backgroundColor: surface[1], borderColor: border.subtle }, isPublic && styles.visibilityBtnActive]}
+                style={[
+                  styles.visibilityBtn,
+                  { backgroundColor: surface[1], borderColor: border.subtle },
+                  isPublic && styles.visibilityBtnActive,
+                ]}
               >
-                <Ionicons
-                  name="earth"
-                  size={18}
-                  color={isPublic ? '#fff' : textRole.tertiary}
-                />
-                <Text style={[
-                  styles.visibilityText,
-                  isPublic && styles.visibilityTextActive,
-                ]}>{t.groups.public}</Text>
+                <Ionicons name="earth" size={18} color={isPublic ? "#fff" : textRole.tertiary} />
+                <Text style={[styles.visibilityText, isPublic && styles.visibilityTextActive]}>
+                  {t.groups.public}
+                </Text>
               </Pressable>
               <Pressable
                 onPress={() => setIsPublic(false)}
@@ -437,12 +499,11 @@ export default function GroupsScreen() {
                 <Ionicons
                   name="lock-closed"
                   size={18}
-                  color={!isPublic ? '#fff' : textRole.tertiary}
+                  color={!isPublic ? "#fff" : textRole.tertiary}
                 />
-                <Text style={[
-                  styles.visibilityText,
-                  !isPublic && styles.visibilityTextActive,
-                ]}>{t.groups.private}</Text>
+                <Text style={[styles.visibilityText, !isPublic && styles.visibilityTextActive]}>
+                  {t.groups.private}
+                </Text>
               </Pressable>
             </View>
 
@@ -452,7 +513,7 @@ export default function GroupsScreen() {
                 onPress={() => {
                   setShowCreate(false);
                   setSelectedLeagues([]);
-                  setNewGroupName('');
+                  setNewGroupName("");
                 }}
                 variant="secondary"
                 size="md"
@@ -484,9 +545,9 @@ const styles = StyleSheet.create({
     width: 44,
     height: 44,
     borderRadius: 22,
-    backgroundColor: 'rgba(0, 166, 81, 0.10)',
-    alignItems: 'center',
-    justifyContent: 'center',
+    backgroundColor: "rgba(0, 166, 81, 0.10)",
+    alignItems: "center",
+    justifyContent: "center",
   },
 
   // Search
@@ -496,20 +557,19 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   searchBar: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: 10,
     paddingHorizontal: 14,
     height: 48,
     borderRadius: radii.md,
     borderWidth: 1,
   },
-  searchBarFocus: {
-  },
+  searchBarFocus: {},
   searchInput: {
     flex: 1,
     fontSize: 14,
-    fontFamily: 'Inter_500Medium',
+    fontFamily: "Inter_500Medium",
     padding: 0,
   },
 
@@ -528,31 +588,31 @@ const styles = StyleSheet.create({
     marginBottom: 12,
     gap: 10,
   },
-  groupCardTop: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  groupCardTop: { flexDirection: "row", alignItems: "center", gap: 12 },
   groupIcon: {
     width: 44,
     height: 44,
     borderRadius: 22,
-    backgroundColor: 'rgba(0, 166, 81, 0.10)',
-    alignItems: 'center',
-    justifyContent: 'center',
+    backgroundColor: "rgba(0, 166, 81, 0.10)",
+    alignItems: "center",
+    justifyContent: "center",
     flexShrink: 0,
   },
   groupInfo: { flex: 1 },
   groupName: {
     fontSize: 15,
-    fontFamily: 'Inter_700Bold',
+    fontFamily: "Inter_700Bold",
     letterSpacing: -0.2,
   },
   groupMetaRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: 4,
     marginTop: 3,
   },
   groupMetaText: {
     fontSize: 11,
-    fontFamily: 'Inter_500Medium',
+    fontFamily: "Inter_500Medium",
   },
   groupMetaDot: {
     fontSize: 11,
@@ -562,19 +622,19 @@ const styles = StyleSheet.create({
     height: 36,
     borderRadius: 18,
     backgroundColor: accent.primary,
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
   },
 
   // League tag pills
   leagueTagsRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
+    flexDirection: "row",
+    flexWrap: "wrap",
     gap: 6,
   },
   leagueTag: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: 5,
     paddingHorizontal: 8,
     paddingVertical: 4,
@@ -583,14 +643,14 @@ const styles = StyleSheet.create({
   leagueTagSmall: { paddingHorizontal: 5, paddingVertical: 2 },
   leagueTagText: {
     fontSize: 10,
-    fontFamily: 'Inter_600SemiBold',
+    fontFamily: "Inter_600SemiBold",
   },
 
   // Empty
   emptyWrap: {
     paddingTop: 40,
     paddingHorizontal: 20,
-    alignItems: 'center',
+    alignItems: "center",
   },
   emptyCta: {
     marginTop: 16,
@@ -600,39 +660,39 @@ const styles = StyleSheet.create({
   // Modal
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(15, 23, 42, 0.35)',
-    justifyContent: 'flex-end',
+    backgroundColor: "rgba(15, 23, 42, 0.35)",
+    justifyContent: "flex-end",
   },
   modalContent: {
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
     padding: 24,
     paddingBottom: 44,
-    maxHeight: '85%',
+    maxHeight: "85%",
   },
   modalHandle: {
     width: 40,
     height: 5,
     borderRadius: 3,
-    alignSelf: 'center',
+    alignSelf: "center",
     marginBottom: 22,
   },
   modalTitle: {
     fontSize: 22,
-    fontFamily: 'Inter_700Bold',
+    fontFamily: "Inter_700Bold",
     letterSpacing: -0.3,
     marginBottom: 24,
   },
   inputLabel: {
     fontSize: 11,
-    fontFamily: 'Inter_600SemiBold',
+    fontFamily: "Inter_600SemiBold",
     marginBottom: 8,
-    textTransform: 'uppercase' as const,
+    textTransform: "uppercase" as const,
     letterSpacing: 0.5,
   },
   inputHint: {
     fontSize: 12,
-    fontFamily: 'Inter_400Regular',
+    fontFamily: "Inter_400Regular",
     marginBottom: 10,
     marginTop: -4,
   },
@@ -641,7 +701,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     height: 54,
     fontSize: 15,
-    fontFamily: 'Inter_500Medium',
+    fontFamily: "Inter_500Medium",
     borderWidth: 1,
   },
   leagueSelectScroll: { flexGrow: 0 },
@@ -658,15 +718,15 @@ const styles = StyleSheet.create({
   },
   leagueSelectText: {
     fontSize: 13,
-    fontFamily: 'Inter_500Medium',
+    fontFamily: "Inter_500Medium",
   },
-  leagueSelectTextActive: { color: '#fff' },
-  visibilityRow: { flexDirection: 'row', gap: 10 },
+  leagueSelectTextActive: { color: "#fff" },
+  visibilityRow: { flexDirection: "row", gap: 10 },
   visibilityBtn: {
     flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
     gap: 8,
     height: 54,
     borderRadius: radii.md,
@@ -678,17 +738,17 @@ const styles = StyleSheet.create({
   },
   visibilityText: {
     fontSize: 14,
-    fontFamily: 'Inter_600SemiBold',
+    fontFamily: "Inter_600SemiBold",
   },
-  visibilityTextActive: { color: '#fff' },
+  visibilityTextActive: { color: "#fff" },
   modalActions: {
-    flexDirection: 'row',
+    flexDirection: "row",
     gap: 12,
     marginTop: 28,
   },
   newGroupBanner: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: 8,
     paddingVertical: 10,
     paddingHorizontal: 14,
@@ -699,8 +759,8 @@ const styles = StyleSheet.create({
   },
   newGroupBannerText: {
     fontSize: 13,
-    fontFamily: 'Inter_500Medium',
-    color: '#fff',
+    fontFamily: "Inter_500Medium",
+    color: "#fff",
     flex: 1,
   },
   groupCardHighlighted: {

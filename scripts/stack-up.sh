@@ -47,16 +47,15 @@ step "1/4  Starting PostgreSQL on port 13292 (Docker)"
 bash "$ROOT/scripts/start-db.sh"
 
 # ─────────────────────────────────────────────────────────────
-# 2. Schema push + seed (idempotent)
+# 2. Schema push (idempotent — no mock seed, data comes from API-Football)
 # ─────────────────────────────────────────────────────────────
-step "2/4  Pushing schema + seeding dev data"
-if [ ! -f "$LOG_DIR/.seeded" ]; then
+step "2/4  Pushing schema"
+if [ ! -f "$LOG_DIR/.schema" ]; then
   npx drizzle-kit push > "$LOG_DIR/db-push.log" 2>&1 || { error "drizzle-kit push failed — see $LOG_DIR/db-push.log"; exit 1; }
-  npx tsx scripts/seed-dev-data.ts > "$LOG_DIR/db-seed.log" 2>&1 || warn "seed-dev-data.ts exited non-zero (may already be seeded)"
-  touch "$LOG_DIR/.seeded"
-  log "Schema pushed and seeded."
+  touch "$LOG_DIR/.schema"
+  log "Schema pushed. Leagues + football data will populate from API-Football on server startup."
 else
-  log "Already seeded (delete logs/.seeded to re-run)."
+  log "Schema already pushed (delete logs/.schema to re-run)."
 fi
 
 # ─────────────────────────────────────────────────────────────

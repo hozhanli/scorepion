@@ -7,40 +7,65 @@
  * cards; Daily Pack keeps the emerald GradientHero. Empty states use the
  * EmptyState primitive — no more flame wash backgrounds.
  */
-import React, { useState, useMemo, useCallback, useEffect, useRef } from 'react';
+import React, { useState, useMemo, useCallback, useEffect, useRef } from "react";
+import { View, Text, StyleSheet, Platform, ScrollView, RefreshControl } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { Ionicons } from "@expo/vector-icons";
+import { router } from "expo-router";
+import Colors, { accent, type as typeTok } from "@/constants/colors";
+import { useApp } from "@/contexts/AppContext";
+import { useLanguage } from "@/contexts/LanguageContext";
+import { useTheme } from "@/contexts/ThemeContext";
+import { useUserStats } from "@/lib/football-api";
+import { MatchCard } from "@/components/MatchCard";
+import { MatchCardSkeleton } from "@/components/SkeletonLoader";
+import { formatLocalTime, getNextWeeklyResetUtc } from "@/lib/datetime";
+import { getTodayString } from "@/lib/time-utils";
 import {
-  View, Text, StyleSheet, Platform, ScrollView, RefreshControl,
-} from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Ionicons } from '@expo/vector-icons';
-import { router } from 'expo-router';
-import Colors, { accent, type as typeTok } from '@/constants/colors';
-import { useApp } from '@/contexts/AppContext';
-import { useLanguage } from '@/contexts/LanguageContext';
-import { useTheme } from '@/contexts/ThemeContext';
-import { useUserStats } from '@/lib/football-api';
-import { MatchCard } from '@/components/MatchCard';
-import { MatchCardSkeleton } from '@/components/SkeletonLoader';
-import { formatLocalTime, getNextWeeklyResetUtc } from '@/lib/datetime';
-import { PressableScale, ScreenHeader, EmptyState, GradientHero, WelcomeBackBanner, useCelebration } from '@/components/ui';
-import { StreakFlame } from '@/components/ui/StreakFlame';
-import { ProgressBar } from '@/components/ui/ProgressBar';
-import StyledText from '@/components/ui/StyledText';
-import { getLastVisit, setLastVisit } from '@/lib/storage';
-import { computeLevel } from '@/lib/leveling';
+  PressableScale,
+  ScreenHeader,
+  EmptyState,
+  GradientHero,
+  WelcomeBackBanner,
+  useCelebration,
+  HelpTip,
+} from "@/components/ui";
+import { StreakFlame } from "@/components/ui/StreakFlame";
+import { ProgressBar } from "@/components/ui/ProgressBar";
+import { ThisWeekCard } from "@/components/ui/ThisWeekCard";
+import StyledText from "@/components/ui/StyledText";
+import { getLastVisit, setLastVisit } from "@/lib/storage";
+import { computeLevel } from "@/lib/leveling";
 
 function MetricCard({
-  icon, value, label,
-}: { icon: keyof typeof Ionicons.glyphMap; value: string | number; label: string }) {
+  icon,
+  value,
+  label,
+  helpTerm,
+}: {
+  icon: keyof typeof Ionicons.glyphMap;
+  value: string | number;
+  label: string;
+  helpTerm?: string;
+}) {
   const { surface, border } = useTheme();
   return (
     <View style={[metricStyles.card, { backgroundColor: surface[0], borderColor: border.subtle }]}>
       <View style={metricStyles.iconWrap}>
         <Ionicons name={icon} size={20} color={accent.primary} />
       </View>
-      <StyledText variant="h3" style={metricStyles.value}>{value}</StyledText>
+      <StyledText variant="h3" style={metricStyles.value}>
+        {value}
+      </StyledText>
       <View style={metricStyles.accentStripe} />
-      <StyledText variant="micro" role="tertiary" style={metricStyles.label}>{label}</StyledText>
+      <View
+        style={{ flexDirection: "row", alignItems: "center", gap: 4, justifyContent: "center" }}
+      >
+        <StyledText variant="micro" role="tertiary" style={metricStyles.label}>
+          {label}
+        </StyledText>
+        {helpTerm && <HelpTip term={helpTerm} iconSize={10} />}
+      </View>
     </View>
   );
 }
@@ -52,16 +77,16 @@ const metricStyles = StyleSheet.create({
     borderWidth: 1,
     paddingVertical: 16,
     paddingHorizontal: 12,
-    alignItems: 'center',
+    alignItems: "center",
     gap: 6,
   },
   iconWrap: {
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: 'rgba(0, 166, 81, 0.10)',
-    alignItems: 'center',
-    justifyContent: 'center',
+    backgroundColor: "rgba(0, 166, 81, 0.10)",
+    alignItems: "center",
+    justifyContent: "center",
   },
   value: {
     letterSpacing: -0.3,
@@ -74,13 +99,23 @@ const metricStyles = StyleSheet.create({
   },
   label: {
     letterSpacing: 0.5,
-    textTransform: 'uppercase' as const,
+    textTransform: "uppercase" as const,
   },
 });
 
 function DailyPackCard({
-  completed, total, allComplete, nextKickoff, onPress,
-}: { completed: number; total: number; allComplete: boolean; nextKickoff?: string; onPress: () => void }) {
+  completed,
+  total,
+  allComplete,
+  nextKickoff,
+  onPress,
+}: {
+  completed: number;
+  total: number;
+  allComplete: boolean;
+  nextKickoff?: string;
+  onPress: () => void;
+}) {
   const { t } = useLanguage();
   const pct = total > 0 ? completed / total : 0;
 
@@ -94,21 +129,22 @@ function DailyPackCard({
         style={dailyStyles.card}
       >
         <View style={dailyStyles.headerRow}>
-          <Text style={dailyStyles.title}>
-            {allComplete ? t.today.packComplete : t.today.yourPack}
-          </Text>
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+            <Text style={dailyStyles.title}>
+              {allComplete ? t.today.packComplete : t.today.yourPack}
+            </Text>
+            <HelpTip term="dailypack" iconSize={14} />
+          </View>
         </View>
 
         <View style={dailyStyles.numberRow}>
-          <Text style={dailyStyles.bigNumber}>{completed} / {total}</Text>
+          <Text style={dailyStyles.bigNumber}>
+            {completed} / {total}
+          </Text>
           <Text style={dailyStyles.subtitle}>{t.today.predicted_badge}</Text>
         </View>
 
-        <ProgressBar
-          progress={pct}
-          colors={['#FFFFFF', 'rgba(255, 255, 255, 0.9)']}
-          height={6}
-        />
+        <ProgressBar progress={pct} colors={["#FFFFFF", "rgba(255, 255, 255, 0.9)"]} height={6} />
 
         {!allComplete && nextKickoff && (
           <Text style={dailyStyles.nextKickoff}>
@@ -127,35 +163,35 @@ const dailyStyles = StyleSheet.create({
     gap: 12,
   },
   headerRow: {
-    justifyContent: 'center',
+    justifyContent: "center",
   },
   title: {
     fontSize: 18,
-    fontFamily: 'Inter_700Bold',
-    color: '#FFFFFF',
+    fontFamily: "Inter_700Bold",
+    color: "#FFFFFF",
     letterSpacing: -0.3,
-    textAlign: 'center',
+    textAlign: "center",
   },
   numberRow: {
-    alignItems: 'center',
+    alignItems: "center",
     gap: 4,
   },
   bigNumber: {
     fontSize: 32,
-    fontFamily: 'Inter_700Bold',
-    color: '#FFFFFF',
+    fontFamily: "Inter_700Bold",
+    color: "#FFFFFF",
     letterSpacing: -0.8,
   },
   subtitle: {
     fontSize: 12,
-    fontFamily: 'Inter_500Medium',
-    color: 'rgba(255, 255, 255, 0.85)',
+    fontFamily: "Inter_500Medium",
+    color: "rgba(255, 255, 255, 0.85)",
   },
   nextKickoff: {
     fontSize: 12,
-    fontFamily: 'Inter_500Medium',
-    color: 'rgba(255, 255, 255, 0.75)',
-    textAlign: 'center',
+    fontFamily: "Inter_500Medium",
+    color: "rgba(255, 255, 255, 0.75)",
+    textAlign: "center",
     marginTop: 4,
   },
 });
@@ -167,11 +203,11 @@ export default function TodayScreen() {
   const { predictions, profile, dailyPack, dailyPickMatches, refreshData, isLoading } = useApp();
   const { data: userStats, refetch: refetchStats } = useUserStats();
   const [refreshing, setRefreshing] = useState(false);
-  const topPad = Platform.OS === 'web' ? 24 : insets.top;
+  const topPad = Platform.OS === "web" ? 24 : insets.top;
 
   const completedCount = useMemo(() => {
     if (!dailyPack) return Object.keys(predictions).length > 0 ? 1 : 0;
-    return dailyPack.picks.filter(p => p.completed || predictions[p.matchId]).length;
+    return dailyPack.picks.filter((p) => p.completed || predictions[p.matchId]).length;
   }, [dailyPack, predictions]);
 
   const totalPicks = dailyPack?.picks.length || dailyPickMatches.length;
@@ -223,7 +259,7 @@ export default function TodayScreen() {
     // Tier promotion — highest priority.
     if (next.level > prev.level) {
       celebrate({
-        variant: 'tier',
+        variant: "tier",
         title: tt(t.celebration.tierUpTitle, { level: next.level }),
         subtitle: t.celebration.tierUpSubtitle,
       });
@@ -232,19 +268,22 @@ export default function TodayScreen() {
     // Streak tick (up) — only at meaningful milestones or on +1 transitions.
     if (next.streak > prev.streak) {
       celebrate({
-        variant: 'streak',
+        variant: "streak",
         title: tt(t.celebration.streakTickTitle, { streak: next.streak }),
-        subtitle: next.streak >= (bestStreak || 0) ? t.celebration.streakBestSubtitle : t.celebration.streakKeepSubtitle,
+        subtitle:
+          next.streak >= (bestStreak || 0)
+            ? t.celebration.streakBestSubtitle
+            : t.celebration.streakKeepSubtitle,
       });
     }
 
     // Streak break — was >0, now 0.
     if (prev.streak > 0 && next.streak === 0) {
       celebrate({
-        variant: 'streak',
+        variant: "streak",
         title: t.celebration.streakResetTitle,
         subtitle: t.celebration.streakResetSubtitle,
-        icon: 'sync-outline',
+        icon: "sync-outline",
       });
     }
 
@@ -253,20 +292,18 @@ export default function TodayScreen() {
     if (prev.rank > 0 && next.rank > 0 && next.rank < prev.rank) {
       const jumped = prev.rank - next.rank;
       celebrate({
-        variant: 'achievement',
+        variant: "achievement",
         title: tt(t.celebration.rankClimbTitle, { rank: next.rank }),
-        subtitle: jumped === 1 ? t.celebration.rankClimbOne : tt(t.celebration.rankClimbMany, { jumped }),
+        subtitle:
+          jumped === 1 ? t.celebration.rankClimbOne : tt(t.celebration.rankClimbMany, { jumped }),
       });
     }
 
     // Settlement points — points grew without a new prediction being made.
-    if (
-      next.totalPoints > prev.totalPoints &&
-      next.totalPredictions === prev.totalPredictions
-    ) {
+    if (next.totalPoints > prev.totalPoints && next.totalPredictions === prev.totalPredictions) {
       const delta = next.totalPoints - prev.totalPoints;
       celebrate({
-        variant: 'points',
+        variant: "points",
         title: tt(t.celebration.pointsGainedTitle, { delta }),
         subtitle: t.celebration.pointsGainedSubtitle,
       });
@@ -278,12 +315,9 @@ export default function TodayScreen() {
   // Local fallback so the Reset metric is never "–": days until the next
   // weekly reset (Sunday UTC). Server value wins if present.
   const daysLeft = useMemo(() => {
-    if (typeof userStats?.resetDays === 'number') return userStats.resetDays;
+    if (typeof userStats?.resetDays === "number") return userStats.resetDays;
     const reset = getNextWeeklyResetUtc();
-    const diff = Math.max(
-      0,
-      Math.ceil((reset.getTime() - Date.now()) / 86_400_000),
-    );
+    const diff = Math.max(0, Math.ceil((reset.getTime() - Date.now()) / 86_400_000));
     return diff;
   }, [userStats?.resetDays]);
 
@@ -299,7 +333,7 @@ export default function TodayScreen() {
       day.setDate(day.getDate() - i);
       const start = day.getTime();
       const end = start + 86_400_000;
-      const hit = Object.values(predictions).some(p => {
+      const hit = Object.values(predictions).some((p) => {
         const ts = p.timestamp ? new Date(p.timestamp).getTime() : 0;
         return ts >= start && ts < end;
       });
@@ -311,9 +345,11 @@ export default function TodayScreen() {
   // ── Welcome-back banner ────────────────────────────────────────────────────
   // Summarises settled predictions that landed since the user's last visit,
   // provided they were away for > 6 hours. Dismissible for the session.
-  const [welcomeBack, setWelcomeBack] = useState<
-    { settledCount: number; pointsEarned: number; hoursAway: number } | null
-  >(null);
+  const [welcomeBack, setWelcomeBack] = useState<{
+    settledCount: number;
+    pointsEarned: number;
+    hoursAway: number;
+  } | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -346,9 +382,18 @@ export default function TodayScreen() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Filter dailyPickMatches to show only today's matches
+  const todaysMatches = useMemo(() => {
+    const today = getTodayString(); // e.g., "2026-04-20"
+    return dailyPickMatches.filter((m) => {
+      const matchDate = m.kickoff.split("T")[0]; // Extract YYYY-MM-DD from ISO string
+      return matchDate === today;
+    });
+  }, [dailyPickMatches]);
+
   const unpredictedMatches = useMemo(
-    () => dailyPickMatches.filter(m => !predictions[m.id] && m.status === 'upcoming'),
-    [dailyPickMatches, predictions],
+    () => todaysMatches.filter((m) => !predictions[m.id] && m.status === "upcoming"),
+    [todaysMatches, predictions],
   );
 
   const nextKickoffStr = useMemo(() => {
@@ -362,16 +407,16 @@ export default function TodayScreen() {
     setRefreshing(false);
   }, [refreshData, refetchStats]);
 
-  const avatarInitial = profile?.username?.charAt(0).toUpperCase() ?? '?';
+  const avatarInitial = profile?.username?.charAt(0).toUpperCase() ?? "?";
 
-  const dayName = new Intl.DateTimeFormat(undefined, { weekday: 'long' }).format(new Date());
+  const dayName = new Intl.DateTimeFormat(undefined, { weekday: "long" }).format(new Date());
   const greetingSub = profile?.username
     ? `${profile.username}, here's your pack`
     : "Here's your pack";
 
   const AvatarButton = (
     <PressableScale
-      onPress={() => router.push('/(tabs)/profile')}
+      onPress={() => router.push("/(tabs)/profile")}
       hitSlop={8}
       haptic="light"
       pressedScale={0.92}
@@ -385,12 +430,19 @@ export default function TodayScreen() {
   );
 
   return (
-    <View style={[styles.container, { backgroundColor: surface[1], paddingTop: topPad }]} testID="today-screen">
+    <View
+      style={[styles.container, { backgroundColor: surface[1], paddingTop: topPad }]}
+      testID="today-screen"
+    >
       <ScrollView
-        contentContainerStyle={{ paddingBottom: Platform.OS === 'web' ? 110 : 120 }}
+        contentContainerStyle={{ paddingBottom: Platform.OS === "web" ? 110 : 120 }}
         showsVerticalScrollIndicator={false}
         refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={Colors.palette.emerald} />
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            tintColor={Colors.palette.emerald}
+          />
         }
       >
         <ScreenHeader
@@ -407,7 +459,7 @@ export default function TodayScreen() {
             settledCount={welcomeBack.settledCount}
             pointsEarned={welcomeBack.pointsEarned}
             hoursAway={welcomeBack.hoursAway}
-            onPress={() => router.push('/(tabs)/profile')}
+            onPress={() => router.push("/(tabs)/profile")}
             onDismiss={() => setWelcomeBack(null)}
           />
         )}
@@ -421,22 +473,30 @@ export default function TodayScreen() {
               weekDots={weekDots}
               subtitle={
                 streak > 0
-                  ? t.today.onFire.replace('{{best}}', bestStreak.toString())
+                  ? t.today.onFire.replace("{{best}}", bestStreak.toString())
                   : bestStreak > 0
-                  ? t.today.rebuildToday.replace('{{best}}', bestStreak.toString())
-                  : t.today.lockInToStartStreak
+                    ? t.today.rebuildToday.replace("{{best}}", bestStreak.toString())
+                    : t.today.lockInToStartStreak
               }
-              onPress={() => router.push('/scoring' as any)}
+              onPress={() => router.push("/scoring" as any)}
             />
           </View>
         </View>
 
         {/* ── 3-column Metrics row ── */}
         <View style={styles.metricsRow}>
-          <MetricCard icon="trophy-outline" value={bestStreak} label={t.today.best} />
+          <MetricCard
+            icon="trophy-outline"
+            value={bestStreak}
+            label={t.today.best}
+            helpTerm="streak"
+          />
           <MetricCard icon="star-outline" value={weeklyPoints} label={t.today.weekPts} />
           <MetricCard icon="refresh-outline" value={daysLeft} label={t.today.reset} />
         </View>
+
+        {/* ── This Week card ── */}
+        <ThisWeekCard />
 
         {/* ── Daily Pack card ── */}
         {totalPicks > 0 && (
@@ -446,16 +506,18 @@ export default function TodayScreen() {
               total={totalPicks}
               allComplete={allComplete}
               nextKickoff={nextKickoffStr}
-              onPress={() => router.push('/(tabs)/matches')}
+              onPress={() => router.push("/(tabs)/matches")}
             />
           </View>
         )}
 
         {/* ── Section header ── */}
         <View style={styles.sectionHeader}>
-          <Text style={[styles.sectionTitle, { color: textRole.primary }]}>{t.today.todaysMatches}</Text>
+          <Text style={[styles.sectionTitle, { color: textRole.primary }]}>
+            {t.today.todaysMatches}
+          </Text>
           <PressableScale
-            onPress={() => router.push('/(tabs)/matches')}
+            onPress={() => router.push("/(tabs)/matches")}
             hitSlop={8}
             haptic="light"
             pressedScale={0.94}
@@ -468,22 +530,33 @@ export default function TodayScreen() {
         </View>
 
         {isLoading ? (
-          [0, 1, 2].map(i => <MatchCardSkeleton key={i} />)
-        ) : dailyPickMatches.length === 0 ? (
+          [0, 1, 2].map((i) => <MatchCardSkeleton key={i} />)
+        ) : todaysMatches.length === 0 ? (
           <View style={styles.emptyWrap}>
             <EmptyState
-              icon="football-outline"
-              title={t.today.noPicks}
-              subtitle={t.today.checkBack}
+              icon="calendar-outline"
+              title={t.today.noPicks || "No matches on your radar today"}
+              subtitle={t.today.checkBack || "Tomorrow's lineup awaits. See all matches →"}
+              action={
+                <PressableScale
+                  onPress={() => router.push("/(tabs)/matches")}
+                  haptic="light"
+                  pressedScale={0.94}
+                >
+                  <View style={styles.emptyActionButton}>
+                    <Text style={styles.emptyActionText}>See all matches</Text>
+                  </View>
+                </PressableScale>
+              }
             />
           </View>
         ) : (
-          dailyPickMatches.map((match, i) => (
+          todaysMatches.map((match, i) => (
             <MatchCard
               key={match.id}
               match={match}
               prediction={predictions[match.id]}
-              onPress={() => router.push({ pathname: '/match/[id]', params: { id: match.id } })}
+              onPress={() => router.push({ pathname: "/match/[id]", params: { id: match.id } })}
               index={i}
             />
           ))
@@ -503,12 +576,12 @@ const styles = StyleSheet.create({
     width: 36,
     height: 36,
     borderRadius: 18,
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
   },
   avatarText: {
     fontSize: 14,
-    fontFamily: 'Inter_700Bold',
+    fontFamily: "Inter_700Bold",
   },
 
   // Streak
@@ -519,7 +592,7 @@ const styles = StyleSheet.create({
 
   // Metrics
   metricsRow: {
-    flexDirection: 'row',
+    flexDirection: "row",
     gap: 10,
     paddingHorizontal: 20,
     marginBottom: 20,
@@ -527,9 +600,9 @@ const styles = StyleSheet.create({
 
   // Section
   sectionHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
     paddingHorizontal: 20,
     marginTop: 12,
     marginBottom: 14,
@@ -540,13 +613,13 @@ const styles = StyleSheet.create({
     letterSpacing: -0.4,
   },
   seeAllRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: 5,
   },
   seeAllText: {
     fontSize: 13,
-    fontFamily: 'Inter_600SemiBold',
+    fontFamily: "Inter_600SemiBold",
     color: accent.primary,
   },
 
@@ -555,5 +628,18 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingTop: 12,
   },
-});
 
+  // Empty action button
+  emptyActionButton: {
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 8,
+    backgroundColor: accent.primary,
+    alignItems: "center",
+  },
+  emptyActionText: {
+    fontSize: 13,
+    fontFamily: "Inter_600SemiBold",
+    color: "#FFFFFF",
+  },
+});

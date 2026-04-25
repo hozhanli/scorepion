@@ -24,23 +24,30 @@ import {
   Platform,
   ScrollView,
   Share,
-  Alert,
-  ActivityIndicator,
+  RefreshControl,
+  Image,
 } from "react-native";
+import { crossAlert } from "@/lib/cross-alert";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import * as Clipboard from "expo-clipboard";
 import Animated from "react-native-reanimated";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 
 import Colors, { accent, radii } from "@/constants/colors";
 import { useApp } from "@/contexts/AppContext";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useTheme } from "@/contexts/ThemeContext";
 import { haptics } from "@/lib/motion";
-import { PressableScale, ProgressBar, TierBadge, Button, EmptyState } from "@/components/ui";
-import { LEAGUES } from "@/lib/mock-data";
+import {
+  PressableScale,
+  ProgressBar,
+  TierBadge,
+  Button,
+  EmptyState,
+  SkeletonPlayerRow,
+} from "@/components/ui";
 import { useEnhancedGroupActivity } from "@/lib/football-api";
 import {
   formatLocalDate,
@@ -103,6 +110,62 @@ function getTierFromMemberCount(count: number): "rookie" | "bronze" | "silver" |
 
 // Neutral avatar pattern — quarantine old rainbow colors.
 // These are now passed from useTheme() context in the components
+
+// ── League chip component ───────────────────────────────────────────────────
+
+function LeagueChip({ leagueId }: { leagueId: string }) {
+  const { surface, textRole } = useTheme();
+  const { leagues } = useApp();
+  const league = leagues.find((l) => l.id === leagueId);
+  if (!league) return null;
+  const logo = league.logo || undefined;
+  return (
+    <View style={[leagueChipStyles.chip, { backgroundColor: surface[2] }]}>
+      {logo && <Image source={{ uri: logo }} style={leagueChipStyles.logo} resizeMode="contain" />}
+      {!logo && (
+        <View style={leagueChipStyles.fallback}>
+          <Text style={[leagueChipStyles.fallbackText, { color: textRole.secondary }]}>
+            {league.name.charAt(0).toUpperCase()}
+          </Text>
+        </View>
+      )}
+      <Text style={[leagueChipStyles.name, { color: textRole.secondary }]} numberOfLines={1}>
+        {league.name}
+      </Text>
+    </View>
+  );
+}
+
+const leagueChipStyles = StyleSheet.create({
+  chip: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: radii.sm,
+  },
+  logo: {
+    width: 18,
+    height: 18,
+  },
+  fallback: {
+    width: 18,
+    height: 18,
+    borderRadius: 9,
+    backgroundColor: "rgba(0, 166, 81, 0.10)",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  fallbackText: {
+    fontSize: 10,
+    fontFamily: "Inter_600SemiBold",
+  },
+  name: {
+    fontSize: 12,
+    fontFamily: "Inter_600SemiBold",
+  },
+});
 
 // ── Activity feed row ─────────────────────────────────────────────────────────
 
@@ -299,7 +362,7 @@ export default function GroupDetailScreen() {
   const insets = useSafeAreaInsets();
   const { surface, border, textRole } = useTheme();
   const { t } = useLanguage();
-  const { profile, leaveGroup } = useApp();
+  const { profile, leaveGroup, leagues } = useApp();
   const topPad = Platform.OS === "web" ? 67 : insets.top;
 
   const _leagueIds = useMemo(() => {
@@ -349,7 +412,10 @@ export default function GroupDetailScreen() {
     [members, profile],
   );
 
+  const queryClient = useQueryClient();
   const [weeklyCountdown, setWeeklyCountdown] = useState("");
+  const [isRefreshing, setIsRefreshing] = useState(false);
+
   React.useEffect(() => {
     const update = () => {
       const timeUntil = getTimeUntil(getNextWeeklyResetUtc());
@@ -359,6 +425,18 @@ export default function GroupDetailScreen() {
     const interval = setInterval(update, 60000);
     return () => clearInterval(interval);
   }, []);
+
+  const handleRefresh = useCallback(async () => {
+    setIsRefreshing(true);
+    try {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["/api/groups", id, "standings"] }),
+        queryClient.invalidateQueries({ queryKey: ["/api/groups", id, "activity"] }),
+      ]);
+    } finally {
+      setIsRefreshing(false);
+    }
+  }, [id, queryClient]);
 
   const handleShare = useCallback(async () => {
     haptics.medium();
@@ -373,12 +451,12 @@ export default function GroupDetailScreen() {
   const handleCopyCode = useCallback(async () => {
     haptics.success();
     await Clipboard.setStringAsync(code ?? "");
-    Alert.alert("Copied!", `Invite code "${code}" copied to clipboard`);
+    crossAlert("Copied!", `Invite code "${code}" copied to clipboard`);
   }, [code]);
 
   const handleLeave = useCallback(() => {
     haptics.medium();
-    Alert.alert(
+    crossAlert(
       "Leave group",
       `Are you sure you want to leave "${name}"? Your predictions and points stay safe on your profile.`,
       [
@@ -393,7 +471,7 @@ export default function GroupDetailScreen() {
               haptics.success();
               router.back();
             } catch (err) {
-              Alert.alert("Could not leave", "Something went wrong. Please try again.");
+              crossAlert("Could not leave", "Something went wrong. Please try again.");
             }
           },
         },
@@ -403,7 +481,7 @@ export default function GroupDetailScreen() {
 
   const handleMenu = useCallback(() => {
     haptics.light();
-    Alert.alert("Group options", "What would you like to do?", [
+    crossAlert("Group options", "What would you like to do?", [
       { text: "Share invite link", onPress: handleShare },
       { text: "Copy invite code", onPress: handleCopyCode },
       { text: "Leave group", style: "destructive", onPress: handleLeave },
@@ -412,14 +490,16 @@ export default function GroupDetailScreen() {
   }, [handleShare, handleCopyCode, handleLeave]);
 
   const _groupLeagues = _leagueIds
-    .map((lid: string) => LEAGUES.find((l) => l.id === lid))
+    .map((lid: string) => leagues.find((l) => l.id === lid))
     .filter(Boolean);
 
   if (isLoading) {
     return (
-      <View style={[styles.container, { backgroundColor: surface[0] }]}>
-        <ActivityIndicator size="large" color={accent.primary} style={styles.loader} />
-      </View>
+      <ScrollView style={[styles.container, { backgroundColor: surface[0] }]}>
+        <View style={styles.skeletonContainer}>
+          <SkeletonPlayerRow count={5} />
+        </View>
+      </ScrollView>
     );
   }
 
@@ -441,6 +521,13 @@ export default function GroupDetailScreen() {
       style={[styles.container, { backgroundColor: surface[0] }]}
       contentContainerStyle={{ paddingBottom: insets.bottom + 40 }}
       showsVerticalScrollIndicator={false}
+      refreshControl={
+        <RefreshControl
+          refreshing={isRefreshing}
+          onRefresh={handleRefresh}
+          tintColor={accent.primary}
+        />
+      }
     >
       {/* ── Top nav row ── */}
       <View style={[styles.topNav, { paddingTop: topPad + 12 }]}>
@@ -508,6 +595,17 @@ export default function GroupDetailScreen() {
               <Text style={[heroStyles.statLabel, { color: textRole.tertiary }]}>Accuracy</Text>
             </View>
           </View>
+
+          {_groupLeagues.length > 0 && (
+            <View style={heroStyles.leaguesWrap}>
+              <Text style={[heroStyles.leaguesLabel, { color: textRole.tertiary }]}>Leagues</Text>
+              <View style={heroStyles.leaguesList}>
+                {_groupLeagues.map((league: any) => (
+                  <LeagueChip key={league?.id} leagueId={league?.id || ""} />
+                ))}
+              </View>
+            </View>
+          )}
 
           <PressableScale
             onPress={handleCopyCode}
@@ -669,7 +767,7 @@ export default function GroupDetailScreen() {
           </PressableScale>
 
           <PressableScale
-            onPress={() => Alert.alert("Chat", "Group chat coming soon")}
+            onPress={() => crossAlert("Chat", "Group chat coming soon")}
             style={[actionStyles.pill, { backgroundColor: surface[0], borderColor: border.subtle }]}
             haptic="light"
           >
@@ -712,9 +810,9 @@ export default function GroupDetailScreen() {
 
         {isDayZero ? (
           <EmptyState
-            icon="people-outline"
-            title="You're the only player"
-            subtitle="Invite friends to compete!"
+            icon="person-add"
+            title="You're the first member"
+            subtitle="Share the join code to invite friends."
           />
         ) : (
           <View style={leaderboardStyles.list}>
@@ -791,9 +889,9 @@ export default function GroupDetailScreen() {
             ]}
           >
             <EmptyState
-              icon="time-outline"
+              icon="pulse"
               title="No activity yet"
-              subtitle="Be the first to predict!"
+              subtitle="Be the first to predict in this group."
             />
             <View style={{ alignSelf: "center", marginTop: 4 }}>
               <Button
@@ -908,7 +1006,11 @@ export default function GroupDetailScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1 },
 
-  loader: { flex: 1, justifyContent: "center" },
+  skeletonContainer: {
+    paddingHorizontal: 16,
+    paddingTop: 20,
+    gap: 12,
+  },
 
   // Top nav
   topNav: {
@@ -1019,6 +1121,20 @@ const heroStyles = StyleSheet.create({
     fontSize: 11,
     fontFamily: "Inter_700Bold",
     letterSpacing: 0.8,
+  },
+  leaguesWrap: {
+    gap: 8,
+  },
+  leaguesLabel: {
+    fontSize: 10,
+    fontFamily: "Inter_600SemiBold",
+    letterSpacing: 0.3,
+    textTransform: "uppercase",
+  },
+  leaguesList: {
+    flexDirection: "row",
+    gap: 8,
+    flexWrap: "wrap",
   },
 });
 

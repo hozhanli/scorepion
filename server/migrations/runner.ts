@@ -14,6 +14,10 @@ const MIGRATIONS = [
   "002_fixture_detail.sql",
   "003_add_indexes.sql",
   "004_predictions_unique_constraint.sql",
+  "005_refresh_tokens.sql",
+  "006_h2h_league_and_venue.sql",
+  "007_push_tokens.sql",
+  "008_billing.sql",
 ];
 
 export async function runMigrations(): Promise<void> {

@@ -2,9 +2,10 @@
  * PredictionReceiptCard — the fired-and-forget emerald receipt for a locked-in prediction.
  *
  * A vertical emerald-gradient card showing:
- *   - SCOREPION label (micro type)
+ *   - SCOREPION label with crest (micro type)
  *   - Team names + predicted score (display type)
  *   - Match date/league badge (caption type)
+ *   - Watermark crest background (bottom-right, subtle)
  *   - Wordmark at bottom
  */
 import React from "react";
@@ -12,6 +13,7 @@ import { View, Text, StyleSheet } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import { type ViewStyle, type StyleProp } from "react-native";
 import { gradients, spacing, type as typeScale, text, surface, radii } from "@/constants/colors";
+import { ScorpionCrest } from "../ScorpionCrest";
 
 export type PredictionReceiptCardProps = {
   homeTeam: string;
@@ -51,8 +53,20 @@ export function PredictionReceiptCard({
           ]}
         />
 
-        {/* Scorepion label */}
-        <Text style={styles.label}>SCOREPION</Text>
+        {/* Watermark crest — bottom-right background, subtle */}
+        <View pointerEvents="none" style={styles.watermarkContainer}>
+          <ScorpionCrest
+            size={180}
+            fill="rgba(255, 255, 255, 0.08)"
+            glyphColor="rgba(255, 255, 255, 0.05)"
+          />
+        </View>
+
+        {/* Scorepion header with crest + wordmark */}
+        <View style={styles.labelContainer}>
+          <ScorpionCrest size={28} />
+          <Text style={styles.label}>SCOREPION</Text>
+        </View>
 
         {/* Match info — spacer to center content */}
         <View style={styles.spacer} />
@@ -105,13 +119,24 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(255, 255, 255, 0.06)",
     pointerEvents: "none",
   },
+  watermarkContainer: {
+    position: "absolute",
+    right: -30,
+    bottom: -30,
+    pointerEvents: "none",
+  },
+  labelContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing[2],
+    marginBottom: spacing[3],
+  },
   label: {
     fontSize: typeScale.micro.size,
     fontFamily: typeScale.micro.family,
     fontWeight: typeScale.micro.weight,
     color: surface[0],
     letterSpacing: 1.5,
-    marginBottom: spacing[3],
   },
   spacer: {
     flex: 1,

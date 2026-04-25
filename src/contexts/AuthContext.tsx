@@ -1,8 +1,19 @@
-import React, { createContext, useContext, useState, useEffect, useMemo, useCallback, ReactNode } from 'react';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import { apiRequest, getQueryFn } from '@/lib/query-client';
+import React, {
+  createContext,
+  useContext,
+  useState,
+  useEffect,
+  useMemo,
+  useCallback,
+  ReactNode,
+} from "react";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import { apiRequest, setOnAuthExpired } from "@/lib/query-client";
+import { showErrorToast } from "@/lib/error-toast";
+import { setUser as setSentryUser, clearUser as clearSentryUser } from "@/lib/sentry";
+import { setAccessToken, setRefreshToken, getRefreshToken, clearTokens } from "@/lib/token-store";
 
-const CACHED_USER_KEY = 'auth:cachedUser';
+const CACHED_USER_KEY = "auth:cachedUser";
 
 interface AuthUser {
   id: string;
@@ -34,12 +45,34 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
+  // Register auth-expiry callback so the API client can force logout
+  useEffect(() => {
+    setOnAuthExpired(() => {
+      setUser(null);
+      AsyncStorage.removeItem(CACHED_USER_KEY).catch(() => {});
+      clearTokens().catch(() => {});
+    });
+    return () => setOnAuthExpired(null);
+  }, []);
+
   useEffect(() => {
     let cancelled = false;
 
     (async () => {
       try {
-        // 1. Try loading from cache first — instant startup
+        // 1. Check if we have a refresh token — no token means no valid session
+        const hasRefreshToken = await getRefreshToken();
+        if (!hasRefreshToken) {
+          // No JWT tokens — clear any stale cache from session-based era
+          if (!cancelled) {
+            setUser(null);
+            await AsyncStorage.removeItem(CACHED_USER_KEY);
+            setIsLoading(false);
+          }
+          return;
+        }
+
+        // 2. We have tokens — show cached user for instant UI while we validate
         const cached = await AsyncStorage.getItem(CACHED_USER_KEY);
         if (cached && !cancelled) {
           const cachedUser = JSON.parse(cached) as AuthUser;
@@ -47,23 +80,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           setIsLoading(false);
         }
 
-        // 2. Validate with server in background
+        // 3. Validate with server in background (auto-refresh handles token rotation)
         try {
-          const res = await apiRequest('GET', '/api/auth/me');
+          const res = await apiRequest("GET", "/api/auth/me");
           const data = await res.json();
           if (!cancelled) {
             setUser(data.user);
             await AsyncStorage.setItem(CACHED_USER_KEY, JSON.stringify(data.user));
           }
         } catch {
-          // Server says unauthorized or error — clear cache
+          // Server says unauthorized or error — clear everything
           if (!cancelled) {
             setUser(null);
             await AsyncStorage.removeItem(CACHED_USER_KEY);
+            await clearTokens();
           }
         }
       } catch {
-        // Cache read failed — non-fatal
+        // Cache/token read failed — non-fatal
       }
 
       if (!cancelled) {
@@ -77,60 +111,114 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const login = useCallback(async (username: string, password: string) => {
-    const res = await apiRequest('POST', '/api/auth/login', { username, password });
-    const data = await res.json();
-    setUser(data.user);
-    await AsyncStorage.setItem(CACHED_USER_KEY, JSON.stringify(data.user));
+    try {
+      const res = await apiRequest("POST", "/api/auth/login", { username, password });
+      const data = await res.json();
+
+      // Store tokens securely
+      await setAccessToken(data.accessToken);
+      await setRefreshToken(data.refreshToken);
+
+      // Cache user for instant startup
+      setUser(data.user);
+      setSentryUser({ id: data.user.id, username: data.user.username });
+      await AsyncStorage.setItem(CACHED_USER_KEY, JSON.stringify(data.user));
+    } catch (error) {
+      // Parse error for user-friendly message
+      let errorMessage = "Login failed, please try again";
+      if (error instanceof Error) {
+        if (error.message.includes("401")) {
+          errorMessage = "Username or password incorrect";
+        } else if (error.message.includes("429")) {
+          errorMessage = "Too many attempts, try again in a minute";
+        } else if (error.message.includes("timeout") || error.message.includes("Can't reach")) {
+          errorMessage = "Can't reach the server";
+        }
+      }
+      showErrorToast({
+        title: "Login failed",
+        message: errorMessage,
+      });
+      throw error;
+    }
   }, []);
 
   const register = useCallback(async (username: string, password: string) => {
-    const res = await apiRequest('POST', '/api/auth/register', { username, password });
-    const data = await res.json();
-    setUser(data.user);
-    await AsyncStorage.setItem(CACHED_USER_KEY, JSON.stringify(data.user));
+    try {
+      const res = await apiRequest("POST", "/api/auth/register", { username, password });
+      const data = await res.json();
+
+      await setAccessToken(data.accessToken);
+      await setRefreshToken(data.refreshToken);
+
+      setUser(data.user);
+      setSentryUser({ id: data.user.id, username: data.user.username });
+      await AsyncStorage.setItem(CACHED_USER_KEY, JSON.stringify(data.user));
+    } catch (error) {
+      // Parse error for user-friendly message
+      let errorMessage = "Registration failed, please try again";
+      if (error instanceof Error) {
+        if (error.message.includes("409")) {
+          errorMessage = "That username is taken";
+        } else if (error.message.includes("422") || error.message.includes("validation")) {
+          errorMessage = "Check your username and password";
+        } else if (error.message.includes("timeout") || error.message.includes("Can't reach")) {
+          errorMessage = "Can't reach the server";
+        }
+      }
+      showErrorToast({
+        title: "Registration failed",
+        message: errorMessage,
+      });
+      throw error;
+    }
   }, []);
 
   const logout = useCallback(async () => {
     try {
-      await apiRequest('POST', '/api/auth/logout');
+      await apiRequest("POST", "/api/auth/logout");
     } catch (err) {
-      console.error('auth:logout', err);
+      console.error("auth:logout", err);
     }
+
+    // Clear all stored auth state
     setUser(null);
+    clearSentryUser();
+    await clearTokens();
     await AsyncStorage.removeItem(CACHED_USER_KEY);
   }, []);
 
   const refreshUser = useCallback(async () => {
     try {
-      const res = await apiRequest('GET', '/api/auth/me');
+      const res = await apiRequest("GET", "/api/auth/me");
       const data = await res.json();
       setUser(data.user);
       await AsyncStorage.setItem(CACHED_USER_KEY, JSON.stringify(data.user));
     } catch {
       setUser(null);
+      await clearTokens();
       await AsyncStorage.removeItem(CACHED_USER_KEY);
     }
   }, []);
 
-  const value = useMemo(() => ({
-    user,
-    isLoading,
-    isAuthenticated: !!user,
-    login,
-    register,
-    logout,
-    refreshUser,
-  }), [user, isLoading, login, register, logout, refreshUser]);
-
-  return (
-    <AuthContext.Provider value={value}>
-      {children}
-    </AuthContext.Provider>
+  const value = useMemo(
+    () => ({
+      user,
+      isLoading,
+      isAuthenticated: !!user,
+      login,
+      register,
+      logout,
+      refreshUser,
+    }),
+    [user, isLoading, login, register, logout, refreshUser],
   );
+
+  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
 
 export function useAuth() {
   const ctx = useContext(AuthContext);
-  if (!ctx) throw new Error('useAuth must be used within AuthProvider');
+  if (!ctx) throw new Error("useAuth must be used within AuthProvider");
   return ctx;
 }

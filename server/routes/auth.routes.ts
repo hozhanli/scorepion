@@ -2,16 +2,21 @@ import { Router, Request, Response } from "express";
 import { authSchema } from "@shared/schema";
 import * as authRepo from "../repositories/user-auth.repository";
 import * as authService from "../services/auth.service";
+import * as tokenService from "../services/token.service";
+import { requireAuth } from "../middleware/auth";
 import { asyncHandler } from "../middleware/asyncHandler";
 
 export const authRouter = Router();
 
+/**
+ * POST /api/auth/register
+ * Creates a new user and issues JWT token pair.
+ */
 authRouter.post(
   "/register",
   asyncHandler(async (req: Request, res: Response) => {
     const parsed = authSchema.safeParse(req.body);
     if (!parsed.success) {
-      // Surface the first Zod error for better UX
       const firstIssue = parsed.error.issues[0];
       return res.status(400).json({ message: firstIssue?.message || "Invalid input" });
     }
@@ -26,12 +31,14 @@ authRouter.post(
         favoriteLeagues,
       );
 
-      req.session.userId = user.id;
-      await new Promise<void>((resolve, reject) => {
-        req.session.save((err) => (err ? reject(err) : resolve()));
-      });
+      const accessToken = await tokenService.signAccessToken(user.id, user.username);
+      const refreshToken = await tokenService.createRefreshToken(user.id);
 
-      return res.status(201).json({ user: safeUser });
+      return res.status(201).json({
+        user: safeUser,
+        accessToken,
+        refreshToken,
+      });
     } catch (err: any) {
       if (err.name === "AuthError") {
         return res.status(err.status || 400).json({ message: err.message });
@@ -41,6 +48,10 @@ authRouter.post(
   }),
 );
 
+/**
+ * POST /api/auth/login
+ * Authenticates and issues JWT token pair.
+ */
 authRouter.post(
   "/login",
   asyncHandler(async (req: Request, res: Response) => {
@@ -54,12 +65,14 @@ authRouter.post(
     try {
       const { user, safeUser } = await authService.authenticateUser(username, password);
 
-      req.session.userId = user.id;
-      await new Promise<void>((resolve, reject) => {
-        req.session.save((err) => (err ? reject(err) : resolve()));
-      });
+      const accessToken = await tokenService.signAccessToken(user.id, user.username);
+      const refreshToken = await tokenService.createRefreshToken(user.id);
 
-      return res.status(200).json({ user: safeUser });
+      return res.status(200).json({
+        user: safeUser,
+        accessToken,
+        refreshToken,
+      });
     } catch (err: any) {
       if (err.name === "AuthError") {
         return res.status(err.status || 401).json({ message: err.message });
@@ -69,14 +82,44 @@ authRouter.post(
   }),
 );
 
-authRouter.get(
-  "/me",
+/**
+ * POST /api/auth/refresh
+ * Rotates refresh token and issues new token pair.
+ * This is the only endpoint that accepts a refresh token.
+ */
+authRouter.post(
+  "/refresh",
   asyncHandler(async (req: Request, res: Response) => {
-    if (!req.session.userId) {
-      return res.status(401).json({ message: "Not authenticated" });
+    const { refreshToken } = req.body;
+    if (!refreshToken || typeof refreshToken !== "string") {
+      return res.status(400).json({ message: "Refresh token required" });
     }
 
-    const user = await authRepo.getUserById(req.session.userId);
+    try {
+      const result = await tokenService.rotateRefreshToken(refreshToken);
+
+      return res.json({
+        accessToken: result.accessToken,
+        refreshToken: result.refreshToken,
+      });
+    } catch (err: any) {
+      if (err.name === "TokenError") {
+        return res.status(err.status || 401).json({ message: err.message });
+      }
+      throw err;
+    }
+  }),
+);
+
+/**
+ * GET /api/auth/me
+ * Returns the current user's profile (requires valid access token).
+ */
+authRouter.get(
+  "/me",
+  requireAuth,
+  asyncHandler(async (req: Request, res: Response) => {
+    const user = await authRepo.getUserById(req.userId!);
     if (!user) {
       return res.status(401).json({ message: "User not found" });
     }
@@ -86,8 +129,15 @@ authRouter.get(
   }),
 );
 
-authRouter.post("/logout", (req: Request, res: Response) => {
-  req.session.destroy(() => {
-    res.json({ message: "Logged out" });
-  });
-});
+/**
+ * POST /api/auth/logout
+ * Revokes all refresh tokens for the user.
+ */
+authRouter.post(
+  "/logout",
+  requireAuth,
+  asyncHandler(async (req: Request, res: Response) => {
+    await tokenService.revokeAllUserTokens(req.userId!);
+    return res.json({ message: "Logged out" });
+  }),
+);

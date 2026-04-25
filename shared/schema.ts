@@ -9,6 +9,7 @@ import {
   jsonb,
   uniqueIndex,
   index,
+  timestamp,
 } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
@@ -498,12 +499,14 @@ export const footballH2H = pgTable(
     team2Id: integer("team2_id").notNull(),
     fixtureId: integer("fixture_id").notNull(),
     leagueId: varchar("league_id").notNull().default(""),
+    leagueName: text("league_name").notNull().default(""),
     homeTeamId: integer("home_team_id").notNull(),
     awayTeamId: integer("away_team_id").notNull(),
     homeScore: integer("home_score"),
     awayScore: integer("away_score"),
     status: text("status").notNull().default("finished"),
     kickoff: text("kickoff").notNull(),
+    venue: text("venue").default(""),
     season: integer("season").notNull(),
     updatedAt: bigint("updated_at", { mode: "number" })
       .notNull()
@@ -560,6 +563,30 @@ export const groupActivity = pgTable("group_activity", {
     .default(sql`extract(epoch from now()) * 1000`),
 });
 
+export const refreshTokens = pgTable(
+  "refresh_tokens",
+  {
+    id: varchar("id")
+      .primaryKey()
+      .default(sql`gen_random_uuid()`),
+    tokenHash: text("token_hash").notNull(),
+    userId: varchar("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    familyId: text("family_id").notNull(),
+    revoked: boolean("revoked").notNull().default(false),
+    expiresAt: bigint("expires_at", { mode: "number" }).notNull(),
+    createdAt: bigint("created_at", { mode: "number" })
+      .notNull()
+      .default(sql`extract(epoch from now()) * 1000`),
+  },
+  (t) => [
+    uniqueIndex("refresh_tokens_hash_idx").on(t.tokenHash),
+    index("refresh_tokens_user_idx").on(t.userId),
+    index("refresh_tokens_family_idx").on(t.familyId),
+  ],
+);
+
 export const eventLog = pgTable("event_log", {
   id: varchar("id")
     .primaryKey()
@@ -605,6 +632,22 @@ export type FootballTopAssist = typeof footballTopAssists.$inferSelect;
 export type FootballTopYellowCard = typeof footballTopYellowCards.$inferSelect;
 export type FootballTopRedCard = typeof footballTopRedCards.$inferSelect;
 export type FootballInjury = typeof footballInjuries.$inferSelect;
+export const pushTokens = pgTable(
+  "push_tokens",
+  {
+    id: varchar("id")
+      .primaryKey()
+      .default(sql`gen_random_uuid()`),
+    userId: varchar("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    token: text("token").notNull(),
+    platform: text("platform"), // "ios" | "android" | "web"
+    createdAt: timestamp("created_at").defaultNow(),
+  },
+  (t) => [uniqueIndex("push_tokens_user_token_unique").on(t.userId, t.token)],
+);
+
 export type FootballTransfer = typeof footballTransfers.$inferSelect;
 export type SyncLog = typeof syncLog.$inferSelect;
 export type DailyPack = typeof dailyPacks.$inferSelect;
@@ -613,8 +656,10 @@ export type Achievement = typeof achievements.$inferSelect;
 export type WeeklyWinner = typeof weeklyWinners.$inferSelect;
 export type GroupActivity = typeof groupActivity.$inferSelect;
 export type EventLogEntry = typeof eventLog.$inferSelect;
+export type RefreshToken = typeof refreshTokens.$inferSelect;
 export type FootballFixtureEvent = typeof footballFixtureEvents.$inferSelect;
 export type FootballFixtureLineup = typeof footballFixtureLineups.$inferSelect;
 export type FootballFixtureStat = typeof footballFixtureStats.$inferSelect;
 export type FootballH2H = typeof footballH2H.$inferSelect;
 export type FootballTeamStat = typeof footballTeamStats.$inferSelect;
+export type PushToken = typeof pushTokens.$inferSelect;

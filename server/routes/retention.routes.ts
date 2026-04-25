@@ -10,10 +10,10 @@ retentionRouter.get(
   "/daily-pack",
   requireAuth,
   asyncHandler(async (req: Request, res: Response) => {
-    const user = await authRepo.getUserById(req.session.userId!);
+    const user = await authRepo.getUserById(req.userId!);
     if (!user) return res.status(404).json({ message: "User not found" });
     const favLeagues = ((req.query.leagues as string) || "").split(",").filter(Boolean);
-    const pack = await retention.getOrCreateDailyPack(req.session.userId!, favLeagues);
+    const pack = await retention.getOrCreateDailyPack(req.userId!, favLeagues);
     return res.json(pack);
   }),
 );
@@ -24,9 +24,9 @@ retentionRouter.post(
   asyncHandler(async (req: Request, res: Response) => {
     const { matchId } = req.body;
     if (!matchId) return res.status(400).json({ message: "matchId required" });
-    const pack = await retention.markDailyPickComplete(req.session.userId!, matchId);
+    const pack = await retention.markDailyPickComplete(req.userId!, matchId);
     if (!pack) return res.status(404).json({ message: "No daily pack found" });
-    const newAchievements = await retention.checkAndAwardAchievements(req.session.userId!);
+    const newAchievements = await retention.checkAndAwardAchievements(req.userId!);
     return res.json({ pack, newAchievements });
   }),
 );
@@ -37,7 +37,7 @@ retentionRouter.post(
   asyncHandler(async (req: Request, res: Response) => {
     const { matchId } = req.body;
     if (!matchId) return res.status(400).json({ message: "matchId required" });
-    const result = await retention.setBoostPick(req.session.userId!, matchId);
+    const result = await retention.setBoostPick(req.userId!, matchId);
     return res.json(result);
   }),
 );
@@ -47,7 +47,7 @@ retentionRouter.get(
   requireAuth,
   asyncHandler(async (req: Request, res: Response) => {
     const period = (req.query.period as string) || "alltime";
-    const data = await retention.getChaseData(req.session.userId!, period);
+    const data = await retention.getChaseData(req.userId!, period);
     return res.json(data);
   }),
 );
@@ -56,8 +56,8 @@ retentionRouter.get(
   "/achievements",
   requireAuth,
   asyncHandler(async (req: Request, res: Response) => {
-    const achievements = await retention.getUserAchievements(req.session.userId!);
-    const newAchievements = await retention.checkAndAwardAchievements(req.session.userId!);
+    const achievements = await retention.getUserAchievements(req.userId!);
+    const newAchievements = await retention.checkAndAwardAchievements(req.userId!);
     return res.json({ achievements, newAchievements });
   }),
 );
@@ -100,7 +100,7 @@ retentionRouter.get(
   "/insights",
   requireAuth,
   asyncHandler(async (req: Request, res: Response) => {
-    const data = await retention.getUserPerformanceInsights(req.session.userId!);
+    const data = await retention.getUserPerformanceInsights(req.userId!);
     return res.json(data);
   }),
 );

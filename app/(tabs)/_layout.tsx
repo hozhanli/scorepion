@@ -9,14 +9,55 @@ import { isLiquidGlassAvailable } from "expo-glass-effect";
 import { Tabs, useRouter, useSegments } from "expo-router";
 import { NativeTabs, Icon, Label } from "expo-router/unstable-native-tabs";
 import { Ionicons } from "@expo/vector-icons";
-import { Platform, StyleSheet, View } from "react-native";
+import { Platform, StyleSheet, View, Text } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import React, { useEffect, useRef } from "react";
+import React, { useEffect, useRef, useMemo } from "react";
+import Animated, {
+  useSharedValue,
+  useAnimatedStyle,
+  withRepeat,
+  withTiming,
+  Easing,
+  useReducedMotion,
+} from "react-native-reanimated";
 
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useTheme } from "@/contexts/ThemeContext";
+import { useApp } from "@/contexts/AppContext";
 import { accent } from "@/constants/colors";
 import { saveLastTab, loadLastTab } from "@/lib/nav-persistence";
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Live match count badge — pulsing red pill with count and pulse dot
+
+function LiveMatchBadge({ count }: { count: number }) {
+  const reduceMotion = useReducedMotion();
+  const pulse = useSharedValue(1);
+
+  useEffect(() => {
+    if (reduceMotion || count === 0) return;
+    pulse.value = withRepeat(
+      withTiming(0.4, { duration: 1000, easing: Easing.inOut(Easing.quad) }),
+      -1,
+      true,
+    );
+  }, [pulse, reduceMotion, count]);
+
+  const pulseStyle = useAnimatedStyle(() => ({
+    opacity: reduceMotion || count === 0 ? 1 : pulse.value,
+  }));
+
+  if (count === 0) return null;
+
+  const badgeLabel = count > 9 ? "9+" : count.toString();
+
+  return (
+    <View style={[badgeStyles.badgeContainer]}>
+      <Animated.View style={[badgeStyles.pulseDot, pulseStyle]} />
+      <Text style={badgeStyles.badgeText}>{badgeLabel}</Text>
+    </View>
+  );
+}
 
 function NativeTabLayout() {
   const { t } = useLanguage();
@@ -49,6 +90,7 @@ function NativeTabLayout() {
 function ClassicTabLayout() {
   const { t } = useLanguage();
   const { surface, border, textRole } = useTheme();
+  const { liveMatchCount } = useApp();
   const isWeb = Platform.OS === "web";
   const safeAreaInsets = useSafeAreaInsets();
 
@@ -112,7 +154,8 @@ function ClassicTabLayout() {
           name="matches"
           options={{
             title: t.tabs.matches,
-            tabBarAccessibilityLabel: t.tabs.matches,
+            tabBarAccessibilityLabel:
+              liveMatchCount > 0 ? `${t.tabs.matches}, ${liveMatchCount} live` : t.tabs.matches,
             tabBarIcon: ({ color, focused }) => (
               <View style={tabStyles.iconWrap}>
                 <Ionicons
@@ -121,6 +164,7 @@ function ClassicTabLayout() {
                   color={color}
                 />
                 {focused && <View style={tabStyles.activeDot} />}
+                {liveMatchCount > 0 && <LiveMatchBadge count={liveMatchCount} />}
               </View>
             ),
           }}
@@ -183,6 +227,37 @@ const tabStyles = StyleSheet.create({
     borderRadius: 2,
     backgroundColor: accent.primary,
     marginTop: 3,
+  },
+});
+
+const badgeStyles = StyleSheet.create({
+  badgeContainer: {
+    position: "absolute",
+    top: -6,
+    right: -6,
+    minWidth: 16,
+    height: 14,
+    backgroundColor: "#EF4444",
+    borderRadius: 7,
+    borderWidth: 1,
+    borderColor: "#B91C1C",
+    paddingHorizontal: 3,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 2,
+  },
+  pulseDot: {
+    width: 4,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: "#FFFFFF",
+  },
+  badgeText: {
+    fontSize: 10,
+    fontFamily: "Inter_700Bold",
+    color: "#FFFFFF",
+    letterSpacing: 0,
   },
 });
 

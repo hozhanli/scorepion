@@ -26,7 +26,7 @@ import { PressableScale } from "./PressableScale";
 
 export interface FilterSegmentedItem<V extends string = string> {
   value: V;
-  label: string;
+  label: string | React.ReactNode;
   count?: number;
 }
 
@@ -100,33 +100,42 @@ export function FilterSegmented<V extends string = string>({
             onPress={() => handlePress(item.value)}
             onLayout={handleItemLayout(i)}
             style={styles.item}
-            accessibilityRole="button"
+            // Use "tab" (correct ARIA semantic for segmented-control items)
+            // rather than "button" so react-native-web renders <div role="tab">,
+            // not a native <button>. This also lets us safely nest interactive
+            // children like <HelpTip> inside tab labels — <button> inside
+            // <button> is an HTML spec violation.
+            accessibilityRole="tab"
             accessibilityState={{ selected: active }}
           >
-            <Text
-              style={[
-                styles.label,
-                { color: textRole.secondary },
-                active && [styles.labelActive, { color: "#FFFFFF" }],
-              ]}
-              numberOfLines={1}
-              adjustsFontSizeToFit
-              minimumFontScale={0.75}
-            >
-              {item.label}
-              {typeof item.count === "number" ? (
-                <Text
-                  style={[
-                    styles.count,
-                    { color: textRole.tertiary },
-                    active && [styles.countActive, { color: "rgba(255, 255, 255, 0.78)" }],
-                  ]}
-                >
-                  {" "}
-                  {item.count}
-                </Text>
-              ) : null}
-            </Text>
+            {typeof item.label === "string" ? (
+              <Text
+                style={[
+                  styles.label,
+                  { color: textRole.secondary },
+                  active && [styles.labelActive, { color: "#FFFFFF" }],
+                ]}
+                numberOfLines={1}
+                adjustsFontSizeToFit
+                minimumFontScale={0.75}
+              >
+                {item.label}
+                {typeof item.count === "number" ? (
+                  <Text
+                    style={[
+                      styles.count,
+                      { color: textRole.tertiary },
+                      active && [styles.countActive, { color: "rgba(255, 255, 255, 0.78)" }],
+                    ]}
+                  >
+                    {" "}
+                    {item.count}
+                  </Text>
+                ) : null}
+              </Text>
+            ) : (
+              item.label
+            )}
           </PressableScale>
         );
       })}

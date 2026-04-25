@@ -1,30 +1,49 @@
 /**
  * Express authentication & authorization middleware.
  *
+ * JWT-based: extracts Bearer token from Authorization header,
+ * verifies it, and attaches userId to the request.
+ *
  * Single Responsibility Principle: middleware concerns are isolated from
- * route handler business logic. Routes import these via dependency injection
- * rather than defining them inline.
+ * route handler business logic.
  *
  * Open/Closed Principle: add new guards (e.g. requirePremium) here without
  * touching routes.ts.
  */
 import type { Request, Response, NextFunction } from "express";
 import * as crypto from "crypto";
+import { verifyAccessToken } from "../services/token.service";
+
+// Extend Express Request to carry userId from JWT
+declare global {
+  namespace Express {
+    interface Request {
+      userId?: string;
+    }
+  }
+}
 
 // ---------------------------------------------------------------------------
-// Session-based auth
+// JWT-based auth
 // ---------------------------------------------------------------------------
 
-export function requireAuth(
-  req: Request,
-  res: Response,
-  next: NextFunction,
-): void {
-  if (!req.session.userId) {
+export async function requireAuth(req: Request, res: Response, next: NextFunction): Promise<void> {
+  const authHeader = req.headers.authorization;
+
+  if (!authHeader || !authHeader.startsWith("Bearer ")) {
     res.status(401).json({ message: "Not authenticated" });
     return;
   }
-  next();
+
+  const token = authHeader.slice(7); // Strip "Bearer "
+
+  try {
+    const payload = await verifyAccessToken(token);
+    req.userId = payload.sub;
+    next();
+  } catch {
+    res.status(401).json({ message: "Invalid or expired token" });
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -35,11 +54,7 @@ const adminAttempts = new Map<string, { count: number; resetAt: number }>();
 const ADMIN_RATE_LIMIT = 10; // max attempts per window
 const ADMIN_RATE_WINDOW_MS = 60_000; // 1 minute
 
-export function requireAdmin(
-  req: Request,
-  res: Response,
-  next: NextFunction,
-): void {
+export function requireAdmin(req: Request, res: Response, next: NextFunction): void {
   const adminSecret = process.env.ADMIN_SECRET;
   if (!adminSecret) {
     res.status(403).json({ message: "Forbidden" });
@@ -75,10 +90,7 @@ export function requireAdmin(
   const secretBuf = Buffer.from(adminSecret, "utf8");
   const providedBuf = Buffer.from(provided, "utf8");
 
-  if (
-    secretBuf.length !== providedBuf.length ||
-    !crypto.timingSafeEqual(secretBuf, providedBuf)
-  ) {
+  if (secretBuf.length !== providedBuf.length || !crypto.timingSafeEqual(secretBuf, providedBuf)) {
     res.status(403).json({ message: "Forbidden" });
     return;
   }

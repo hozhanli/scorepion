@@ -1,95 +1,185 @@
-import { getUncachableStripeClient, getStripePublishableKey } from "../stripeClient";
-import * as userRepo from "../repositories/user.repository";
+/**
+ * Stripe integration — scaffold only. Actual premium features aren't live.
+ *
+ * Activation steps when product decides on paid tiers:
+ *   1. Set STRIPE_SECRET_KEY, STRIPE_WEBHOOK_SECRET, STRIPE_PUBLISHABLE_KEY in .env
+ *   2. Create products + prices in Stripe Dashboard, paste price IDs into PRICE_IDS below
+ *   3. Flip ENABLE_BILLING=true
+ *   4. Add upgrade UI to the client (Profile screen → "Go Premium")
+ */
 
-export async function getStripeConfig() {
-    const publishableKey = await getStripePublishableKey();
-    return { publishableKey };
-}
+import Stripe from "stripe";
 
-export async function getStripeProducts() {
-    const stripe = await getUncachableStripeClient();
-    const products = await stripe.products.list({ active: true, limit: 10 });
-    const prices = await stripe.prices.list({ active: true, limit: 50 });
+const STRIPE_SECRET = process.env.STRIPE_SECRET_KEY;
+const WEBHOOK_SECRET = process.env.STRIPE_WEBHOOK_SECRET;
+const ENABLE_BILLING = process.env.ENABLE_BILLING === "true";
 
-    return products.data.map(product => ({
-        id: product.id,
-        name: product.name,
-        description: product.description,
-        metadata: product.metadata,
-        prices: prices.data
-            .filter(p => p.product === product.id)
-            .map(p => ({
-                id: p.id,
-                unitAmount: p.unit_amount,
-                currency: p.currency,
-                recurring: p.recurring,
-            }))
-            .sort((a, b) => (a.unitAmount || 0) - (b.unitAmount || 0)),
-    }));
-}
+export const PRICE_IDS = {
+  premium_monthly: process.env.STRIPE_PRICE_PREMIUM_MONTHLY ?? "",
+  premium_yearly: process.env.STRIPE_PRICE_PREMIUM_YEARLY ?? "",
+};
 
-export async function createCheckoutSession(user: any, priceId: string) {
-    const stripe = await getUncachableStripeClient();
+let stripeClient: Stripe | null = null;
 
-    let customerId = user.stripeCustomerId;
-    if (!customerId) {
-        const customer = await stripe.customers.create({
-            metadata: { userId: user.id, username: user.username },
-        });
-        customerId = customer.id;
-        await userRepo.updateUserStripeCustomer(user.id, customerId);
-    }
-
-    const baseUrl = (process.env.APP_URL || `http://localhost:${process.env.PORT || '5000'}`).replace(/\/+$/, '');
-    const session = await stripe.checkout.sessions.create({
-        customer: customerId,
-        payment_method_types: ['card'],
-        line_items: [{ price: priceId, quantity: 1 }],
-        mode: 'subscription',
-        success_url: `${baseUrl}/api/stripe/success?session_id={CHECKOUT_SESSION_ID}`,
-        cancel_url: `${baseUrl}/api/stripe/cancel`,
+function getStripeClient(): Stripe {
+  if (!stripeClient && STRIPE_SECRET) {
+    stripeClient = new Stripe(STRIPE_SECRET, {
+      apiVersion: "2025-11-17.clover" as Stripe.LatestApiVersion,
     });
-
-    return { url: session.url };
+  }
+  if (!stripeClient) {
+    throw new Error("Stripe client not initialized. Check STRIPE_SECRET_KEY env var.");
+  }
+  return stripeClient;
 }
 
-export async function handleCheckoutSuccess(sessionId: string) {
-    const stripe = await getUncachableStripeClient();
-    const session = await stripe.checkout.sessions.retrieve(sessionId);
-
-    if (session.customer && session.subscription) {
-        const customerId = typeof session.customer === 'string' ? session.customer : session.customer.id;
-        const subscriptionId = typeof session.subscription === 'string' ? session.subscription : session.subscription.id;
-        await userRepo.updateUserSubscription(customerId, subscriptionId, true);
-    }
+export function isBillingEnabled(): boolean {
+  return ENABLE_BILLING && !!STRIPE_SECRET;
 }
 
-export async function getSubscriptionStatus(user: any) {
-    if (!user.stripeSubscriptionId) {
-        return { subscription: null, isPremium: user.isPremium };
-    }
+/**
+ * Create a Checkout session for the user to upgrade.
+ * Returns the session ID; client redirects to Stripe-hosted checkout.
+ */
+export async function createCheckoutSession(
+  userId: string,
+  priceKey: keyof typeof PRICE_IDS,
+  returnUrl: string,
+): Promise<string> {
+  if (!isBillingEnabled()) {
+    throw new Error("Billing is not enabled");
+  }
 
-    const subscription = await userRepo.getSubscriptionRow(user.stripeSubscriptionId);
-    const isActive = subscription && ['active', 'trialing'].includes(subscription.status);
+  const priceId = PRICE_IDS[priceKey];
+  if (!priceId) {
+    throw new Error(`Price ID not configured for ${priceKey}`);
+  }
 
-    if (user.isPremium !== isActive) {
-        await userRepo.updateUserPremiumStatus(user.id, !!isActive);
-    }
+  const stripe = getStripeClient();
+  const session = await stripe.checkout.sessions.create({
+    customer_email: undefined, // Will be set from user context in routes
+    line_items: [
+      {
+        price: priceId,
+        quantity: 1,
+      },
+    ],
+    mode: "subscription",
+    success_url: `${returnUrl}?session_id={CHECKOUT_SESSION_ID}`,
+    cancel_url: returnUrl,
+    metadata: {
+      user_id: userId,
+    },
+  });
 
-    return { subscription, isPremium: isActive };
+  if (!session.id) {
+    throw new Error("Failed to create Stripe session");
+  }
+
+  return session.id;
 }
 
-export async function createBillingPortalSession(user: any) {
-    if (!user.stripeCustomerId) {
-        throw new Error("No Stripe customer found");
-    }
+/**
+ * Verify webhook signature and dispatch to handlers.
+ */
+export async function handleWebhook(rawBody: Buffer, signature: string): Promise<void> {
+  if (!isBillingEnabled() || !WEBHOOK_SECRET) {
+    throw new Error("Billing or webhook secret not configured");
+  }
 
-    const stripe = await getUncachableStripeClient();
-    const baseUrl = (process.env.APP_URL || `http://localhost:${process.env.PORT || '5000'}`).replace(/\/+$/, '');
-    const portalSession = await stripe.billingPortal.sessions.create({
-        customer: user.stripeCustomerId,
-        return_url: baseUrl,
-    });
+  const stripe = getStripeClient();
 
-    return { url: portalSession.url };
+  let event: Stripe.Event;
+  try {
+    event = stripe.webhooks.constructEvent(rawBody, signature, WEBHOOK_SECRET);
+  } catch (err) {
+    throw new Error(`Webhook signature verification failed: ${(err as Error).message}`);
+  }
+
+  // Dispatch based on event type
+  switch (event.type) {
+    case "customer.subscription.created":
+    case "customer.subscription.updated":
+      await handleSubscriptionChange(event.data.object as Stripe.Subscription);
+      break;
+    case "customer.subscription.deleted":
+      await handleSubscriptionDeleted(event.data.object as Stripe.Subscription);
+      break;
+    case "invoice.payment_failed":
+      await handleInvoicePaymentFailed(event.data.object as Stripe.Invoice);
+      break;
+    default:
+      // Log but don't fail on unknown events
+      console.log(`Unhandled webhook event type: ${event.type}`);
+  }
+}
+
+async function handleSubscriptionChange(subscription: Stripe.Subscription): Promise<void> {
+  // Write to DB: insert/update subscriptions + billingEvents
+  // (Implementation deferred until billing is activated)
+  console.log(`Subscription change: ${subscription.id} status=${subscription.status}`);
+}
+
+async function handleSubscriptionDeleted(subscription: Stripe.Subscription): Promise<void> {
+  // Write to DB: mark subscription as canceled
+  console.log(`Subscription deleted: ${subscription.id}`);
+}
+
+async function handleInvoicePaymentFailed(invoice: Stripe.Invoice): Promise<void> {
+  // Write to DB: log payment failure event
+  console.log(`Invoice payment failed: ${invoice.id}`);
+}
+
+/**
+ * Retrieve current subscription status for a user (from DB).
+ * Returns null if no active subscription.
+ */
+export async function getUserSubscription(userId: string): Promise<any | null> {
+  // TODO: query DB subscriptions table
+  // For now, return null (no active subscriptions until billing is activated)
+  return null;
+}
+
+/**
+ * Legacy/stub exports for backwards compatibility with existing stripe.routes.ts
+ * These are disabled when ENABLE_BILLING=false
+ */
+
+export async function getStripeConfig(): Promise<any> {
+  if (!isBillingEnabled()) {
+    throw new Error("Billing is not enabled");
+  }
+  // TODO: return publishable key from Stripe Dashboard
+  return { publishableKey: process.env.STRIPE_PUBLISHABLE_KEY ?? "" };
+}
+
+export async function getStripeProducts(): Promise<any[]> {
+  if (!isBillingEnabled()) {
+    throw new Error("Billing is not enabled");
+  }
+  // TODO: fetch from Stripe API
+  return [];
+}
+
+export async function handleCheckoutSuccess(sessionId: string): Promise<void> {
+  if (!isBillingEnabled()) {
+    throw new Error("Billing is not enabled");
+  }
+  // TODO: update user subscription in DB
+}
+
+export async function getSubscriptionStatus(user: any): Promise<any> {
+  if (!isBillingEnabled()) {
+    return { subscription: null, isPremium: false };
+  }
+  // TODO: query DB
+  return { subscription: null, isPremium: false };
+}
+
+export async function createBillingPortalSession(user: any): Promise<any> {
+  if (!isBillingEnabled()) {
+    throw new Error("Billing is not enabled");
+  }
+  // TODO: create Stripe billing portal session
+  throw new Error("Not implemented");
 }

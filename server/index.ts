@@ -1,17 +1,27 @@
 import express from "express";
 import type { Request, Response, NextFunction } from "express";
 import helmet from "helmet";
-import rateLimit from "express-rate-limit";
 import { registerRoutes } from "./routes";
-import { registerHealthRoutes } from "./routes/health";
+import { registerHealthRoutes } from "./routes/health.routes";
+import { authLimiter, adminLimiter, writeLimiter, readLimiter } from "./middleware/rate-limit";
+import { requestLog } from "./middleware/request-log";
 import * as fs from "fs";
 import * as path from "path";
-import { getStripeClient } from './stripeClient';
-import { WebhookHandlers } from './webhookHandlers';
-import { runMigrations } from './migrations/runner';
+import { getStripeClient } from "./stripeClient";
+import { WebhookHandlers } from "./webhookHandlers";
+import { runMigrations } from "./migrations/runner";
+import { initSentryServer, sentryRequestHandler, sentryErrorHandler } from "./sentry";
+import { logger } from "./lib/logger";
+import { checkEnv } from "./env";
+
+// Validate environment before anything else — fails fast in production
+// with a clear message if a required var is missing.
+checkEnv();
 
 const app = express();
-const log = console.log;
+
+// Initialize Sentry first, before any other middleware or routes
+initSentryServer();
 
 declare module "http" {
   interface IncomingMessage {
@@ -49,19 +59,12 @@ function setupCors(app: express.Application) {
 
     // Always allow localhost for development (any port)
     const isLocalhost =
-      origin?.startsWith("http://localhost:") ||
-      origin?.startsWith("http://127.0.0.1:");
+      origin?.startsWith("http://localhost:") || origin?.startsWith("http://127.0.0.1:");
 
     if (origin && (allowedOrigins.has(origin) || isLocalhost)) {
       res.header("Access-Control-Allow-Origin", origin);
-      res.header(
-        "Access-Control-Allow-Methods",
-        "GET, POST, PUT, DELETE, OPTIONS",
-      );
-      res.header(
-        "Access-Control-Allow-Headers",
-        "Content-Type, Authorization",
-      );
+      res.header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");
+      res.header("Access-Control-Allow-Headers", "Content-Type, Authorization");
       res.header("Access-Control-Allow-Credentials", "true");
     }
 
@@ -96,47 +99,22 @@ function setupSecurity(app: express.Application) {
 }
 
 function setupRateLimiting(app: express.Application) {
-  const apiLimiter = rateLimit({
-    windowMs: 60 * 1000,
-    max: Number(process.env.RATE_LIMIT_PER_MIN || 120),
-    standardHeaders: true,
-    legacyHeaders: false,
-    skip: (req) =>
-      req.path === "/health" ||
-      req.path === "/health/ready" ||
-      req.path === "/api/stripe/webhook",
-  });
-  app.use("/api", apiLimiter);
+  // Tier A: Auth routes (strict) — 10 req/min
+  app.use("/api/auth", authLimiter);
+
+  // Tier B: Admin routes (very strict) — 30 req/min
+  app.use("/api/football/sync", adminLimiter);
+
+  // Tier C: Write routes (moderate) — 60 req/min
+  app.use(["/api/predictions", "/api/groups", "/api/account"], writeLimiter);
+
+  // Tier D: Read routes (loose) — 300 req/min (catch-all, applied last)
+  app.use(readLimiter);
 }
 
 function setupRequestLogging(app: express.Application) {
-  app.use((req, res, next) => {
-    const start = Date.now();
-    const reqPath = req.path;
-    let capturedJsonResponse: Record<string, unknown> | undefined;
-
-    const originalResJson = res.json;
-    res.json = function (bodyJson, ...args) {
-      capturedJsonResponse = bodyJson;
-      return originalResJson.apply(res, [bodyJson, ...args]);
-    };
-
-    res.on("finish", () => {
-      if (!reqPath.startsWith("/api")) return;
-
-      const duration = Date.now() - start;
-      let logLine = `${req.method} ${reqPath} ${res.statusCode} in ${duration}ms`;
-      if (capturedJsonResponse) {
-        logLine += ` :: ${JSON.stringify(capturedJsonResponse)}`;
-      }
-      if (logLine.length > 120) {
-        logLine = logLine.slice(0, 119) + "…";
-      }
-      log(logLine);
-    });
-
-    next();
-  });
+  // Apply structured request logging for all requests
+  app.use(requestLog);
 }
 
 // ---------------------------------------------------------------------------
@@ -155,17 +133,10 @@ function getAppName(): string {
 }
 
 function serveExpoManifest(platform: string, res: Response) {
-  const manifestPath = path.resolve(
-    process.cwd(),
-    "static-build",
-    platform,
-    "manifest.json",
-  );
+  const manifestPath = path.resolve(process.cwd(), "static-build", platform, "manifest.json");
 
   if (!fs.existsSync(manifestPath)) {
-    return res
-      .status(404)
-      .json({ error: `Manifest not found for platform: ${platform}` });
+    return res.status(404).json({ error: `Manifest not found for platform: ${platform}` });
   }
 
   res.setHeader("expo-protocol-version", "1");
@@ -204,16 +175,11 @@ function serveLandingPage({
 }
 
 function configureExpoAndLanding(app: express.Application) {
-  const templatePath = path.resolve(
-    process.cwd(),
-    "server",
-    "templates",
-    "landing-page.html",
-  );
+  const templatePath = path.resolve(process.cwd(), "server", "templates", "landing-page.html");
   const landingPageTemplate = fs.readFileSync(templatePath, "utf-8");
   const appName = getAppName();
 
-  log("Serving static Expo files with dynamic manifest routing");
+  logger.info("Serving static Expo files with dynamic manifest routing");
 
   app.use((req: Request, res: Response, next: NextFunction) => {
     if (req.path.startsWith("/api")) return next();
@@ -232,17 +198,14 @@ function configureExpoAndLanding(app: express.Application) {
   });
 
   // Static assets with cache headers
-  app.use(
-    "/assets",
-    express.static(path.resolve(process.cwd(), "assets"), { maxAge: "7d" }),
-  );
+  app.use("/assets", express.static(path.resolve(process.cwd(), "assets"), { maxAge: "7d" }));
   app.use(
     express.static(path.resolve(process.cwd(), "static-build"), {
       maxAge: "1d",
     }),
   );
 
-  log("Expo routing: Checking expo-platform header on / and /manifest");
+  logger.info("Expo routing: Checking expo-platform header on / and /manifest");
 }
 
 // ---------------------------------------------------------------------------
@@ -260,7 +223,7 @@ function setupErrorHandler(app: express.Application) {
     const status = error.status || error.statusCode || 500;
     const message = error.message || "Internal Server Error";
 
-    console.error("Internal Server Error:", err);
+    logger.error({ error: err }, "Internal Server Error");
 
     if (res.headersSent) {
       return next(err);
@@ -276,7 +239,7 @@ function setupErrorHandler(app: express.Application) {
 
 async function initStripe() {
   if (!process.env.STRIPE_SECRET_KEY) {
-    log("[Stripe] STRIPE_SECRET_KEY not set, skipping Stripe init");
+    logger.info("[Stripe] STRIPE_SECRET_KEY not set, skipping Stripe init");
     return;
   }
 
@@ -288,18 +251,18 @@ async function initStripe() {
     // If a webhook secret is configured, we assume the webhook is already
     // registered in the Stripe dashboard.  Otherwise log a reminder.
     if (process.env.STRIPE_WEBHOOK_SECRET) {
-      log(`[Stripe] Webhook ready at ${webhookUrl}`);
+      logger.info(`[Stripe] Webhook ready at ${webhookUrl}`);
     } else {
-      log(
+      logger.info(
         `[Stripe] STRIPE_WEBHOOK_SECRET not set — register ${webhookUrl} in your Stripe dashboard and set the signing secret.`,
       );
     }
 
     // Quick connectivity check
     await stripe.products.list({ limit: 1 });
-    log("[Stripe] Connection verified");
+    logger.info("[Stripe] Connection verified");
   } catch (error) {
-    console.error("[Stripe] Init failed:", error);
+    logger.error({ error }, "[Stripe] Init failed");
   }
 }
 
@@ -313,40 +276,39 @@ async function initStripe() {
   registerHealthRoutes(app);
 
   // Stripe webhook needs raw body — must be registered BEFORE body parsing
-  app.post(
-    "/api/stripe/webhook",
-    express.raw({ type: "application/json" }),
-    async (req, res) => {
-      const signature = req.headers["stripe-signature"];
-      if (!signature) {
-        return res.status(400).json({ error: "Missing stripe-signature" });
-      }
+  app.post("/api/stripe/webhook", express.raw({ type: "application/json" }), async (req, res) => {
+    const signature = req.headers["stripe-signature"];
+    if (!signature) {
+      return res.status(400).json({ error: "Missing stripe-signature" });
+    }
 
-      try {
-        const sig = Array.isArray(signature) ? signature[0] : signature;
-        if (!Buffer.isBuffer(req.body)) {
-          console.error("[Stripe] Webhook body is not a Buffer");
-          return res.status(500).json({ error: "Webhook processing error" });
-        }
-        await WebhookHandlers.processWebhook(req.body as Buffer, sig);
-        res.status(200).json({ received: true });
-      } catch (error: any) {
-        console.error("[Stripe] Webhook error:", error.message);
-        res.status(400).json({ error: "Webhook processing error" });
+    try {
+      const sig = Array.isArray(signature) ? signature[0] : signature;
+      if (!Buffer.isBuffer(req.body)) {
+        logger.error("[Stripe] Webhook body is not a Buffer");
+        return res.status(500).json({ error: "Webhook processing error" });
       }
-    },
-  );
+      await WebhookHandlers.processWebhook(req.body as Buffer, sig);
+      res.status(200).json({ received: true });
+    } catch (error: any) {
+      logger.error({ message: error.message }, "[Stripe] Webhook error");
+      res.status(400).json({ error: "Webhook processing error" });
+    }
+  });
 
   setupBodyParsing(app);
   setupRateLimiting(app);
   setupRequestLogging(app);
+
+  // Add Sentry request handler after body parsing, before routes
+  app.use(sentryRequestHandler());
 
   configureExpoAndLanding(app);
 
   try {
     await initStripe();
   } catch (err) {
-    console.error("Failed to initialize Stripe:", err);
+    logger.error({ error: err }, "Failed to initialize Stripe");
   }
 
   // Run Scorepion DB migrations (adds weekly_points, group_activity, etc.)
@@ -354,43 +316,44 @@ async function initStripe() {
 
   const server = await registerRoutes(app);
 
+  // Add Sentry error handler after routes, before custom error handler
+  app.use(sentryErrorHandler());
+
   setupErrorHandler(app);
 
   const port = parseInt(process.env.PORT || "5000", 10);
 
   server.listen({ port, host: "0.0.0.0" }, () => {
-    log(`express server serving on port ${port}`);
+    logger.info(`express server serving on port ${port}`);
   });
 
   // Graceful shutdown handler
   const gracefulShutdown = async (signal: string) => {
-    log(
-      `\n[Shutdown] Received ${signal} signal, starting graceful shutdown...`,
-    );
+    logger.info(`\n[Shutdown] Received ${signal} signal, starting graceful shutdown...`);
 
     try {
       const syncModule = await import("./services/sync");
       syncModule.stopCronScheduler();
-      log("[Shutdown] Cron scheduler stopped");
+      logger.info("[Shutdown] Cron scheduler stopped");
 
       syncModule.stopLivePolling();
-      log("[Shutdown] Live polling stopped");
+      logger.info("[Shutdown] Live polling stopped");
 
       const { pool } = await import("./db");
       await pool.end();
-      log("[Shutdown] Database pool closed");
+      logger.info("[Shutdown] Database pool closed");
 
       server.close(() => {
-        log("[Shutdown] Server closed, exiting");
+        logger.info("[Shutdown] Server closed, exiting");
         process.exit(0);
       });
 
       setTimeout(() => {
-        log("[Shutdown] Forced exit after 10s timeout");
+        logger.info("[Shutdown] Forced exit after 10s timeout");
         process.exit(1);
       }, 10_000);
     } catch (error) {
-      console.error("[Shutdown] Error during graceful shutdown:", error);
+      logger.error({ error }, "[Shutdown] Error during graceful shutdown");
       process.exit(1);
     }
   };

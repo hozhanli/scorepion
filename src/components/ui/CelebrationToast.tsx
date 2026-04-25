@@ -36,37 +36,47 @@ import React, {
   useMemo,
   useRef,
   useState,
-} from 'react';
-import {
-  View, Text, StyleSheet, Platform, Pressable, AccessibilityInfo,
-} from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Ionicons } from '@expo/vector-icons';
+} from "react";
+import { View, Text, StyleSheet, Platform, Pressable, AccessibilityInfo } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { Ionicons } from "@expo/vector-icons";
+import { LinearGradient } from "expo-linear-gradient";
 import Animated, {
-  FadeIn, FadeInUp, FadeOut, FadeOutUp, useSharedValue, useAnimatedStyle,
-  withSpring, withTiming, interpolate, Extrapolate,
-} from 'react-native-reanimated';
-import { haptics, springs } from '@/lib/motion';
-import { accent, radii, text as textRole } from '@/constants/colors';
-import { ScorpionCrest } from '@/components/ui/ScorpionCrest';
-import { TierUpFullscreen } from '@/components/ui/TierUpFullscreen';
+  FadeIn,
+  FadeInUp,
+  FadeOut,
+  FadeOutUp,
+  useSharedValue,
+  useAnimatedStyle,
+  withSpring,
+  withTiming,
+  interpolate,
+  Extrapolate,
+} from "react-native-reanimated";
+import { haptics, springs } from "@/lib/motion";
+import { accent, radii, text as textRole } from "@/constants/colors";
+import { ScorpionCrest } from "@/components/ui/ScorpionCrest";
+import { TierUpFullscreen } from "@/components/ui/TierUpFullscreen";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Types
 
 export type CelebrationVariant =
-  | 'lockin'
-  | 'tier'
-  | 'streak'
-  | 'points'
-  | 'achievement';
+  | "lockin"
+  | "tier"
+  | "streak"
+  | "points"
+  | "achievement"
+  | "miss"
+  | "streak_reset"
+  | "rank_drop";
 
 export interface CelebrationPayload {
   variant: CelebrationVariant;
   title: string;
   subtitle?: string;
   /** Custom icon override; defaults to the variant's canonical glyph. */
-  icon?: React.ComponentProps<typeof Ionicons>['name'];
+  icon?: React.ComponentProps<typeof Ionicons>["name"];
   /** Display duration in ms. Default: 2400. */
   durationMs?: number;
   /** Optional accent color for glow/ring/crest background. Falls back to variant default if not provided. */
@@ -80,14 +90,71 @@ interface CelebrationContextValue {
 const CelebrationContext = createContext<CelebrationContextValue | null>(null);
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Variant → icon map
+// Variant config and icon map
 
-const DEFAULT_ICON: Record<CelebrationVariant, React.ComponentProps<typeof Ionicons>['name']> = {
-  lockin: 'checkmark-circle',
-  tier: 'trophy',
-  streak: 'flame',
-  points: 'star',
-  achievement: 'ribbon',
+const DEFAULT_ICON: Record<CelebrationVariant, React.ComponentProps<typeof Ionicons>["name"]> = {
+  lockin: "checkmark-circle",
+  tier: "trophy",
+  streak: "flame",
+  points: "star",
+  achievement: "ribbon",
+  miss: "close-circle-outline",
+  streak_reset: "flame-outline",
+  rank_drop: "trending-down-outline",
+};
+
+// Variant styling config: background gradient, haptic, duration
+interface VariantConfig {
+  gradient: [string, string]; // gradient colors
+  haptic: keyof typeof import("@/lib/motion").haptics; // which haptic to use
+  durationMs: number;
+  iconColor?: string; // override icon color (default: white)
+}
+
+const VARIANT_CONFIG: Record<CelebrationVariant, VariantConfig> = {
+  // Celebration variants
+  lockin: {
+    gradient: ["#00C75A", "#007A3D"],
+    haptic: "success",
+    durationMs: 3500,
+  },
+  tier: {
+    gradient: ["#FFD36B", "#D98A00"],
+    haptic: "success",
+    durationMs: 3500,
+  },
+  streak: {
+    gradient: ["#FFB347", "#E04A1E"],
+    haptic: "success",
+    durationMs: 3500,
+  },
+  points: {
+    gradient: ["#FFD36B", "#D98A00"],
+    haptic: "success",
+    durationMs: 3500,
+  },
+  achievement: {
+    gradient: ["#FFD36B", "#D98A00"],
+    haptic: "success",
+    durationMs: 3500,
+  },
+  // Commiseration variants
+  miss: {
+    gradient: ["#2D2D2D", "#1A1A1A"],
+    haptic: "warning",
+    durationMs: 4500,
+  },
+  streak_reset: {
+    gradient: ["#2D2D2D", "#1A1A1A"],
+    haptic: "warning",
+    durationMs: 5000,
+  },
+  rank_drop: {
+    gradient: ["#2D2D2D", "#1A1A1A"],
+    haptic: "warning",
+    durationMs: 4500,
+    iconColor: "#D97706",
+  },
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -99,12 +166,16 @@ interface QueuedCelebration extends CelebrationPayload {
 
 export function CelebrationProvider({ children }: { children: React.ReactNode }) {
   const [queue, setQueue] = useState<QueuedCelebration[]>([]);
-  const [tierUpPayload, setTierUpPayload] = useState<{ tierName: string; subtitle?: string; accentColor?: string } | null>(null);
+  const [tierUpPayload, setTierUpPayload] = useState<{
+    tierName: string;
+    subtitle?: string;
+    accentColor?: string;
+  } | null>(null);
   const idCounter = useRef(0);
 
   const celebrate = useCallback((payload: CelebrationPayload) => {
     // Redirect 'tier' variant to fullscreen instead of toast queue
-    if (payload.variant === 'tier') {
+    if (payload.variant === "tier") {
       setTierUpPayload({
         tierName: payload.title,
         subtitle: payload.subtitle,
@@ -141,7 +212,7 @@ export function CelebrationProvider({ children }: { children: React.ReactNode })
       ) : null}
       <TierUpFullscreen
         visible={tierUpPayload !== null}
-        tierName={tierUpPayload?.tierName ?? ''}
+        tierName={tierUpPayload?.tierName ?? ""}
         accentColor={tierUpPayload?.accentColor}
         subtitle={tierUpPayload?.subtitle}
         onDismiss={() => setTierUpPayload(null)}
@@ -158,7 +229,7 @@ export function useCelebration() {
     return {
       celebrate: (_: CelebrationPayload) => {
         if (__DEV__) {
-          console.warn('[CelebrationToast] celebrate() called with no provider mounted.');
+          console.warn("[CelebrationToast] celebrate() called with no provider mounted.");
         }
       },
     };
@@ -179,7 +250,7 @@ function CelebrationHost({
   onDismiss: () => void;
 }) {
   const insets = useSafeAreaInsets();
-  const topPad = Platform.OS === 'web' ? 16 : Math.max(insets.top, 16);
+  const topPad = Platform.OS === "web" ? 16 : Math.max(insets.top, 16);
   // Default raised from 2400ms → 3500ms so Switch Control and partial-vision
   // users (Ingrid, Julian) can actually read the toast before it dismisses.
   const duration = payload.durationMs ?? 3500;
@@ -205,10 +276,12 @@ function CelebrationHost({
 
   // Fire haptic + schedule auto-dismiss on mount.
   useEffect(() => {
-    haptics.medium?.().catch(() => {});
+    const config = VARIANT_CONFIG[payload.variant];
+    const hapticFn = haptics[config.haptic];
+    hapticFn?.().catch(() => {});
     const t = setTimeout(onDismiss, duration);
     return () => clearTimeout(t);
-  }, [duration, onDismiss]);
+  }, [payload.variant, duration, onDismiss]);
 
   // Animate icon wobble on mount
   useEffect(() => {
@@ -217,7 +290,7 @@ function CelebrationHost({
 
   // Color shimmer for celebratory variants
   useEffect(() => {
-    if (['lockin', 'points', 'achievement'].includes(payload.variant)) {
+    if (["lockin", "points", "achievement"].includes(payload.variant)) {
       colorProgress.value = withTiming(1, { duration: 1200 });
     }
   }, [payload.variant]);
@@ -226,7 +299,7 @@ function CelebrationHost({
 
   // Determine if this variant should render the ScorpionCrest
   // Note: 'tier' variant is now handled by TierUpFullscreen, not the toast queue
-  const showCrest = payload.variant === 'lockin';
+  const showCrest = payload.variant === "lockin";
 
   const enteringAnim = reduceMotion
     ? FadeIn.duration(180)
@@ -240,17 +313,20 @@ function CelebrationHost({
 
   // Color shimmer for celebratory variants
   const iconShimmerStyle = useAnimatedStyle(() => {
-    if (!['lockin', 'points', 'achievement'].includes(payload.variant)) {
+    if (!["lockin", "points", "achievement"].includes(payload.variant)) {
       return { opacity: 1 };
     }
     const shimmerOpacity = interpolate(
       colorProgress.value,
       [0, 0.5, 1],
       [1, 0.6, 1],
-      Extrapolate.CLAMP
+      Extrapolate.CLAMP,
     );
     return { opacity: shimmerOpacity };
   });
+
+  const config = VARIANT_CONFIG[payload.variant];
+  const iconColor = config.iconColor ?? "#FFFFFF";
 
   return (
     <Animated.View
@@ -260,22 +336,31 @@ function CelebrationHost({
       accessibilityLiveRegion="polite"
       accessibilityRole="alert"
     >
-      <Pressable
-        onPress={() => {
-          haptics.selection?.().catch(() => {});
-          onDismiss();
-        }}
+      <LinearGradient
+        colors={config.gradient}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
         style={styles.toast}
-        accessibilityRole="button"
-        accessibilityLabel={`${payload.title}${payload.subtitle ? `, ${payload.subtitle}` : ''}. Tap to dismiss.`}
-        accessibilityHint="Dismisses the celebration"
       >
+        <Pressable
+          onPress={() => {
+            haptics.selection?.().catch(() => {});
+            onDismiss();
+          }}
+          style={StyleSheet.absoluteFill}
+          accessible={false}
+        />
         <Animated.View style={[iconWobbleStyle, iconShimmerStyle]}>
-          <View style={[styles.iconWell, payload.accentColor && { backgroundColor: payload.accentColor }]}>
+          <View
+            style={[
+              styles.iconWell,
+              payload.accentColor && { backgroundColor: payload.accentColor },
+            ]}
+          >
             {showCrest ? (
               <ScorpionCrest size={18} fill={payload.accentColor ?? accent.primary} />
             ) : (
-              <Ionicons name={iconName} size={20} color="#FFFFFF" />
+              <Ionicons name={iconName} size={22} color={iconColor} />
             )}
           </View>
         </Animated.View>
@@ -294,7 +379,7 @@ function CelebrationHost({
             <Text style={styles.pendingText}>+{pending}</Text>
           </View>
         ) : null}
-      </Pressable>
+      </LinearGradient>
     </Animated.View>
   );
 }
@@ -304,15 +389,15 @@ function CelebrationHost({
 
 const styles = StyleSheet.create({
   container: {
-    position: 'absolute',
+    position: "absolute",
     left: 16,
     right: 16,
-    alignItems: 'center',
+    alignItems: "center",
     zIndex: 9999,
   },
   toast: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: 12,
     backgroundColor: accent.primary,
     paddingVertical: 12,
@@ -323,7 +408,7 @@ const styles = StyleSheet.create({
     // Minimal shadow — the toast needs *some* lift to float above content.
     // This is the only sanctioned shadow in Emerald Minimalism because the
     // toast is the highest z-index ephemeral element in the app.
-    shadowColor: '#0F172A',
+    shadowColor: "#0F172A",
     shadowOffset: { width: 0, height: 8 },
     shadowOpacity: 0.18,
     shadowRadius: 20,
@@ -333,9 +418,9 @@ const styles = StyleSheet.create({
     width: 36,
     height: 36,
     borderRadius: radii.pill / 2,
-    backgroundColor: 'rgba(255, 255, 255, 0.18)',
-    alignItems: 'center',
-    justifyContent: 'center',
+    backgroundColor: "rgba(255, 255, 255, 0.18)",
+    alignItems: "center",
+    justifyContent: "center",
   },
   textCol: {
     flex: 1,
@@ -343,27 +428,27 @@ const styles = StyleSheet.create({
   },
   title: {
     fontSize: 14,
-    fontFamily: 'Inter_700Bold',
-    color: '#FFFFFF',
+    fontFamily: "Inter_700Bold",
+    color: "#FFFFFF",
     letterSpacing: -0.1,
   },
   subtitle: {
     fontSize: 12,
-    fontFamily: 'Inter_500Medium',
-    color: 'rgba(255, 255, 255, 0.88)',
+    fontFamily: "Inter_500Medium",
+    color: "rgba(255, 255, 255, 0.88)",
     marginTop: 2,
   },
   pendingPill: {
     paddingHorizontal: 8,
     paddingVertical: 3,
     borderRadius: radii.pill,
-    backgroundColor: 'rgba(255, 255, 255, 0.22)',
+    backgroundColor: "rgba(255, 255, 255, 0.22)",
     marginLeft: 4,
   },
   pendingText: {
     fontSize: 11,
-    fontFamily: 'Inter_700Bold',
-    color: '#FFFFFF',
+    fontFamily: "Inter_700Bold",
+    color: "#FFFFFF",
     letterSpacing: 0.2,
   },
 });
