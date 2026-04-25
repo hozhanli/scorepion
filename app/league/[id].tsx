@@ -341,13 +341,13 @@ export default function LeagueDetailScreen() {
               { backgroundColor: surface[2], borderColor: border.subtle },
             ]}
           >
-            {league.logo ? (
+            {league?.logo ? (
               <Image
                 source={{ uri: league.logo, cache: "force-cache" }}
                 style={styles.leagueLogo}
                 resizeMode="contain"
               />
-            ) : league.flag ? (
+            ) : league?.flag ? (
               <Image
                 source={{ uri: league.flag, cache: "force-cache" }}
                 style={styles.leagueLogo}
@@ -355,18 +355,18 @@ export default function LeagueDetailScreen() {
               />
             ) : (
               <Ionicons
-                name={league.icon as keyof typeof Ionicons.glyphMap}
+                name={(league?.icon ?? "football") as keyof typeof Ionicons.glyphMap}
                 size={36}
                 color={accent.primary}
               />
             )}
           </View>
-          <Text style={styles.leagueName}>{league.name}</Text>
+          <Text style={styles.leagueName}>{league?.name}</Text>
           <View style={styles.seasonPill}>
             <Ionicons name="calendar-outline" size={11} color={textRole.tertiary} />
             <View style={{ flexDirection: "row", alignItems: "center", gap: 2 }}>
               <Text style={styles.leagueCountry}>
-                {league.country} · 2025/26
+                {league?.country} · 2025/26
                 {matchday && totalMatchdays ? ` · Matchday ${matchday} of ${totalMatchdays}` : ""}
               </Text>
               {matchday && totalMatchdays && <HelpTip term="matchday" iconSize={10} />}

@@ -70,6 +70,14 @@ jobs:
       - name: Lint
         run: npm run lint
 
+      - name: Setup test database
+        run: |
+          npx drizzle-kit push --force
+          for f in $(ls server/migrations/*.sql | sort); do
+            echo "Applying $f ..."
+            psql "$DATABASE_URL" -f "$f" || true
+          done
+
       - name: Test
         run: npm test
 
