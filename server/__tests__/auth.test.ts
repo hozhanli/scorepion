@@ -311,12 +311,11 @@ describe("POST /api/auth/logout", () => {
   });
 
   it("prevents refresh token use after logout", async () => {
-    const loginRes = await request(app)
-      .post("/api/auth/register")
-      .send({
-        username: `logout_test_${Date.now()}`,
-        password: testUser.password,
-      });
+    const logoutUsername = `lo_${Date.now().toString(36)}`;
+    const loginRes = await request(app).post("/api/auth/register").send({
+      username: logoutUsername,
+      password: testUser.password,
+    });
 
     const refreshToken = loginRes.body.refreshToken;
 
@@ -331,6 +330,6 @@ describe("POST /api/auth/logout", () => {
     expect(refreshRes.status).toBe(401);
 
     // Cleanup
-    await db.delete(users).where(eq(users.username, `logout_test_${Date.now()}`));
+    await db.delete(users).where(eq(users.username, logoutUsername));
   });
 });

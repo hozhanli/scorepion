@@ -10,7 +10,7 @@ import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { db } from "@server/db";
 import { footballFixtures, predictions, users } from "@shared/schema";
 import { submitPrediction, PredictionError } from "@server/services/prediction.service";
-import { eq } from "drizzle-orm";
+import { eq, inArray } from "drizzle-orm";
 
 describe("Prediction Submission", () => {
   let userId: string;
@@ -107,11 +107,7 @@ describe("Prediction Submission", () => {
     await db.delete(users).where(eq(users.id, userId));
     await db
       .delete(footballFixtures)
-      .where(
-        eq(footballFixtures.apiFixtureId, 1001) ||
-          eq(footballFixtures.apiFixtureId, 1002) ||
-          eq(footballFixtures.apiFixtureId, 1003),
-      );
+      .where(inArray(footballFixtures.apiFixtureId, [1001, 1002, 1003]));
   });
 
   describe("Valid submission", () => {
