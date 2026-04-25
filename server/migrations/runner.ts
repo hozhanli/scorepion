@@ -18,6 +18,7 @@ const MIGRATIONS = [
   "006_h2h_league_and_venue.sql",
   "007_push_tokens.sql",
   "008_billing.sql",
+  "009_missing_tables.sql",
 ];
 
 export async function runMigrations(): Promise<void> {
