@@ -38,6 +38,7 @@ const CONDITIONAL: { when: () => boolean; vars: [string, string][]; label: strin
     label: "ENABLE_BILLING=true",
     vars: [
       ["STRIPE_SECRET_KEY", "Stripe secret key"],
+      ["STRIPE_PUBLISHABLE_KEY", "Stripe publishable key"],
       ["STRIPE_WEBHOOK_SECRET", "Stripe webhook signing secret"],
       ["STRIPE_PRICE_PREMIUM_MONTHLY", "Stripe price ID for monthly tier"],
       ["STRIPE_PRICE_PREMIUM_YEARLY", "Stripe price ID for yearly tier"],
@@ -85,7 +86,6 @@ export function checkEnv(): void {
   const { missing, invalid } = validate();
 
   if (missing.length === 0 && invalid.length === 0) {
-     
     console.log(
       `[env] validated (${isProd ? "production" : (process.env.NODE_ENV ?? "development")} mode)`,
     );
