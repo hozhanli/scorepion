@@ -57,9 +57,10 @@ function setupCors(app: express.Application) {
       });
     }
 
-    // Always allow localhost for development (any port)
+    // Allow localhost only in non-production environments
     const isLocalhost =
-      origin?.startsWith("http://localhost:") || origin?.startsWith("http://127.0.0.1:");
+      process.env.NODE_ENV !== "production" &&
+      (origin?.startsWith("http://localhost:") || origin?.startsWith("http://127.0.0.1:"));
 
     if (origin && (allowedOrigins.has(origin) || isLocalhost)) {
       res.header("Access-Control-Allow-Origin", origin);

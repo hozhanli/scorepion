@@ -1,5 +1,5 @@
 CREATE TABLE IF NOT EXISTS push_tokens (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  id VARCHAR PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id VARCHAR NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   token TEXT NOT NULL,
   platform TEXT,
