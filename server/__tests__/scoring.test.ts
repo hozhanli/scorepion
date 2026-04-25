@@ -110,7 +110,7 @@ describe("Scoring Engine", () => {
     // Cleanup user
     await db.delete(users).where(eq(users.id, userId));
     // Cleanup fixtures
-    await db.delete(footballFixtures).where(eq(footballFixtures.id, fixtureId));
+    await db.delete(footballFixtures).where(eq(footballFixtures.apiFixtureId, parseInt(fixtureId)));
   });
 
   describe("Exact match scoring", () => {
@@ -310,7 +310,7 @@ describe("Scoring Engine", () => {
   });
 
   describe("Misses and zero points", () => {
-    it("awards 0 points for completely wrong prediction: pred 2-1, actual 1-2", async () => {
+    it("awards TOTAL_GOALS_CLOSE for wrong result but matching total goals: pred 2-1, actual 1-2", async () => {
       await db.insert(predictions).values({
         userId,
         matchId: fixtureId,
@@ -338,7 +338,7 @@ describe("Scoring Engine", () => {
         .select()
         .from(predictions)
         .where(and(eq(predictions.userId, userId), eq(predictions.matchId, fixtureId)));
-      expect(pred.points).toBe(0);
+      expect(pred.points).toBe(SCORING.TOTAL_GOALS_CLOSE);
     });
   });
 
@@ -398,7 +398,7 @@ describe("Scoring Engine", () => {
   });
 
   describe("Goal difference edge cases", () => {
-    it("awards GOAL_DIFFERENCE_ONLY when GD matches but result differs: pred 2-1 (GD=1), actual 1-0 (GD=1, but away win not draw)", async () => {
+    it("awards CORRECT_RESULT_WITH_GD when result and GD both match: pred 2-1 (GD=+1), actual 1-0 (GD=+1)", async () => {
       await db.insert(predictions).values({
         userId,
         matchId: fixtureId,
@@ -426,7 +426,7 @@ describe("Scoring Engine", () => {
         .select()
         .from(predictions)
         .where(and(eq(predictions.userId, userId), eq(predictions.matchId, fixtureId)));
-      expect(pred.points).toBe(SCORING.GOAL_DIFFERENCE_ONLY);
+      expect(pred.points).toBe(SCORING.CORRECT_RESULT_WITH_GD);
     });
   });
 
