@@ -21,12 +21,22 @@ profileRouter.get(
   }),
 );
 
+// Only these fields may be set via the profile update endpoint.
+const ALLOWED_PROFILE_FIELDS = new Set(["avatar", "username", "displayName", "favoriteLeagues"]);
+
 profileRouter.put(
   "/",
   requireAuth,
   asyncHandler(async (req: Request, res: Response) => {
     try {
-      const updated = await userService.updateUserProfile(req.userId!, req.body);
+      // Whitelist: strip any fields not explicitly allowed
+      const sanitized: Record<string, unknown> = {};
+      for (const key of Object.keys(req.body)) {
+        if (ALLOWED_PROFILE_FIELDS.has(key)) {
+          sanitized[key] = req.body[key];
+        }
+      }
+      const updated = await userService.updateUserProfile(req.userId!, sanitized);
       return res.json(updated);
     } catch (err: any) {
       if (err.name === "UserError")
