@@ -173,7 +173,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
           celebrate({
             variant: "miss",
             title: "Close, but no.",
-            subtitle: `${match.homeTeam} ${homeScore}–${awayScore} ${match.awayTeam} — you picked ${pred.homeScore}–${pred.awayScore}`,
+            subtitle: `${match.homeTeam.shortName} ${homeScore}–${awayScore} ${match.awayTeam.shortName} — you picked ${pred.homeScore}–${pred.awayScore}`,
           });
         }
       }
