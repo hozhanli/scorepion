@@ -276,7 +276,7 @@ describe("Scoring Engine", () => {
       expect(pred.points).toBe(SCORING.CORRECT_RESULT);
     });
 
-    it("awards CORRECT_RESULT for correct away win: pred 1-2, actual 0-3", async () => {
+    it("awards CORRECT_RESULT + UPSET_BONUS for correct underdog away win: pred 1-2, actual 0-3", async () => {
       await db.insert(predictions).values({
         userId,
         matchId: fixtureId,
@@ -305,7 +305,7 @@ describe("Scoring Engine", () => {
         .select()
         .from(predictions)
         .where(and(eq(predictions.userId, userId), eq(predictions.matchId, fixtureId)));
-      expect(pred.points).toBe(SCORING.CORRECT_RESULT);
+      expect(pred.points).toBe(SCORING.CORRECT_RESULT + SCORING.UPSET_BONUS);
     });
   });
 
