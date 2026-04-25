@@ -37,7 +37,7 @@ export async function submitPrediction(
     throw new PredictionError("Match not found", 404);
   }
 
-  const status = (fixture.status || "").toUpperCase();
+  const status = (fixture.status_short || fixture.status || "").toUpperCase();
 
   // Reject predictions for cancelled / postponed / abandoned matches
   const cancelledStatuses = ["PST", "CANC", "ABD", "AWD", "WO"];

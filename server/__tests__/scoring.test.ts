@@ -8,7 +8,13 @@
 
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { db } from "@server/db";
-import { footballFixtures, footballStandings, predictions, users } from "@shared/schema";
+import {
+  achievements,
+  footballFixtures,
+  footballStandings,
+  predictions,
+  users,
+} from "@shared/schema";
 import { SCORING } from "@server/config";
 import { settlePredictions } from "@server/services/sync";
 import { eq, and } from "drizzle-orm";
@@ -99,6 +105,8 @@ describe("Scoring Engine", () => {
   afterEach(async () => {
     // Cleanup predictions
     await db.delete(predictions).where(eq(predictions.userId, userId));
+    // Cleanup achievements (created by settlePredictions)
+    await db.delete(achievements).where(eq(achievements.userId, userId));
     // Cleanup user
     await db.delete(users).where(eq(users.id, userId));
     // Cleanup fixtures

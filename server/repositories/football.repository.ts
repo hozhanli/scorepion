@@ -127,7 +127,7 @@ export async function getFixtures(filters: FixtureFilters = {}) {
 
 export async function getFixtureKickoff(matchId: string) {
   const result = await pool.query(
-    `SELECT kickoff, status FROM football_fixtures WHERE CAST(api_fixture_id AS TEXT) = $1 LIMIT 1`,
+    `SELECT kickoff, status, status_short FROM football_fixtures WHERE CAST(api_fixture_id AS TEXT) = $1 LIMIT 1`,
     [matchId],
   );
   return result.rows[0] ?? null;
