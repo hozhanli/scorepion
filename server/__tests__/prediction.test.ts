@@ -23,7 +23,7 @@ describe("Prediction Submission", () => {
     const [testUser] = await db
       .insert(users)
       .values({
-        username: `pred_user_${Date.now()}`,
+        username: `pu_${Date.now().toString(36)}`,
         password: "hashed_pw",
         avatar: "PU",
       })

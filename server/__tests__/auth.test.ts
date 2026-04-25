@@ -17,7 +17,7 @@ import * as tokenService from "@server/services/token.service";
 // We'll need to create a minimal Express app with the auth routes
 let app: Express;
 let testUser = {
-  username: `testuser_${Date.now()}`,
+  username: `tu_${Date.now().toString(36)}`,
   password: "ValidPassword123!",
 };
 

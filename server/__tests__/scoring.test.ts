@@ -22,7 +22,7 @@ describe("Scoring Engine", () => {
     const [testUser] = await db
       .insert(users)
       .values({
-        username: `test_user_${Date.now()}`,
+        username: `tu_${Date.now().toString(36)}`,
         password: "hashed_pw",
         avatar: "TU",
       })
