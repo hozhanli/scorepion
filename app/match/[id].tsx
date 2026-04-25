@@ -28,6 +28,7 @@ import Animated, {
   useSharedValue,
   useAnimatedStyle,
   FadeOut,
+  runOnJS,
 } from "react-native-reanimated";
 
 import Colors, { accent, radii, type as typeTok, textRoleLight } from "@/constants/colors";
@@ -476,7 +477,7 @@ export default function MatchScreen() {
         if (!dismissedShareCTARef.current) {
           // Fade out over 300ms then hide
           shareCtaFadeAnim.value = withTiming(0, { duration: 300 }, () => {
-            setShowShareCTA(false);
+            runOnJS(setShowShareCTA)(false);
           });
         }
       }, 10000);
@@ -910,7 +911,7 @@ export default function MatchScreen() {
                             dismissedShareCTARef.current = true;
                             if (shareCtaTimerRef.current) clearTimeout(shareCtaTimerRef.current);
                             shareCtaFadeAnim.value = withTiming(0, { duration: 300 }, () => {
-                              setShowShareCTA(false);
+                              runOnJS(setShowShareCTA)(false);
                             });
                           }}
                           style={styles.shareCTASecondary}
