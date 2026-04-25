@@ -105,6 +105,23 @@ function RootLayoutNav() {
         name="scoring"
         options={{ headerShown: false, animation: "slide_from_right" }}
       />
+      <Stack.Screen
+        name="delete-account"
+        options={{ headerShown: false, animation: "slide_from_right" }}
+      />
+      <Stack.Screen
+        name="glossary"
+        options={{ headerShown: false, animation: "slide_from_right" }}
+      />
+      <Stack.Screen
+        name="privacy"
+        options={{ headerShown: false, animation: "slide_from_right" }}
+      />
+      <Stack.Screen name="terms" options={{ headerShown: false, animation: "slide_from_right" }} />
+      <Stack.Screen
+        name="team/[id]"
+        options={{ headerShown: false, animation: "slide_from_right" }}
+      />
     </Stack>
   );
 }
