@@ -1,7 +1,17 @@
 import { Router } from "express";
 import { requireAuth } from "../middleware/auth";
 import { db } from "../db";
-import { users, predictions, groupMembers } from "@shared/schema";
+import {
+  users,
+  predictions,
+  groupMembers,
+  pushTokens,
+  dailyPacks,
+  boostPicks,
+  achievements,
+  weeklyWinners,
+  eventLog,
+} from "@shared/schema";
 import { eq } from "drizzle-orm";
 
 export const accountRouter = Router();
@@ -15,12 +25,15 @@ accountRouter.delete("/", requireAuth, async (req, res) => {
   const userId = req.userId!;
 
   try {
-    // Cascade delete with Drizzle ORM
-    // Predictions reference users, so delete them first
+    // Cascade delete with Drizzle ORM — child tables before parent
     await db.delete(predictions).where(eq(predictions.userId, userId));
-
-    // Group membership references users, so delete those
     await db.delete(groupMembers).where(eq(groupMembers.userId, userId));
+    await db.delete(pushTokens).where(eq(pushTokens.userId, userId));
+    await db.delete(dailyPacks).where(eq(dailyPacks.userId, userId));
+    await db.delete(boostPicks).where(eq(boostPicks.userId, userId));
+    await db.delete(achievements).where(eq(achievements.userId, userId));
+    await db.delete(weeklyWinners).where(eq(weeklyWinners.userId, userId));
+    await db.delete(eventLog).where(eq(eventLog.userId, userId));
 
     // Finally, delete the user
     await db.delete(users).where(eq(users.id, userId));
