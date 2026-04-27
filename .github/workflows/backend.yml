@@ -32,22 +32,21 @@ jobs:
     runs-on: ubuntu-latest
 
     services:
-      postgres:
-        image: postgres:16-alpine
+      mysql:
+        image: mysql:8.0
         env:
-          POSTGRES_USER: postgres
-          POSTGRES_PASSWORD: postgres
-          POSTGRES_DB: scorepion_test
+          MYSQL_ROOT_PASSWORD: postgres
+          MYSQL_DATABASE: scorepion_test
         ports:
-          - 5432:5432
+          - 3306:3306
         options: >-
-          --health-cmd pg_isready
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
+          --health-cmd="mysqladmin ping -h 127.0.0.1"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=5
 
     env:
-      DATABASE_URL: postgres://postgres:postgres@localhost:5432/scorepion_test
+      DATABASE_URL: mysql://root:postgres@localhost:3306/scorepion_test
       NODE_ENV: test
       SESSION_SECRET: test-session-secret-not-used-outside-ci
       ADMIN_SECRET: test-admin-secret
@@ -75,7 +74,7 @@ jobs:
           npx drizzle-kit push --force
           for f in $(ls server/migrations/*.sql | sort); do
             echo "Applying $f ..."
-            psql "$DATABASE_URL" -f "$f" || true
+            mysql -h 127.0.0.1 -u root -ppostgres scorepion_test < "$f" || true
           done
 
       - name: Test

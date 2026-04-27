@@ -20,7 +20,7 @@
  */
 
 import "dotenv/config";
-import pg from "pg";
+import mysql from "mysql2/promise";
 
 const DATABASE_URL = process.env.DATABASE_URL;
 const PORT = process.env.PORT || "13291";
@@ -31,7 +31,7 @@ if (!DATABASE_URL) {
   process.exit(1);
 }
 
-const pool = new pg.Pool({ connectionString: DATABASE_URL });
+const pool = mysql.createPool(DATABASE_URL);
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -104,15 +104,14 @@ async function resetDatabase() {
   section("PHASE 1: Database Reset");
 
   log("Dropping all tables...");
-  await pool.query(`
-    DO $$ DECLARE
-      r RECORD;
-    BEGIN
-      FOR r IN (SELECT tablename FROM pg_tables WHERE schemaname = 'public') LOOP
-        EXECUTE 'DROP TABLE IF EXISTS public.' || quote_ident(r.tablename) || ' CASCADE';
-      END LOOP;
-    END $$;
-  `);
+  await pool.query(`SET FOREIGN_KEY_CHECKS = 0`);
+  const [tables] = await pool.query(
+    `SELECT table_name FROM information_schema.tables WHERE table_schema = DATABASE()`,
+  );
+  for (const row of tables as any[]) {
+    await pool.query(`DROP TABLE IF EXISTS \`${row.table_name}\``);
+  }
+  await pool.query(`SET FOREIGN_KEY_CHECKS = 1`);
   log("All tables dropped.");
 
   log("Running drizzle-kit push...");
@@ -130,16 +129,17 @@ async function resetDatabase() {
   log("Migrations complete.");
 
   // Verify unique constraint exists
-  const constraintCheck = await pool.query(`
-    SELECT indexname FROM pg_indexes
-    WHERE tablename = 'predictions' AND indexname = 'predictions_user_match_uniq'
+  const [constraintRows] = await pool.query(`
+    SELECT index_name FROM information_schema.statistics
+    WHERE table_schema = DATABASE() AND table_name = 'predictions' AND index_name = 'predictions_user_match_uniq'
+    LIMIT 1
   `);
-  if (constraintCheck.rows.length > 0) {
+  if ((constraintRows as any[]).length > 0) {
     log("✓ predictions_user_match_uniq constraint verified");
   } else {
     log("⚠ predictions_user_match_uniq constraint missing — creating manually...");
     await pool.query(
-      `CREATE UNIQUE INDEX IF NOT EXISTS predictions_user_match_uniq ON predictions (user_id, match_id)`,
+      `CREATE UNIQUE INDEX predictions_user_match_uniq ON predictions (user_id, match_id)`,
     );
     log("✓ Constraint created manually");
   }
@@ -204,12 +204,12 @@ async function seedData() {
   }
 
   // Verify data
-  const fixtureCount = await pool.query("SELECT COUNT(*) as n FROM football_fixtures");
-  const teamCount = await pool.query("SELECT COUNT(*) as n FROM football_teams");
-  const leagueCount = await pool.query("SELECT COUNT(*) as n FROM football_leagues");
-  const standingCount = await pool.query("SELECT COUNT(*) as n FROM football_standings");
+  const [fixtureCount] = await pool.query("SELECT COUNT(*) as n FROM football_fixtures");
+  const [teamCount] = await pool.query("SELECT COUNT(*) as n FROM football_teams");
+  const [leagueCount] = await pool.query("SELECT COUNT(*) as n FROM football_leagues");
+  const [standingCount] = await pool.query("SELECT COUNT(*) as n FROM football_standings");
   log(
-    `DB state: ${leagueCount.rows[0].n} leagues, ${teamCount.rows[0].n} teams, ${fixtureCount.rows[0].n} fixtures, ${standingCount.rows[0].n} standings`,
+    `DB state: ${(leagueCount as any[])[0].n} leagues, ${(teamCount as any[])[0].n} teams, ${(fixtureCount as any[])[0].n} fixtures, ${(standingCount as any[])[0].n} standings`,
   );
 }
 
@@ -542,15 +542,15 @@ async function testSettlement() {
   section("PHASE 3G: Settlement Tests");
 
   // Check if there are finished matches with unsettled predictions
-  const finishedResult = await pool.query(`
+  const [finishedResult] = await pool.query(`
     SELECT COUNT(*) as n FROM football_fixtures WHERE status = 'finished'
   `);
-  log(`Finished fixtures in DB: ${finishedResult.rows[0].n}`);
+  log(`Finished fixtures in DB: ${(finishedResult as any[])[0].n}`);
 
-  const unsettledResult = await pool.query(`
+  const [unsettledResult] = await pool.query(`
     SELECT COUNT(*) as n FROM predictions WHERE settled = false
   `);
-  log(`Unsettled predictions: ${unsettledResult.rows[0].n}`);
+  log(`Unsettled predictions: ${(unsettledResult as any[])[0].n}`);
 
   // Create a test user and submit predictions on finished matches, then settle
   sessionCookie = "";
@@ -560,15 +560,15 @@ async function testSettlement() {
 
   if (userId) {
     // Insert predictions directly for finished matches
-    const finishedMatches = await pool.query(`
+    const [finishedMatches] = await pool.query(`
       SELECT api_fixture_id, home_score, away_score FROM football_fixtures
       WHERE status = 'finished' AND home_score IS NOT NULL
       LIMIT 5
     `);
 
-    if (finishedMatches.rows.length > 0) {
+    if ((finishedMatches as any[]).length > 0) {
       let exactCount = 0;
-      for (const m of finishedMatches.rows) {
+      for (const m of finishedMatches as any[]) {
         // Insert prediction — one exact, others close
         const isExact = exactCount === 0;
         const hs = isExact ? m.home_score : Math.max(0, m.home_score + 1);
@@ -578,13 +578,13 @@ async function testSettlement() {
         await pool.query(
           `
           INSERT INTO predictions (user_id, match_id, home_score, away_score, timestamp)
-          VALUES ($1, $2, $3, $4, $5)
-          ON CONFLICT ON CONSTRAINT predictions_user_match_uniq DO UPDATE SET home_score = $3, away_score = $4
+          VALUES (?, ?, ?, ?, ?)
+          ON DUPLICATE KEY UPDATE home_score = VALUES(home_score), away_score = VALUES(away_score)
         `,
           [userId, String(m.api_fixture_id), hs, as, Date.now()],
         );
       }
-      log(`Inserted ${finishedMatches.rows.length} test predictions (1 exact match)`);
+      log(`Inserted ${(finishedMatches as any[]).length} test predictions (1 exact match)`);
 
       // Trigger settlement via admin endpoint (need admin secret)
       await test("POST /api/predictions/settle triggers settlement", async () => {
@@ -600,15 +600,15 @@ async function testSettlement() {
       });
 
       // Check if any predictions got settled
-      const settledResult = await pool.query(
+      const [settledResult] = await pool.query(
         `
         SELECT COUNT(*) as n, SUM(CASE WHEN points > 0 THEN 1 ELSE 0 END) as scored
-        FROM predictions WHERE user_id = $1 AND settled = true
+        FROM predictions WHERE user_id = ? AND settled = true
       `,
         [userId],
       );
       log(
-        `After settlement: ${settledResult.rows[0].n} settled, ${settledResult.rows[0].scored || 0} with points`,
+        `After settlement: ${(settledResult as any[])[0].n} settled, ${(settledResult as any[])[0].scored || 0} with points`,
       );
     }
   }
@@ -697,7 +697,7 @@ async function main() {
   }
 
   // DB stats
-  const stats = await pool.query(`
+  const [stats] = await pool.query(`
     SELECT
       (SELECT COUNT(*) FROM users) as users,
       (SELECT COUNT(*) FROM predictions) as predictions,
@@ -706,7 +706,7 @@ async function main() {
       (SELECT COUNT(*) FROM football_leagues) as leagues,
       (SELECT COUNT(*) FROM football_standings) as standings
   `);
-  const s = stats.rows[0];
+  const s = (stats as any[])[0];
   console.log(
     `\n  Database: ${s.users} users, ${s.predictions} predictions, ${s.fixtures} fixtures, ${s.teams} teams, ${s.leagues} leagues, ${s.standings} standings`,
   );

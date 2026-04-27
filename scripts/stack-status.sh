@@ -32,12 +32,12 @@ echo ""
 echo -e "${YELLOW}Scorepion dev stack:${NC}"
 check_port "Expo web " 13290
 check_port "Backend  " 13291
-check_port "Postgres " 13292
+check_port "MySQL    " 13292
 echo ""
 
 if command -v docker >/dev/null 2>&1; then
-  if docker ps --filter "name=scorepion-db" --format '{{.Status}}' | grep -q .; then
-    echo -e "  docker:  ${GREEN}$(docker ps --filter "name=scorepion-db" --format '{{.Status}}')${NC}"
+  if docker ps --filter "name=scorepion-mysql" --format '{{.Status}}' | grep -q .; then
+    echo -e "  docker:  ${GREEN}$(docker ps --filter "name=scorepion-mysql" --format '{{.Status}}')${NC}"
   fi
 fi
 

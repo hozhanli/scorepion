@@ -18,7 +18,7 @@ const isProd = process.env.NODE_ENV === "production";
 // Each entry is [varName, brief human-readable purpose].
 // ─────────────────────────────────────────────────────────────────────────────
 const REQUIRED_IN_PROD: [string, string][] = [
-  ["DATABASE_URL", "Postgres connection string"],
+  ["DATABASE_URL", "MySQL connection string"],
   [
     "JWT_SECRET",
     "JWT signing key (generate with node -e \"console.log(require('crypto').randomBytes(64).toString('hex'))\")",

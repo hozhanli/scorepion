@@ -8,13 +8,13 @@ set -euo pipefail
 
 BACKUP_DIR="./backups"
 TEMP_CONTAINER_NAME="scorepion_backup_verify_$$"
-TEMP_PORT=$((15432 + RANDOM % 1000))
-POSTGRES_USER="postgres"
-POSTGRES_PASSWORD="postgres_temp_$$"
-POSTGRES_DB="scorepion_verify"
+TEMP_PORT=$((15306 + RANDOM % 1000))
+MYSQL_USER="root"
+MYSQL_PASSWORD="root_temp_$$"
+MYSQL_DB="scorepion_verify"
 
 # Find most recent backup
-LATEST_BACKUP=$(find "$BACKUP_DIR" -maxdepth 1 -name "scorepion_*.dump" -type f -printf '%T+ %p\n' \
+LATEST_BACKUP=$(find "$BACKUP_DIR" -maxdepth 1 -name "scorepion_*.sql.gz" -type f -printf '%T+ %p\n' \
   | sort -r | head -1 | cut -d' ' -f2-)
 
 if [ -z "$LATEST_BACKUP" ]; then
@@ -30,15 +30,14 @@ if ! command -v docker &> /dev/null; then
   exit 1
 fi
 
-# Spin up temp Postgres container
-echo "→ Starting temporary Postgres container on port $TEMP_PORT..."
+# Spin up temp MySQL container
+echo "→ Starting temporary MySQL container on port $TEMP_PORT..."
 if ! docker run -d \
   --name "$TEMP_CONTAINER_NAME" \
-  -e POSTGRES_USER="$POSTGRES_USER" \
-  -e POSTGRES_PASSWORD="$POSTGRES_PASSWORD" \
-  -e POSTGRES_DB="$POSTGRES_DB" \
-  -p "$TEMP_PORT:5432" \
-  postgres:16-alpine \
+  -e MYSQL_ROOT_PASSWORD="$MYSQL_PASSWORD" \
+  -e MYSQL_DATABASE="$MYSQL_DB" \
+  -p "$TEMP_PORT:3306" \
+  mysql:8.0 \
   > /dev/null 2>&1; then
   echo "✗ Failed to start Docker container. Ensure Docker daemon is running." >&2
   exit 1
@@ -51,10 +50,10 @@ cleanup() {
 }
 trap cleanup EXIT
 
-# Wait for Postgres to be ready
+# Wait for MySQL to be ready
 RETRY_COUNT=0
 while [ "$RETRY_COUNT" -lt 30 ]; do
-  if docker exec "$TEMP_CONTAINER_NAME" pg_isready -U "$POSTGRES_USER" > /dev/null 2>&1; then
+  if docker exec "$TEMP_CONTAINER_NAME" mysqladmin ping -h 127.0.0.1 -u"$MYSQL_USER" -p"$MYSQL_PASSWORD" --silent > /dev/null 2>&1; then
     break
   fi
   sleep 1
@@ -62,21 +61,19 @@ while [ "$RETRY_COUNT" -lt 30 ]; do
 done
 
 if [ "$RETRY_COUNT" -ge 30 ]; then
-  echo "✗ Postgres container failed to start within 30 seconds." >&2
+  echo "✗ MySQL container failed to start within 30 seconds." >&2
   exit 1
 fi
 
 echo "→ Restoring backup into temporary database..."
 
 # Restore backup
-TEMP_DATABASE_URL="postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@127.0.0.1:${TEMP_PORT}/${POSTGRES_DB}"
-
-if ! pg_restore "$TEMP_DATABASE_URL" \
-  --clean \
-  --if-exists \
-  --no-owner \
-  --no-privileges \
-  "$LATEST_BACKUP" 2>&1 | head -20; then
+if ! gunzip -c "$LATEST_BACKUP" | mysql \
+  -h 127.0.0.1 \
+  -P "$TEMP_PORT" \
+  -u "$MYSQL_USER" \
+  -p"$MYSQL_PASSWORD" \
+  "$MYSQL_DB" 2>&1 | head -20; then
   echo "✗ Failed to restore backup. Dump file may be corrupted." >&2
   exit 1
 fi
@@ -84,9 +81,9 @@ fi
 # Run smoke queries
 echo "→ Running smoke queries..."
 
-USERS_COUNT=$(psql "$TEMP_DATABASE_URL" -t -c "SELECT count(*) FROM users;" 2>/dev/null | xargs)
-FIXTURES_COUNT=$(psql "$TEMP_DATABASE_URL" -t -c "SELECT count(*) FROM football_fixtures;" 2>/dev/null | xargs)
-LATEST_MIGRATION=$(psql "$TEMP_DATABASE_URL" -t -c "SELECT max(applied_at) FROM _migrations;" 2>/dev/null | xargs)
+USERS_COUNT=$(mysql -h 127.0.0.1 -P "$TEMP_PORT" -u "$MYSQL_USER" -p"$MYSQL_PASSWORD" -N -e "SELECT count(*) FROM users;" "$MYSQL_DB" 2>/dev/null | xargs)
+FIXTURES_COUNT=$(mysql -h 127.0.0.1 -P "$TEMP_PORT" -u "$MYSQL_USER" -p"$MYSQL_PASSWORD" -N -e "SELECT count(*) FROM football_fixtures;" "$MYSQL_DB" 2>/dev/null | xargs)
+LATEST_MIGRATION=$(mysql -h 127.0.0.1 -P "$TEMP_PORT" -u "$MYSQL_USER" -p"$MYSQL_PASSWORD" -N -e "SELECT max(applied_at) FROM _migrations;" "$MYSQL_DB" 2>/dev/null | xargs)
 
 if [ -z "$USERS_COUNT" ] || [ -z "$FIXTURES_COUNT" ]; then
   echo "✗ Smoke queries failed. Database schema may be invalid." >&2
@@ -98,5 +95,5 @@ if [ "$USERS_COUNT" -eq 0 ]; then
 fi
 
 # Summary
-echo "✓ backup verified: $USERS_COUNT users, $FIXTURES_COUNT fixtures, latest migration $(date -d "@${LATEST_MIGRATION:0:10}" +%Y-%m-%d 2>/dev/null || echo "unknown")"
+echo "✓ backup verified: $USERS_COUNT users, $FIXTURES_COUNT fixtures, latest migration ${LATEST_MIGRATION:-unknown}"
 exit 0

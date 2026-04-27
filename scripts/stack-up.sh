@@ -4,7 +4,7 @@
 #
 #   13290 = Expo Metro web dev server
 #   13291 = Express backend API
-#   13292 = PostgreSQL 16 (Docker)
+#   13292 = MySQL 8.0 (Docker)
 #
 # Usage:
 #   npm run stack:up
@@ -43,7 +43,7 @@ fi
 # ─────────────────────────────────────────────────────────────
 # 1. Database (Docker, port 13292)
 # ─────────────────────────────────────────────────────────────
-step "1/4  Starting PostgreSQL on port 13292 (Docker)"
+step "1/4  Starting MySQL on port 13292 (Docker)"
 bash "$ROOT/scripts/start-db.sh"
 
 # ─────────────────────────────────────────────────────────────
@@ -98,7 +98,7 @@ echo ""
 log "Stack is up:"
 printf "  ${BLUE}%-10s${NC} →  %s\n" "Expo web" "http://localhost:13290"
 printf "  ${BLUE}%-10s${NC} →  %s\n" "Backend"  "http://localhost:13291"
-printf "  ${BLUE}%-10s${NC} →  %s\n" "Postgres" "postgresql://postgres:postgres@localhost:13292/scorepion"
+printf "  ${BLUE}%-10s${NC} →  %s\n" "MySQL" "mysql://root:root@localhost:13292/scorepion"
 echo ""
 echo "  Logs:   tail -f $LOG_DIR/{db,server,expo,db-push,db-seed}.log"
 echo "  Stop:   npm run stack:down"

@@ -17,14 +17,14 @@
  */
 
 import "dotenv/config";
-import pg from "pg";
+import mysql from "mysql2/promise";
 import { execSync } from "child_process";
 
 const DATABASE_URL = process.env.DATABASE_URL!;
 const PORT = process.env.PORT || "13291";
 const BASE = `http://localhost:${PORT}`;
 
-const pool = new pg.Pool({ connectionString: DATABASE_URL });
+const pool = mysql.createPool(DATABASE_URL);
 
 // ═══════════════════════════════════════════════════════════════════════════
 // Helpers
@@ -91,14 +91,14 @@ async function resetAndSeed() {
   section("PHASE 1 — Database Reset & Seed");
 
   log("Dropping all tables...");
-  await pool.query(`
-    DO $$ DECLARE r RECORD;
-    BEGIN
-      FOR r IN (SELECT tablename FROM pg_tables WHERE schemaname = 'public') LOOP
-        EXECUTE 'DROP TABLE IF EXISTS public.' || quote_ident(r.tablename) || ' CASCADE';
-      END LOOP;
-    END $$;
-  `);
+  await pool.query(`SET FOREIGN_KEY_CHECKS = 0`);
+  const [tables] = await pool.query(
+    `SELECT table_name FROM information_schema.tables WHERE table_schema = DATABASE()`,
+  );
+  for (const row of tables as any[]) {
+    await pool.query(`DROP TABLE IF EXISTS \`${row.table_name}\``);
+  }
+  await pool.query(`SET FOREIGN_KEY_CHECKS = 1`);
   log("✓ All tables dropped");
 
   log("Pushing Drizzle schema...");
@@ -115,12 +115,12 @@ async function resetAndSeed() {
   log("✓ Migrations applied");
 
   // Verify unique constraint
-  const idx = await pool.query(
-    `SELECT 1 FROM pg_indexes WHERE indexname = 'predictions_user_match_uniq'`,
+  const [idxRows] = await pool.query(
+    `SELECT 1 FROM information_schema.statistics WHERE table_schema = DATABASE() AND table_name = 'predictions' AND index_name = 'predictions_user_match_uniq' LIMIT 1`,
   );
-  if (idx.rows.length === 0) {
+  if ((idxRows as any[]).length === 0) {
     await pool.query(
-      `CREATE UNIQUE INDEX IF NOT EXISTS predictions_user_match_uniq ON predictions (user_id, match_id)`,
+      `CREATE UNIQUE INDEX predictions_user_match_uniq ON predictions (user_id, match_id)`,
     );
     log("✓ predictions_user_match_uniq created manually");
   } else {
@@ -160,8 +160,8 @@ async function resetAndSeed() {
 
   // Generate extra fixtures spanning the full month for simulation
   log("Generating 30-day fixture spread for simulation...");
-  const teams = await pool.query(`SELECT api_football_id FROM football_teams LIMIT 40`);
-  const teamIds = teams.rows.map((r) => r.api_football_id);
+  const [teamRows] = await pool.query(`SELECT api_football_id FROM football_teams LIMIT 40`);
+  const teamIds = (teamRows as any[]).map((r) => r.api_football_id);
   let fid = 900000;
 
   for (let day = -7; day <= 30; day++) {
@@ -181,10 +181,9 @@ async function resetAndSeed() {
 
       await pool.query(
         `
-        INSERT INTO football_fixtures (api_fixture_id, league_id, home_team_id, away_team_id,
+        INSERT IGNORE INTO football_fixtures (api_fixture_id, league_id, home_team_id, away_team_id,
           home_score, away_score, status, status_short, minute, kickoff, venue, referee, round, season, updated_at)
-        VALUES ($1, 'pl', $2, $3, $4, $5, $6, $7, $8, $9, 'Stadium', 'Referee', 'Sim', 2024, $10)
-        ON CONFLICT (api_fixture_id) DO NOTHING
+        VALUES (?, 'pl', ?, ?, ?, ?, ?, ?, ?, ?, 'Stadium', 'Referee', 'Sim', 2024, ?)
       `,
         [
           fid++,
@@ -203,7 +202,7 @@ async function resetAndSeed() {
   }
   log("✓ 30-day fixture spread generated");
 
-  const stats = await pool.query(`
+  const [statsRows] = await pool.query(`
     SELECT
       (SELECT COUNT(*) FROM football_fixtures) as fixtures,
       (SELECT COUNT(*) FROM football_fixtures WHERE status='upcoming') as upcoming,
@@ -211,7 +210,7 @@ async function resetAndSeed() {
       (SELECT COUNT(*) FROM football_teams) as teams,
       (SELECT COUNT(*) FROM football_leagues) as leagues
   `);
-  const s = stats.rows[0];
+  const s = (statsRows as any[])[0];
   log(
     `DB: ${s.leagues} leagues, ${s.teams} teams, ${s.fixtures} fixtures (${s.upcoming} upcoming, ${s.finished} finished)`,
   );
@@ -326,15 +325,15 @@ async function simulateMonth() {
   }));
 
   // Get all fixtures sorted by date
-  const allFixtures = await pool.query(`
+  const [allFixtureRows] = await pool.query(`
     SELECT api_fixture_id, home_team_id, away_team_id, home_score, away_score,
            status, kickoff
     FROM football_fixtures
     ORDER BY kickoff ASC
   `);
 
-  const upcomingPool = allFixtures.rows.filter((f) => f.status === "upcoming");
-  const finishedPool = allFixtures.rows.filter((f) => f.status === "finished");
+  const upcomingPool = (allFixtureRows as any[]).filter((f) => f.status === "upcoming");
+  const finishedPool = (allFixtureRows as any[]).filter((f) => f.status === "finished");
 
   // Simulate day by day
   for (let day = 1; day <= 30; day++) {
@@ -487,11 +486,11 @@ async function simulateMonth() {
       for (const fix of batch) {
         if (fix.home_score == null) continue;
         // Manually settle predictions for this fixture
-        const preds = await pool.query(
-          `SELECT id, user_id, home_score, away_score FROM predictions WHERE match_id = $1 AND settled = false`,
+        const [predRows] = await pool.query(
+          `SELECT id, user_id, home_score, away_score FROM predictions WHERE match_id = ? AND settled = false`,
           [String(fix.api_fixture_id)],
         );
-        for (const pred of preds.rows) {
+        for (const pred of predRows as any[]) {
           let pts = 0;
           const exactMatch =
             pred.home_score === fix.home_score && pred.away_score === fix.away_score;
@@ -505,11 +504,11 @@ async function simulateMonth() {
           else if (correctResult) pts = 5;
           else if (correctDiff) pts = 3;
 
-          await pool.query(`UPDATE predictions SET settled = true, points = $1 WHERE id = $2`, [
+          await pool.query(`UPDATE predictions SET settled = true, points = ? WHERE id = ?`, [
             pts,
             pred.id,
           ]);
-          await pool.query(`UPDATE users SET total_points = total_points + $1 WHERE id = $2`, [
+          await pool.query(`UPDATE users SET total_points = total_points + ? WHERE id = ?`, [
             pts,
             pred.user_id,
           ]);
