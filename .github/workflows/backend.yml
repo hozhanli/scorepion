@@ -6,6 +6,7 @@ on:
     paths:
       - "server/**"
       - "shared/**"
+      - "drizzle.config.ts"
       - "package.json"
       - "package-lock.json"
       - "Dockerfile"
@@ -15,6 +16,7 @@ on:
     paths:
       - "server/**"
       - "shared/**"
+      - "drizzle.config.ts"
       - "package.json"
       - "package-lock.json"
       - "Dockerfile"
