@@ -100,6 +100,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const pendingMatchIds = useRef(new Set<string>());
   const dailyPackRef = useRef(dailyPack);
   const profileRef = useRef(profile);
+  const submitPredictionRef = useRef<AppContextValue["submitPrediction"]>(null as any);
   // Dedup sets for commiseration toasts
   const announcedMisses = useRef(new Set<string>());
   const lastStreakResetAnnounced = useRef<number | null>(null);
@@ -390,7 +391,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
           showErrorToast({
             title: "Prediction didn't save",
             message: "We'll retry automatically. Check back soon.",
-            retry: () => submitPrediction(matchId, homeScore, awayScore, boosted),
+            retry: () => submitPredictionRef.current(matchId, homeScore, awayScore, boosted),
           });
         }
 
@@ -462,6 +463,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
     },
     [],
   );
+
+  // Keep ref in sync so the retry handler in showErrorToast always calls the
+  // latest version of submitPrediction (avoids stale recursive closure).
+  useEffect(() => {
+    submitPredictionRef.current = submitPrediction;
+  }, [submitPrediction]);
 
   const toggleBoostPick = useCallback(async (matchId: string) => {
     const current = dailyPackRef.current;
