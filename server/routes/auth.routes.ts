@@ -22,7 +22,24 @@ authRouter.post(
     }
 
     const { username, password } = parsed.data;
-    const favoriteLeagues: string[] = req.body.favoriteLeagues || [];
+    const rawLeagues = req.body.favoriteLeagues;
+
+    // Validate favoriteLeagues: must be an array of strings, max 20 items, each max 20 chars
+    let favoriteLeagues: string[] = [];
+    if (rawLeagues !== undefined && rawLeagues !== null) {
+      if (
+        !Array.isArray(rawLeagues) ||
+        rawLeagues.length > 20 ||
+        !rawLeagues.every((item: unknown) => typeof item === "string" && item.length <= 20)
+      ) {
+        return res
+          .status(400)
+          .json({
+            message: "favoriteLeagues must be an array of up to 20 strings (each max 20 chars)",
+          });
+      }
+      favoriteLeagues = rawLeagues;
+    }
 
     try {
       const { user, safeUser } = await authService.registerUser(
