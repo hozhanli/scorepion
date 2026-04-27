@@ -14,16 +14,18 @@ export async function getUserByUsername(username: string): Promise<User | undefi
 }
 
 export async function createUser(username: string, hashedPassword: string, avatar: string, favoriteLeagues: string[]): Promise<User> {
-    const [user] = await db.insert(users).values({
+    await db.insert(users).values({
         username,
         password: hashedPassword,
         avatar,
         favoriteLeagues,
-    }).returning();
+    });
+    const [user] = await db.select().from(users).where(eq(users.username, username));
     return user;
 }
 
 export async function updateUser(id: string, updates: Partial<Omit<User, 'id' | 'password'>>): Promise<User | undefined> {
-    const [user] = await db.update(users).set(updates).where(eq(users.id, id)).returning();
+    await db.update(users).set(updates).where(eq(users.id, id));
+    const [user] = await db.select().from(users).where(eq(users.id, id));
     return user;
 }

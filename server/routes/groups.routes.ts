@@ -83,7 +83,7 @@ groupsRouter.post(
       try {
         await pool.query(
           `INSERT INTO group_activity (group_id, user_id, type, metadata, created_at)
-                 VALUES ($1, $2, 'joined', '{}', $3)`,
+                 VALUES (?, ?, 'joined', '{}', ?)`,
           [groupId, req.userId, Date.now()],
         );
       } catch (err: unknown) {

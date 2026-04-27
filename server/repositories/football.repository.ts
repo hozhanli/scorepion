@@ -54,19 +54,19 @@ export async function getFixtures(filters: FixtureFilters = {}) {
 
   if (filters.league) {
     params.push(filters.league);
-    conditions.push(`f.league_id = $${params.length}`);
+    conditions.push(`f.league_id = ?`);
   }
   if (filters.status) {
     params.push(filters.status);
-    conditions.push(`f.status = $${params.length}`);
+    conditions.push(`f.status = ?`);
   }
   if (filters.date) {
     params.push(filters.date);
-    conditions.push(`f.kickoff::date = $${params.length}::date`);
+    conditions.push(`CAST(f.kickoff AS DATE) = CAST(? AS DATE)`);
   }
 
   const whereClause = `WHERE ${conditions.join(" AND ")}`;
-  const result = await pool.query(
+  const [rows] = await pool.query(
     `
     SELECT
       f.api_fixture_id, f.league_id, f.home_score, f.away_score,
@@ -85,9 +85,9 @@ export async function getFixtures(filters: FixtureFilters = {}) {
     ORDER BY f.kickoff ASC
   `,
     params,
-  );
+  ) as any;
 
-  return result.rows.map((r: any) => ({
+  return rows.map((r: any) => ({
     id: String(r.api_fixture_id),
     league: {
       id: r.l_id,
@@ -126,11 +126,11 @@ export async function getFixtures(filters: FixtureFilters = {}) {
 }
 
 export async function getFixtureKickoff(matchId: string) {
-  const result = await pool.query(
-    `SELECT kickoff, status, status_short FROM football_fixtures WHERE CAST(api_fixture_id AS TEXT) = $1 LIMIT 1`,
+  const [rows] = await pool.query(
+    `SELECT kickoff, status, status_short FROM football_fixtures WHERE CAST(api_fixture_id AS CHAR) = ? LIMIT 1`,
     [matchId],
-  );
-  return result.rows[0] ?? null;
+  ) as any;
+  return rows[0] ?? null;
 }
 
 export async function getStandings(leagueId: string) {
@@ -304,22 +304,25 @@ export async function getTransfers(leagueId: string) {
 }
 
 export async function getCommunityPicks(matchId: string) {
-  const [picks, total] = await Promise.all([
+  const [picksResult, totalResult] = await Promise.all([
     pool.query(
       `SELECT home_score, away_score, COUNT(*) as count
-       FROM predictions WHERE match_id = $1
+       FROM predictions WHERE match_id = ?
        GROUP BY home_score, away_score ORDER BY count DESC LIMIT 8`,
       [matchId],
     ),
-    pool.query(`SELECT COUNT(*) as total FROM predictions WHERE match_id = $1`, [matchId]),
+    pool.query(`SELECT COUNT(*) as total FROM predictions WHERE match_id = ?`, [matchId]),
   ]);
 
-  const totalPredictions = Number(total.rows[0]?.total ?? 0);
+  const [picksRows] = picksResult as any;
+  const [totalRows] = totalResult as any;
+
+  const totalPredictions = Number(totalRows[0]?.total ?? 0);
   if (totalPredictions === 0) {
     return { totalPredictions: 0, communityPicks: [], mostPickedScore: null, mostPickedPercent: 0 };
   }
 
-  const communityPicks = picks.rows.map((r: any) => ({
+  const communityPicks = picksRows.map((r: any) => ({
     score: `${r.home_score}-${r.away_score}`,
     percent: Math.round((Number(r.count) / totalPredictions) * 100),
   }));
@@ -335,7 +338,7 @@ export async function getCommunityPicks(matchId: string) {
 // ── Fixture events ────────────────────────────────────────────────────────────
 
 export async function getFixtureEvents(fixtureApiId: number) {
-  const result = await pool.query(
+  const [rows] = await pool.query(
     `
     SELECT e.fixture_id, e.team_id, e.player_id, e.player_name,
            e.assist_id, e.assist_name, e.type, e.detail, e.comments,
@@ -343,13 +346,13 @@ export async function getFixtureEvents(fixtureApiId: number) {
            t.name as team_name, t.logo as team_logo, t.color as team_color
     FROM football_fixture_events e
     LEFT JOIN football_teams t ON t.api_football_id = e.team_id
-    WHERE e.fixture_id = $1
-    ORDER BY e.elapsed ASC, e.extra_time ASC NULLS LAST
+    WHERE e.fixture_id = ?
+    ORDER BY e.elapsed ASC, CASE WHEN e.extra_time IS NULL THEN 1 ELSE 0 END, e.extra_time ASC
   `,
     [fixtureApiId],
-  );
+  ) as any;
 
-  return result.rows.map((r: any) => ({
+  return rows.map((r: any) => ({
     elapsed: r.elapsed,
     extraTime: r.extra_time,
     team: {
@@ -369,22 +372,22 @@ export async function getFixtureEvents(fixtureApiId: number) {
 // ── Fixture lineups ───────────────────────────────────────────────────────────
 
 export async function getFixtureLineups(fixtureApiId: number) {
-  const result = await pool.query(
+  const [rows] = await pool.query(
     `
     SELECT l.fixture_id, l.team_id, l.formation, l.player_id, l.player_name,
            l.player_number, l.player_pos, l.grid, l.is_starting,
            t.name as team_name, t.logo as team_logo, t.color as team_color
     FROM football_fixture_lineups l
     LEFT JOIN football_teams t ON t.api_football_id = l.team_id
-    WHERE l.fixture_id = $1
+    WHERE l.fixture_id = ?
     ORDER BY l.team_id, l.is_starting DESC, l.player_number ASC
   `,
     [fixtureApiId],
-  );
+  ) as any;
 
   // Group by team
   const teams: Record<number, any> = {};
-  for (const r of result.rows) {
+  for (const r of rows) {
     if (!teams[r.team_id]) {
       teams[r.team_id] = {
         team: { id: r.team_id, name: r.team_name, logo: r.team_logo, color: r.team_color },
@@ -409,17 +412,17 @@ export async function getFixtureLineups(fixtureApiId: number) {
 // ── Fixture match statistics ──────────────────────────────────────────────────
 
 export async function getFixtureMatchStats(fixtureApiId: number) {
-  const result = await pool.query(
+  const [rows] = await pool.query(
     `
     SELECT fs.*, t.name as team_name, t.logo as team_logo, t.color as team_color
     FROM football_fixture_stats fs
     LEFT JOIN football_teams t ON t.api_football_id = fs.team_id
-    WHERE fs.fixture_id = $1
+    WHERE fs.fixture_id = ?
   `,
     [fixtureApiId],
-  );
+  ) as any;
 
-  return result.rows.map((r: any) => ({
+  return rows.map((r: any) => ({
     team: { id: r.team_id, name: r.team_name, logo: r.team_logo, color: r.team_color },
     statistics: {
       shotsOnGoal: r.shots_on_goal,
@@ -445,7 +448,7 @@ export async function getH2H(team1ApiId: number, team2ApiId: number) {
   const t1 = Math.min(team1ApiId, team2ApiId);
   const t2 = Math.max(team1ApiId, team2ApiId);
 
-  const result = await pool.query(
+  const [rows] = await pool.query(
     `
     SELECT h.*,
            ht.name as home_name, ht.short_name as home_short, ht.logo as home_logo, ht.color as home_color,
@@ -453,15 +456,15 @@ export async function getH2H(team1ApiId: number, team2ApiId: number) {
     FROM football_h2h h
     LEFT JOIN football_teams ht  ON ht.api_football_id = h.home_team_id
     LEFT JOIN football_teams at2 ON at2.api_football_id = h.away_team_id
-    WHERE h.team1_id=$1 AND h.team2_id=$2
+    WHERE h.team1_id=? AND h.team2_id=?
       AND h.status='finished'
     ORDER BY h.kickoff DESC
     LIMIT 15
   `,
     [t1, t2],
-  );
+  ) as any;
 
-  return result.rows.map((r: any) => ({
+  return rows.map((r: any) => ({
     date: r.kickoff,
     homeTeam: {
       id: String(r.home_team_id),
@@ -487,21 +490,21 @@ export async function getH2H(team1ApiId: number, team2ApiId: number) {
 // ── Team statistics ───────────────────────────────────────────────────────────
 
 export async function getTeamStats(teamApiId: number) {
-  const result = await pool.query(
+  const [rows] = await pool.query(
     `
     SELECT ts.*, t.name as team_name, t.logo as team_logo
     FROM football_team_stats ts
     LEFT JOIN football_teams t ON t.api_football_id = ts.team_id
-    WHERE ts.team_id = $1
+    WHERE ts.team_id = ?
     ORDER BY ts.updated_at DESC
     LIMIT 3
   `,
     [teamApiId],
-  );
+  ) as any;
 
-  if (result.rows.length === 0) return null;
+  if (rows.length === 0) return null;
 
-  return result.rows.map((r: any) => ({
+  return rows.map((r: any) => ({
     leagueId: r.league_id,
     season: r.season,
     team: { id: r.team_id, name: r.team_name, logo: r.team_logo },
@@ -527,15 +530,15 @@ export async function getSyncStatus(
   getRequestCount: () => number,
   getRemainingRequests: () => number,
 ) {
-  const result = await pool.query(`
+  const [rows] = await pool.query(`
     SELECT sync_type, league_id, status, request_count, synced_at, error
     FROM sync_log
     ORDER BY synced_at DESC
     LIMIT 30
-  `);
+  `) as any;
   return {
     dailyRequests: getRequestCount(),
     remaining: getRemainingRequests(),
-    recentSyncs: result.rows,
+    recentSyncs: rows,
   };
 }

@@ -14,7 +14,7 @@ export async function getUserPrediction(userId: string, matchId: string): Promis
 }
 
 /**
- * Insert or update a prediction in a single query using ON CONFLICT.
+ * Insert or update a prediction in a single query using ON DUPLICATE KEY UPDATE.
  * Requires a unique constraint on (userId, matchId).
  */
 export async function upsertPrediction(
@@ -23,7 +23,7 @@ export async function upsertPrediction(
     homeScore: number,
     awayScore: number,
 ): Promise<Prediction> {
-    const [pred] = await db
+    await db
         .insert(predictions)
         .values({
             userId,
@@ -32,14 +32,14 @@ export async function upsertPrediction(
             awayScore,
             timestamp: Date.now(),
         })
-        .onConflictDoUpdate({
-            target: [predictions.userId, predictions.matchId],
+        .onDuplicateKeyUpdate({
             set: {
                 homeScore,
                 awayScore,
                 timestamp: Date.now(),
             },
-        })
-        .returning();
+        });
+    const [pred] = await db.select().from(predictions)
+        .where(and(eq(predictions.userId, userId), eq(predictions.matchId, matchId)));
     return pred;
 }

@@ -7,7 +7,7 @@
 import { Router } from "express";
 import { db } from "../db";
 import { pushTokens } from "@shared/schema";
-import { eq, and } from "drizzle-orm";
+import { eq, and, sql } from "drizzle-orm";
 import { requireAuth } from "../middleware/auth";
 import { asyncHandler } from "../middleware/asyncHandler";
 
@@ -43,7 +43,7 @@ pushRouter.post(
           token,
           platform: platform || "unknown",
         })
-        .onConflictDoNothing();
+        .onDuplicateKeyUpdate({ set: { id: sql`id` } });
 
       return res.json({ ok: true });
     } catch (err) {
