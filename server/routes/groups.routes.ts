@@ -1,6 +1,7 @@
 import { Router, Request, Response } from "express";
 import { requireAuth } from "../middleware/auth";
 import * as groupService from "../services/group.service";
+import * as groupRepo from "../repositories/group.repository";
 import { logGroupActivity } from "../services/group-activity.service";
 import { pool } from "../db";
 import { asyncHandler } from "../middleware/asyncHandler";
@@ -40,6 +41,21 @@ groupsRouter.post(
   asyncHandler(async (req: Request, res: Response) => {
     try {
       const { name, isPublic, leagueIds } = req.body;
+
+      // Validate group name length
+      if (typeof name !== "string" || name.trim().length < 1 || name.trim().length > 100) {
+        return res.status(400).json({ message: "Group name must be between 1 and 100 characters" });
+      }
+
+      // Validate leagueIds array
+      if (leagueIds !== undefined && leagueIds !== null) {
+        if (!Array.isArray(leagueIds) || leagueIds.length > 50) {
+          return res
+            .status(400)
+            .json({ message: "leagueIds must be an array with at most 50 items" });
+        }
+      }
+
       const group = await groupService.createGroup(
         name,
         isPublic ?? true,
@@ -106,6 +122,14 @@ groupsRouter.post(
   asyncHandler(async (req: Request, res: Response) => {
     try {
       const { code } = req.body;
+      if (
+        typeof code !== "string" ||
+        code.length < 4 ||
+        code.length > 12 ||
+        !/^[A-Z0-9]+$/i.test(code)
+      ) {
+        return res.status(400).json({ message: "Invalid invite code format" });
+      }
       const group = await groupService.joinGroupByCode(code, req.userId!);
       return res.json({ group });
     } catch (err: any) {
@@ -123,6 +147,10 @@ groupsRouter.get(
   asyncHandler(async (req: Request, res: Response) => {
     try {
       const groupId = req.params.id as string;
+      const hasAccess = await groupRepo.canAccessGroup(groupId, req.userId!);
+      if (!hasAccess) {
+        return res.status(403).json({ message: "You do not have access to this group" });
+      }
       const standings = await groupService.getGroupStandings(groupId);
       return res.json(standings);
     } catch (err) {
@@ -138,6 +166,10 @@ groupsRouter.get(
   asyncHandler(async (req: Request, res: Response) => {
     try {
       const groupId = req.params.id as string;
+      const hasAccess = await groupRepo.canAccessGroup(groupId, req.userId!);
+      if (!hasAccess) {
+        return res.status(403).json({ message: "You do not have access to this group" });
+      }
       const preds = await groupService.getGroupPredictions(groupId);
       return res.json(preds);
     } catch (err) {
@@ -153,6 +185,10 @@ groupsRouter.get(
   asyncHandler(async (req: Request, res: Response) => {
     try {
       const groupId = req.params.id as string;
+      const hasAccess = await groupRepo.canAccessGroup(groupId, req.userId!);
+      if (!hasAccess) {
+        return res.status(403).json({ message: "You do not have access to this group" });
+      }
       const activity = await groupService.getGroupActivity(groupId);
       return res.json(activity);
     } catch (err) {
