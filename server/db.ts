@@ -13,5 +13,5 @@ const pool = mysql.createPool({
   idleTimeout: 30000,
 });
 
-export const db = drizzle(pool, { schema });
+export const db = drizzle(pool, { schema, mode: "default" });
 export { pool };

@@ -4,7 +4,6 @@ import {
   getYesterdayStringUtc,
   getWeekStartUtc,
   getRelativeTime,
-  getNextDailyResetUtc,
 } from "../utils/time";
 
 const DERBY_PAIRS: [string, string][] = [
@@ -59,7 +58,7 @@ export interface MatchImportance {
 }
 
 export async function calculateMatchImportance(matchId: string): Promise<MatchImportance> {
-  const [resultRows] = await pool.query(
+  const [resultRows] = (await pool.query(
     `
     SELECT f.api_fixture_id, f.home_team_id, f.away_team_id, f.league_id, f.kickoff, f.status,
            ht.name as home_name, at2.name as away_name,
@@ -72,7 +71,7 @@ export async function calculateMatchImportance(matchId: string): Promise<MatchIm
     LIMIT 1
   `,
     [matchId],
-  ) as any;
+  )) as any;
 
   if (resultRows.length === 0) {
     return { matchId, score: 50, tags: [], factors: [] };
@@ -83,14 +82,14 @@ export async function calculateMatchImportance(matchId: string): Promise<MatchIm
   const tags: string[] = [];
   const factors: string[] = [];
 
-  const [homeStandingRows] = await pool.query(
+  const [homeStandingRows] = (await pool.query(
     `SELECT position, points FROM football_standings WHERE team_id = ? AND league_id = ? LIMIT 1`,
     [match.home_team_id, match.league_id],
-  ) as any;
-  const [awayStandingRows] = await pool.query(
+  )) as any;
+  const [awayStandingRows] = (await pool.query(
     `SELECT position, points FROM football_standings WHERE team_id = ? AND league_id = ? LIMIT 1`,
     [match.away_team_id, match.league_id],
-  ) as any;
+  )) as any;
 
   const homePos = homeStandingRows[0]?.position || 99;
   const awayPos = awayStandingRows[0]?.position || 99;
@@ -171,10 +170,10 @@ export async function getOrCreateDailyPack(
 ): Promise<DailyPackResponse> {
   const today = getTodayStringUtc();
 
-  const [existingRows] = await pool.query(`SELECT * FROM daily_packs WHERE user_id = ? AND date = ?`, [
-    userId,
-    today,
-  ]) as any;
+  const [existingRows] = (await pool.query(
+    `SELECT * FROM daily_packs WHERE user_id = ? AND date = ?`,
+    [userId, today],
+  )) as any;
 
   if (existingRows.length > 0) {
     const pack = existingRows[0];
@@ -209,7 +208,7 @@ export async function getOrCreateDailyPack(
     params.push(...favoriteLeagues);
   }
 
-  const [fixturesRows] = await pool.query(
+  const [fixturesRows] = (await pool.query(
     `
     SELECT CAST(f.api_fixture_id AS CHAR) as match_id, f.kickoff, f.league_id,
            ht.name as home_name, at2.name as away_name
@@ -222,12 +221,12 @@ export async function getOrCreateDailyPack(
     ORDER BY f.kickoff ASC
   `,
     params,
-  ) as any;
+  )) as any;
 
   let matchIds = fixturesRows.map((r: any) => r.match_id);
 
   if (matchIds.length === 0) {
-    const [allFixturesRows] = await pool.query(
+    const [allFixturesRows] = (await pool.query(
       `
       SELECT CAST(f.api_fixture_id AS CHAR) as match_id, f.kickoff
       FROM football_fixtures f
@@ -236,7 +235,7 @@ export async function getOrCreateDailyPack(
       ORDER BY f.kickoff ASC
     `,
       [todayStart, tomorrowStart],
-    ) as any;
+    )) as any;
     matchIds = allFixturesRows.map((r: any) => r.match_id);
   }
 
@@ -259,10 +258,10 @@ export async function getOrCreateDailyPack(
     [userId, today, JSON.stringify(selectedIds), totalPicks],
   );
 
-  const [packRows] = await pool.query(
-    `SELECT * FROM daily_packs WHERE user_id = ? AND date = ?`,
-    [userId, today],
-  ) as any;
+  const [packRows] = (await pool.query(`SELECT * FROM daily_packs WHERE user_id = ? AND date = ?`, [
+    userId,
+    today,
+  ])) as any;
 
   const pack = packRows[0];
   return {
@@ -290,10 +289,10 @@ export async function markDailyPickComplete(
     await client.query("BEGIN");
 
     // Lock the row to prevent concurrent updates (SELECT ... FOR UPDATE)
-    const [packRows] = await client.query(
+    const [packRows] = (await client.query(
       `SELECT * FROM daily_packs WHERE user_id = ? AND date = ? FOR UPDATE`,
       [userId, today],
-    ) as any;
+    )) as any;
     if (packRows.length === 0) {
       await client.query("ROLLBACK");
       return null;
@@ -332,10 +331,10 @@ export async function markDailyPickComplete(
     if (isComplete) {
       // Check if yesterday's pack was completed to decide streak continuation
       const yesterday = getYesterdayStringUtc();
-      const [yesterdayPackRows] = await client.query(
+      const [yesterdayPackRows] = (await client.query(
         `SELECT is_complete FROM daily_packs WHERE user_id = ? AND date = ?`,
         [userId, yesterday],
-      ) as any;
+      )) as any;
       const yesterdayComplete = yesterdayPackRows.length > 0 && yesterdayPackRows[0].is_complete;
 
       if (yesterdayComplete) {
@@ -390,10 +389,10 @@ export async function setBoostPick(
   try {
     await client.query("BEGIN");
 
-    const [packRows] = await client.query(
+    const [packRows] = (await client.query(
       `SELECT * FROM daily_packs WHERE user_id = ? AND date = ? FOR UPDATE`,
       [userId, today],
-    ) as any;
+    )) as any;
     if (packRows.length === 0) {
       await client.query("ROLLBACK");
       return { success: false, message: "No daily pack found" };
@@ -424,10 +423,7 @@ export async function setBoostPick(
       );
       await logEvent(userId, "boost_pick", { matchId, date: today });
     } else {
-      await client.query(`DELETE FROM boost_picks WHERE user_id = ? AND date = ?`, [
-        userId,
-        today,
-      ]);
+      await client.query(`DELETE FROM boost_picks WHERE user_id = ? AND date = ?`, [userId, today]);
     }
 
     await client.query("COMMIT");
@@ -441,12 +437,12 @@ export async function setBoostPick(
 }
 
 export async function settleBoosts(): Promise<number> {
-  const [unsettledRows] = await pool.query(`
+  const [unsettledRows] = (await pool.query(`
     SELECT bp.*, p.points as pred_points, p.settled as pred_settled
     FROM boost_picks bp
     LEFT JOIN predictions p ON p.match_id = bp.match_id AND p.user_id = bp.user_id
     WHERE bp.settled = false AND p.settled = true
-  `) as any;
+  `)) as any;
 
   let count = 0;
   for (const row of unsettledRows) {
@@ -494,10 +490,10 @@ export interface ChaseData {
 }
 
 export async function getChaseData(userId: string, period: string = "alltime"): Promise<ChaseData> {
-  const [userResultRows] = await pool.query(
+  const [userResultRows] = (await pool.query(
     `SELECT username, total_points, streak, avatar FROM users WHERE id = ?`,
     [userId],
-  ) as any;
+  )) as any;
   if (userResultRows.length === 0) {
     return { userRank: 0, userPoints: 0, chaseTarget: null, swingMatches: [], weeklyCountdown: "" };
   }
@@ -505,12 +501,12 @@ export async function getChaseData(userId: string, period: string = "alltime"): 
   const user = userResultRows[0];
   const userPoints = user.total_points;
 
-  const [leaderboardRows] = await pool.query(`
+  const [leaderboardRows] = (await pool.query(`
     SELECT id, username, avatar, total_points as points
     FROM users WHERE username != 'scorepion_system'
     ORDER BY total_points DESC
     LIMIT 100
-  `) as any;
+  `)) as any;
 
   const entries = leaderboardRows;
   const userIdx = entries.findIndex((e: any) => e.id === userId);
@@ -537,7 +533,7 @@ export async function getChaseData(userId: string, period: string = "alltime"): 
     Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() + 2, 23, 59, 59, 999),
   ).toISOString();
 
-  const [upcomingRows] = await pool.query(
+  const [upcomingRows] = (await pool.query(
     `
     SELECT CAST(f.api_fixture_id AS CHAR) as match_id,
            ht.name as home_name, at2.name as away_name
@@ -550,7 +546,7 @@ export async function getChaseData(userId: string, period: string = "alltime"): 
     LIMIT 5
   `,
     [todayStart, tomorrowEnd],
-  ) as any;
+  )) as any;
 
   const swingMatches = upcomingRows.map((r: any) => ({
     matchId: r.match_id,
@@ -595,10 +591,10 @@ export interface AchievementData {
 }
 
 export async function getUserAchievements(userId: string): Promise<AchievementData[]> {
-  const [resultRows] = await pool.query(
+  const [resultRows] = (await pool.query(
     `SELECT * FROM achievements WHERE user_id = ? ORDER BY earned_at DESC`,
     [userId],
-  ) as any;
+  )) as any;
   return resultRows.map((r: any) => ({
     id: r.id,
     type: r.type,
@@ -612,13 +608,14 @@ export async function getUserAchievements(userId: string): Promise<AchievementDa
 }
 
 export async function checkAndAwardAchievements(userId: string): Promise<AchievementData[]> {
-  const [userRows] = await pool.query(`SELECT * FROM users WHERE id = ?`, [userId]) as any;
+  const [userRows] = (await pool.query(`SELECT * FROM users WHERE id = ?`, [userId])) as any;
   if (userRows.length === 0) return [];
 
   const u = userRows[0];
-  const [existingRows] = await pool.query(`SELECT type, tier FROM achievements WHERE user_id = ?`, [
-    userId,
-  ]) as any;
+  const [existingRows] = (await pool.query(
+    `SELECT type, tier FROM achievements WHERE user_id = ?`,
+    [userId],
+  )) as any;
   const existingSet = new Set(existingRows.map((r: any) => `${r.type}:${r.tier}`));
 
   const newAchievements: AchievementData[] = [];
@@ -717,10 +714,10 @@ export async function checkAndAwardAchievements(userId: string): Promise<Achieve
     }
   }
 
-  const [exactResultRows] = await pool.query(
+  const [exactResultRows] = (await pool.query(
     `SELECT COUNT(*) as cnt FROM predictions WHERE user_id = ? AND settled = true AND points >= 10`,
     [userId],
-  ) as any;
+  )) as any;
   const exactCount = Number(exactResultRows[0]?.cnt || 0);
 
   const exactAchievements = [
@@ -765,10 +762,10 @@ async function awardAchievement(
       [userId, type, title, description, icon, color, tier],
     );
 
-    const [achRows] = await pool.query(
+    const [achRows] = (await pool.query(
       `SELECT * FROM achievements WHERE user_id = ? AND type = ? AND tier = ? ORDER BY earned_at DESC LIMIT 1`,
       [userId, type, tier],
-    ) as any;
+    )) as any;
 
     const r = achRows[0];
     await logEvent(userId, "achievement_earned", { type, tier, title });
@@ -789,12 +786,12 @@ async function awardAchievement(
 }
 
 export async function getWeeklyWinners(): Promise<any[]> {
-  const [resultRows] = await pool.query(`
+  const [resultRows] = (await pool.query(`
     SELECT ww.*, u.username, u.avatar FROM weekly_winners ww
     JOIN users u ON ww.user_id = u.id
     ORDER BY ww.created_at DESC
     LIMIT 10
-  `) as any;
+  `)) as any;
   return resultRows.map((r: any) => ({
     id: r.id,
     userId: r.user_id,
@@ -810,10 +807,10 @@ export async function getWeeklyWinners(): Promise<any[]> {
 export async function computeWeeklyWinners(): Promise<number> {
   const weekStart = getWeekStartUtc();
 
-  const [existingRows2] = await pool.query(
+  const [existingRows2] = (await pool.query(
     `SELECT id FROM weekly_winners WHERE week_start = ? AND type = 'global'`,
     [weekStart],
-  ) as any;
+  )) as any;
   if (existingRows2.length > 0) return 0;
 
   const prevWeekStart = new Date();
@@ -825,7 +822,7 @@ export async function computeWeeklyWinners(): Promise<number> {
   const prevWeekEnd = new Date(prevWeekStart);
   prevWeekEnd.setDate(prevWeekEnd.getDate() + 7);
 
-  const [topUsersRows] = await pool.query(
+  const [topUsersRows] = (await pool.query(
     `
     SELECT u.id, CAST(SUM(p.points) AS SIGNED) as weekly_points
     FROM users u
@@ -837,7 +834,7 @@ export async function computeWeeklyWinners(): Promise<number> {
     LIMIT 3
   `,
     [prevWeekStart.getTime(), prevWeekEnd.getTime()],
-  ) as any;
+  )) as any;
 
   let inserted = 0;
   for (let i = 0; i < topUsersRows.length; i++) {
@@ -872,19 +869,23 @@ export async function computeWeeklyWinners(): Promise<number> {
 }
 
 export async function getGroupActivityEnhanced(groupId: string): Promise<any[]> {
-  const [membershipRows] = await pool.query(`SELECT user_id FROM group_members WHERE group_id = ?`, [
-    groupId,
-  ]) as any;
+  const [membershipRows] = (await pool.query(
+    `SELECT user_id FROM group_members WHERE group_id = ?`,
+    [groupId],
+  )) as any;
   if (membershipRows.length === 0) return [];
 
   const userIds = membershipRows.map((r: any) => r.user_id);
-  const userPlaceholders = userIds.map(() => '?').join(',');
+  const userPlaceholders = userIds.map(() => "?").join(",");
 
-  const [usersRows] = await pool.query(
+  const [usersRows] = (await pool.query(
     `SELECT id, username, avatar, streak, total_points FROM users WHERE id IN (${userPlaceholders})`,
     userIds,
-  ) as any;
-  const userMap = new Map(
+  )) as any;
+  const userMap = new Map<
+    string,
+    { username: string; avatar: string; color: string; streak: number; totalPoints: number }
+  >(
     usersRows.map((u: any, idx: number) => [
       u.id,
       {
@@ -901,7 +902,7 @@ export async function getGroupActivityEnhanced(groupId: string): Promise<any[]> 
 
   const items: any[] = [];
 
-  const [boostsRows] = await pool.query(
+  const [boostsRows] = (await pool.query(
     `
     SELECT bp.*, ht.name as home_name, at2.name as away_name
     FROM boost_picks bp
@@ -913,7 +914,7 @@ export async function getGroupActivityEnhanced(groupId: string): Promise<any[]> 
     LIMIT 10
   `,
     userIds,
-  ) as any;
+  )) as any;
 
   for (const b of boostsRows) {
     const user = userMap.get(b.user_id);
@@ -932,12 +933,12 @@ export async function getGroupActivityEnhanced(groupId: string): Promise<any[]> 
     });
   }
 
-  const [achievementsRows] = await pool.query(
+  const [achievementsRows] = (await pool.query(
     `
     SELECT * FROM achievements WHERE user_id IN (${userPlaceholders}) ORDER BY earned_at DESC LIMIT 10
   `,
     userIds,
-  ) as any;
+  )) as any;
 
   for (const a of achievementsRows) {
     const user = userMap.get(a.user_id);
@@ -974,7 +975,7 @@ export async function getGroupActivityEnhanced(groupId: string): Promise<any[]> 
     }
   }
 
-  const [winnersRows] = await pool.query(
+  const [winnersRows] = (await pool.query(
     `
     SELECT ww.*, u.username, u.avatar FROM weekly_winners ww
     JOIN users u ON ww.user_id = u.id
@@ -983,7 +984,7 @@ export async function getGroupActivityEnhanced(groupId: string): Promise<any[]> 
     LIMIT 3
   `,
     userIds,
-  ) as any;
+  )) as any;
 
   for (const w of winnersRows) {
     const user = userMap.get(w.user_id);
@@ -1012,10 +1013,11 @@ export async function logEvent(
   eventData: any = {},
 ): Promise<void> {
   try {
-    await pool.query(
-      `INSERT INTO event_log (user_id, event_type, event_data) VALUES (?, ?, ?)`,
-      [userId, eventType, JSON.stringify(eventData)],
-    );
+    await pool.query(`INSERT INTO event_log (user_id, event_type, event_data) VALUES (?, ?, ?)`, [
+      userId,
+      eventType,
+      JSON.stringify(eventData),
+    ]);
   } catch (err) {
     console.error("[EventLog] Error:", err);
   }
@@ -1026,24 +1028,25 @@ export async function getEventStats(): Promise<any> {
   const dayAgo = now - 86400000;
   const weekAgo = now - 604800000;
 
-  const [dailyPacksResult, dailyBoostsResult, dailyStreakBreaksResult, weeklyPacksResult] = await Promise.all([
-    pool.query(
-      `SELECT COUNT(*) as cnt FROM event_log WHERE event_type = 'daily_pack_complete' AND timestamp >= ?`,
-      [dayAgo],
-    ),
-    pool.query(
-      `SELECT COUNT(*) as cnt FROM event_log WHERE event_type = 'boost_pick' AND timestamp >= ?`,
-      [dayAgo],
-    ),
-    pool.query(
-      `SELECT COUNT(*) as cnt FROM event_log WHERE event_type = 'streak_break' AND timestamp >= ?`,
-      [dayAgo],
-    ),
-    pool.query(
-      `SELECT COUNT(*) as cnt FROM event_log WHERE event_type = 'daily_pack_complete' AND timestamp >= ?`,
-      [weekAgo],
-    ),
-  ]);
+  const [dailyPacksResult, dailyBoostsResult, dailyStreakBreaksResult, weeklyPacksResult] =
+    await Promise.all([
+      pool.query(
+        `SELECT COUNT(*) as cnt FROM event_log WHERE event_type = 'daily_pack_complete' AND timestamp >= ?`,
+        [dayAgo],
+      ),
+      pool.query(
+        `SELECT COUNT(*) as cnt FROM event_log WHERE event_type = 'boost_pick' AND timestamp >= ?`,
+        [dayAgo],
+      ),
+      pool.query(
+        `SELECT COUNT(*) as cnt FROM event_log WHERE event_type = 'streak_break' AND timestamp >= ?`,
+        [dayAgo],
+      ),
+      pool.query(
+        `SELECT COUNT(*) as cnt FROM event_log WHERE event_type = 'daily_pack_complete' AND timestamp >= ?`,
+        [weekAgo],
+      ),
+    ]);
 
   const [dailyPacks] = dailyPacksResult as any;
   const [dailyBoosts] = dailyBoostsResult as any;
@@ -1063,7 +1066,7 @@ export async function getEventStats(): Promise<any> {
 }
 
 export async function getUserPerformanceInsights(userId: string): Promise<any> {
-  const [leaguePerfRows] = await pool.query(
+  const [leaguePerfRows] = (await pool.query(
     `
     SELECT l.name as league_name, l.id as league_id,
            CAST(COUNT(p.id) AS SIGNED) as total,
@@ -1077,12 +1080,12 @@ export async function getUserPerformanceInsights(userId: string): Promise<any> {
     ORDER BY points DESC
   `,
     [userId],
-  ) as any;
+  )) as any;
 
   const bestLeague = leaguePerfRows[0] || null;
   const worstLeague = leaguePerfRows[leaguePerfRows.length - 1] || null;
 
-  const [derbyPerfRows] = await pool.query(
+  const [derbyPerfRows] = (await pool.query(
     `
     SELECT CAST(COUNT(p.id) AS SIGNED) as total,
            CAST(COUNT(CASE WHEN p.points >= 5 THEN 1 END) AS SIGNED) as correct,
@@ -1091,9 +1094,9 @@ export async function getUserPerformanceInsights(userId: string): Promise<any> {
     WHERE p.user_id = ? AND p.settled = true
   `,
     [userId],
-  ) as any;
+  )) as any;
 
-  const [recentFormRows] = await pool.query(
+  const [recentFormRows] = (await pool.query(
     `
     SELECT p.points FROM predictions p
     WHERE p.user_id = ? AND p.settled = true
@@ -1101,7 +1104,7 @@ export async function getUserPerformanceInsights(userId: string): Promise<any> {
     LIMIT 10
   `,
     [userId],
-  ) as any;
+  )) as any;
 
   const formPoints = recentFormRows.map((r: any) => r.points || 0);
   const avgRecent =
