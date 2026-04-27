@@ -8,7 +8,7 @@ export const authLimiter = rateLimit({
   standardHeaders: false,
   legacyHeaders: false,
   skipSuccessfulRequests: true, // Don't count successful requests toward the limit
-  skip: () => process.env.NODE_ENV !== "production",
+  skip: () => process.env.NODE_ENV !== "production" && process.env.FORCE_RATE_LIMIT !== "true",
   keyGenerator: (req) => req.ip || "unknown",
   handler: (_req, res) => {
     res.status(429).json({ message: "Too many attempts, try again in a minute" });
@@ -22,7 +22,7 @@ export const adminLimiter = rateLimit({
   message: { message: "Too many requests, please slow down" },
   standardHeaders: false,
   legacyHeaders: false,
-  skip: () => process.env.NODE_ENV !== "production",
+  skip: () => process.env.NODE_ENV !== "production" && process.env.FORCE_RATE_LIMIT !== "true",
   keyGenerator: (req) => req.ip || "unknown",
   handler: (_req, res) => {
     res.status(429).json({ message: "Too many requests, please slow down" });
@@ -36,7 +36,7 @@ export const writeLimiter = rateLimit({
   message: { message: "Too many requests, please slow down" },
   standardHeaders: false,
   legacyHeaders: false,
-  skip: () => process.env.NODE_ENV !== "production",
+  skip: () => process.env.NODE_ENV !== "production" && process.env.FORCE_RATE_LIMIT !== "true",
   keyGenerator: (req) => req.ip || "unknown",
   handler: (_req, res) => {
     res.status(429).json({ message: "Too many requests, please slow down" });
@@ -50,7 +50,7 @@ export const readLimiter = rateLimit({
   message: { message: "Too many requests, please slow down" },
   standardHeaders: false,
   legacyHeaders: false,
-  skip: () => process.env.NODE_ENV !== "production",
+  skip: () => process.env.NODE_ENV !== "production" && process.env.FORCE_RATE_LIMIT !== "true",
   keyGenerator: (req) => req.ip || "unknown",
   handler: (_req, res) => {
     res.status(429).json({ message: "Too many requests, please slow down" });
