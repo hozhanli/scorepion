@@ -1,60 +1,60 @@
 import { sql } from "drizzle-orm";
 import {
-  pgTable,
+  mysqlTable,
   text,
   varchar,
-  integer,
+  int,
   bigint,
   boolean,
-  jsonb,
+  json,
   uniqueIndex,
   index,
-} from "drizzle-orm/pg-core";
+} from "drizzle-orm/mysql-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
-export const users = pgTable("users", {
-  id: varchar("id")
+export const users = mysqlTable("users", {
+  id: varchar("id", { length: 36 })
     .primaryKey()
-    .default(sql`gen_random_uuid()`),
+    .default(sql`(UUID())`),
   username: text("username").notNull().unique(),
   password: text("password").notNull(),
   avatar: text("avatar").notNull().default(""),
-  totalPoints: integer("total_points").notNull().default(0),
-  weeklyPoints: integer("weekly_points").notNull().default(0),
-  monthlyPoints: integer("monthly_points").notNull().default(0),
-  correctPredictions: integer("correct_predictions").notNull().default(0),
-  totalPredictions: integer("total_predictions").notNull().default(0),
-  streak: integer("streak").notNull().default(0),
-  bestStreak: integer("best_streak").notNull().default(0),
-  rank: integer("rank").notNull().default(0),
-  rankLastWeek: integer("rank_last_week").notNull().default(0),
-  favoriteLeagues: jsonb("favorite_leagues").$type<string[]>().notNull().default([]),
+  totalPoints: int("total_points").notNull().default(0),
+  weeklyPoints: int("weekly_points").notNull().default(0),
+  monthlyPoints: int("monthly_points").notNull().default(0),
+  correctPredictions: int("correct_predictions").notNull().default(0),
+  totalPredictions: int("total_predictions").notNull().default(0),
+  streak: int("streak").notNull().default(0),
+  bestStreak: int("best_streak").notNull().default(0),
+  rank: int("rank").notNull().default(0),
+  rankLastWeek: int("rank_last_week").notNull().default(0),
+  favoriteLeagues: json("favorite_leagues").$type<string[]>().notNull().default([]),
   joinedAt: bigint("joined_at", { mode: "number" })
     .notNull()
-    .default(sql`extract(epoch from now()) * 1000`),
+    .default(sql`(FLOOR(UNIX_TIMESTAMP() * 1000))`),
   stripeCustomerId: text("stripe_customer_id"),
   stripeSubscriptionId: text("stripe_subscription_id"),
   isPremium: boolean("is_premium").notNull().default(false),
 });
 
-export const predictions = pgTable(
+export const predictions = mysqlTable(
   "predictions",
   {
-    id: varchar("id")
+    id: varchar("id", { length: 36 })
       .primaryKey()
-      .default(sql`gen_random_uuid()`),
-    userId: varchar("user_id")
+      .default(sql`(UUID())`),
+    userId: varchar("user_id", { length: 36 })
       .notNull()
       .references(() => users.id, { onDelete: "cascade" }),
     matchId: text("match_id").notNull(),
-    homeScore: integer("home_score").notNull(),
-    awayScore: integer("away_score").notNull(),
-    points: integer("points").default(0),
+    homeScore: int("home_score").notNull(),
+    awayScore: int("away_score").notNull(),
+    points: int("points").default(0),
     settled: boolean("settled").default(false),
     timestamp: bigint("timestamp", { mode: "number" })
       .notNull()
-      .default(sql`extract(epoch from now()) * 1000`),
+      .default(sql`(FLOOR(UNIX_TIMESTAMP() * 1000))`),
   },
   (table) => [
     index("predictions_user_idx").on(table.userId),
@@ -63,38 +63,38 @@ export const predictions = pgTable(
   ],
 );
 
-export const groups = pgTable("groups", {
-  id: varchar("id")
+export const groups = mysqlTable("groups", {
+  id: varchar("id", { length: 36 })
     .primaryKey()
-    .default(sql`gen_random_uuid()`),
+    .default(sql`(UUID())`),
   name: text("name").notNull(),
   code: text("code").notNull().unique(),
   isPublic: boolean("is_public").notNull().default(true),
-  memberCount: integer("member_count").notNull().default(1),
-  leagueIds: jsonb("league_ids").$type<string[]>().notNull().default([]),
-  createdBy: varchar("created_by")
+  memberCount: int("member_count").notNull().default(1),
+  leagueIds: json("league_ids").$type<string[]>().notNull().default([]),
+  createdBy: varchar("created_by", { length: 36 })
     .notNull()
     .references(() => users.id, { onDelete: "cascade" }),
   createdAt: bigint("created_at", { mode: "number" })
     .notNull()
-    .default(sql`extract(epoch from now()) * 1000`),
+    .default(sql`(FLOOR(UNIX_TIMESTAMP() * 1000))`),
 });
 
-export const groupMembers = pgTable(
+export const groupMembers = mysqlTable(
   "group_members",
   {
-    id: varchar("id")
+    id: varchar("id", { length: 36 })
       .primaryKey()
-      .default(sql`gen_random_uuid()`),
-    groupId: varchar("group_id")
+      .default(sql`(UUID())`),
+    groupId: varchar("group_id", { length: 36 })
       .notNull()
       .references(() => groups.id, { onDelete: "cascade" }),
-    userId: varchar("user_id")
+    userId: varchar("user_id", { length: 36 })
       .notNull()
       .references(() => users.id, { onDelete: "cascade" }),
     joinedAt: bigint("joined_at", { mode: "number" })
       .notNull()
-      .default(sql`extract(epoch from now()) * 1000`),
+      .default(sql`(FLOOR(UNIX_TIMESTAMP() * 1000))`),
   },
   (table) => [
     index("group_members_user_idx").on(table.userId),
@@ -103,251 +103,251 @@ export const groupMembers = pgTable(
   ],
 );
 
-export const footballLeagues = pgTable("football_leagues", {
-  id: varchar("id").primaryKey(),
-  apiFootballId: integer("api_football_id").notNull().unique(),
+export const footballLeagues = mysqlTable("football_leagues", {
+  id: varchar("id", { length: 255 }).primaryKey(),
+  apiFootballId: int("api_football_id").notNull().unique(),
   name: text("name").notNull(),
   country: text("country").notNull(),
   logo: text("logo").default(""),
   flag: text("flag").default(""),
   color: text("color").notNull().default("#333"),
   icon: text("icon").notNull().default("football"),
-  season: integer("season").notNull(),
+  season: int("season").notNull(),
   type: text("type").notNull().default("League"),
 });
 
-export const footballTeams = pgTable("football_teams", {
-  id: varchar("id")
+export const footballTeams = mysqlTable("football_teams", {
+  id: varchar("id", { length: 36 })
     .primaryKey()
-    .default(sql`gen_random_uuid()`),
-  apiFootballId: integer("api_football_id").notNull().unique(),
+    .default(sql`(UUID())`),
+  apiFootballId: int("api_football_id").notNull().unique(),
   name: text("name").notNull(),
   shortName: text("short_name").notNull().default(""),
   logo: text("logo").default(""),
   color: text("color").notNull().default("#333"),
 });
 
-export const footballFixtures = pgTable("football_fixtures", {
-  id: varchar("id")
+export const footballFixtures = mysqlTable("football_fixtures", {
+  id: varchar("id", { length: 36 })
     .primaryKey()
-    .default(sql`gen_random_uuid()`),
-  apiFixtureId: integer("api_fixture_id").notNull().unique(),
-  leagueId: varchar("league_id").notNull(),
-  homeTeamId: integer("home_team_id").notNull(),
-  awayTeamId: integer("away_team_id").notNull(),
-  homeScore: integer("home_score"),
-  awayScore: integer("away_score"),
+    .default(sql`(UUID())`),
+  apiFixtureId: int("api_fixture_id").notNull().unique(),
+  leagueId: varchar("league_id", { length: 255 }).notNull(),
+  homeTeamId: int("home_team_id").notNull(),
+  awayTeamId: int("away_team_id").notNull(),
+  homeScore: int("home_score"),
+  awayScore: int("away_score"),
   status: text("status").notNull().default("upcoming"),
   statusShort: text("status_short").notNull().default("NS"),
-  minute: integer("minute"),
+  minute: int("minute"),
   kickoff: text("kickoff").notNull(),
   venue: text("venue").default(""),
   referee: text("referee").default(""),
   round: text("round").default(""),
-  season: integer("season").notNull(),
+  season: int("season").notNull(),
   updatedAt: bigint("updated_at", { mode: "number" })
     .notNull()
-    .default(sql`extract(epoch from now()) * 1000`),
+    .default(sql`(FLOOR(UNIX_TIMESTAMP() * 1000))`),
 });
 
-export const footballStandings = pgTable(
+export const footballStandings = mysqlTable(
   "football_standings",
   {
-    id: varchar("id")
+    id: varchar("id", { length: 36 })
       .primaryKey()
-      .default(sql`gen_random_uuid()`),
-    leagueId: varchar("league_id").notNull(),
-    teamId: integer("team_id").notNull(),
-    position: integer("position").notNull(),
-    played: integer("played").notNull().default(0),
-    won: integer("won").notNull().default(0),
-    drawn: integer("drawn").notNull().default(0),
-    lost: integer("lost").notNull().default(0),
-    goalsFor: integer("goals_for").notNull().default(0),
-    goalsAgainst: integer("goals_against").notNull().default(0),
-    goalDifference: integer("goal_difference").notNull().default(0),
-    points: integer("points").notNull().default(0),
+      .default(sql`(UUID())`),
+    leagueId: varchar("league_id", { length: 255 }).notNull(),
+    teamId: int("team_id").notNull(),
+    position: int("position").notNull(),
+    played: int("played").notNull().default(0),
+    won: int("won").notNull().default(0),
+    drawn: int("drawn").notNull().default(0),
+    lost: int("lost").notNull().default(0),
+    goalsFor: int("goals_for").notNull().default(0),
+    goalsAgainst: int("goals_against").notNull().default(0),
+    goalDifference: int("goal_difference").notNull().default(0),
+    points: int("points").notNull().default(0),
     form: text("form").default(""),
-    season: integer("season").notNull(),
+    season: int("season").notNull(),
     group: text("group_name"),
     updatedAt: bigint("updated_at", { mode: "number" })
       .notNull()
-      .default(sql`extract(epoch from now()) * 1000`),
+      .default(sql`(FLOOR(UNIX_TIMESTAMP() * 1000))`),
   },
   (table) => [
     uniqueIndex("standings_league_team_season").on(table.leagueId, table.teamId, table.season),
   ],
 );
 
-export const footballTopScorers = pgTable(
+export const footballTopScorers = mysqlTable(
   "football_top_scorers",
   {
-    id: varchar("id")
+    id: varchar("id", { length: 36 })
       .primaryKey()
-      .default(sql`gen_random_uuid()`),
-    leagueId: varchar("league_id").notNull(),
-    playerId: integer("player_id").notNull(),
+      .default(sql`(UUID())`),
+    leagueId: varchar("league_id", { length: 255 }).notNull(),
+    playerId: int("player_id").notNull(),
     playerName: text("player_name").notNull(),
     playerPhoto: text("player_photo").default(""),
-    teamId: integer("team_id").notNull(),
-    goals: integer("goals").notNull().default(0),
-    assists: integer("assists").notNull().default(0),
-    matches: integer("matches").notNull().default(0),
-    season: integer("season").notNull(),
+    teamId: int("team_id").notNull(),
+    goals: int("goals").notNull().default(0),
+    assists: int("assists").notNull().default(0),
+    matches: int("matches").notNull().default(0),
+    season: int("season").notNull(),
     updatedAt: bigint("updated_at", { mode: "number" })
       .notNull()
-      .default(sql`extract(epoch from now()) * 1000`),
+      .default(sql`(FLOOR(UNIX_TIMESTAMP() * 1000))`),
   },
   (table) => [
     uniqueIndex("scorers_league_player_season").on(table.leagueId, table.playerId, table.season),
   ],
 );
 
-export const footballTopAssists = pgTable(
+export const footballTopAssists = mysqlTable(
   "football_top_assists",
   {
-    id: varchar("id")
+    id: varchar("id", { length: 36 })
       .primaryKey()
-      .default(sql`gen_random_uuid()`),
-    leagueId: varchar("league_id").notNull(),
-    playerId: integer("player_id").notNull(),
+      .default(sql`(UUID())`),
+    leagueId: varchar("league_id", { length: 255 }).notNull(),
+    playerId: int("player_id").notNull(),
     playerName: text("player_name").notNull(),
     playerPhoto: text("player_photo").default(""),
-    teamId: integer("team_id").notNull(),
-    assists: integer("assists").notNull().default(0),
-    goals: integer("goals").notNull().default(0),
-    matches: integer("matches").notNull().default(0),
-    season: integer("season").notNull(),
+    teamId: int("team_id").notNull(),
+    assists: int("assists").notNull().default(0),
+    goals: int("goals").notNull().default(0),
+    matches: int("matches").notNull().default(0),
+    season: int("season").notNull(),
     updatedAt: bigint("updated_at", { mode: "number" })
       .notNull()
-      .default(sql`extract(epoch from now()) * 1000`),
+      .default(sql`(FLOOR(UNIX_TIMESTAMP() * 1000))`),
   },
   (table) => [
     uniqueIndex("assists_league_player_season").on(table.leagueId, table.playerId, table.season),
   ],
 );
 
-export const footballTopYellowCards = pgTable(
+export const footballTopYellowCards = mysqlTable(
   "football_top_yellow_cards",
   {
-    id: varchar("id")
+    id: varchar("id", { length: 36 })
       .primaryKey()
-      .default(sql`gen_random_uuid()`),
-    leagueId: varchar("league_id").notNull(),
-    playerId: integer("player_id").notNull(),
+      .default(sql`(UUID())`),
+    leagueId: varchar("league_id", { length: 255 }).notNull(),
+    playerId: int("player_id").notNull(),
     playerName: text("player_name").notNull(),
     playerPhoto: text("player_photo").default(""),
-    teamId: integer("team_id").notNull(),
-    yellowCards: integer("yellow_cards").notNull().default(0),
-    matches: integer("matches").notNull().default(0),
-    season: integer("season").notNull(),
+    teamId: int("team_id").notNull(),
+    yellowCards: int("yellow_cards").notNull().default(0),
+    matches: int("matches").notNull().default(0),
+    season: int("season").notNull(),
     updatedAt: bigint("updated_at", { mode: "number" })
       .notNull()
-      .default(sql`extract(epoch from now()) * 1000`),
+      .default(sql`(FLOOR(UNIX_TIMESTAMP() * 1000))`),
   },
   (table) => [
     uniqueIndex("yellow_league_player_season").on(table.leagueId, table.playerId, table.season),
   ],
 );
 
-export const footballTopRedCards = pgTable(
+export const footballTopRedCards = mysqlTable(
   "football_top_red_cards",
   {
-    id: varchar("id")
+    id: varchar("id", { length: 36 })
       .primaryKey()
-      .default(sql`gen_random_uuid()`),
-    leagueId: varchar("league_id").notNull(),
-    playerId: integer("player_id").notNull(),
+      .default(sql`(UUID())`),
+    leagueId: varchar("league_id", { length: 255 }).notNull(),
+    playerId: int("player_id").notNull(),
     playerName: text("player_name").notNull(),
     playerPhoto: text("player_photo").default(""),
-    teamId: integer("team_id").notNull(),
-    redCards: integer("red_cards").notNull().default(0),
-    matches: integer("matches").notNull().default(0),
-    season: integer("season").notNull(),
+    teamId: int("team_id").notNull(),
+    redCards: int("red_cards").notNull().default(0),
+    matches: int("matches").notNull().default(0),
+    season: int("season").notNull(),
     updatedAt: bigint("updated_at", { mode: "number" })
       .notNull()
-      .default(sql`extract(epoch from now()) * 1000`),
+      .default(sql`(FLOOR(UNIX_TIMESTAMP() * 1000))`),
   },
   (table) => [
     uniqueIndex("red_league_player_season").on(table.leagueId, table.playerId, table.season),
   ],
 );
 
-export const footballInjuries = pgTable("football_injuries", {
-  id: varchar("id")
+export const footballInjuries = mysqlTable("football_injuries", {
+  id: varchar("id", { length: 36 })
     .primaryKey()
-    .default(sql`gen_random_uuid()`),
-  leagueId: varchar("league_id").notNull(),
-  playerId: integer("player_id").notNull(),
+    .default(sql`(UUID())`),
+  leagueId: varchar("league_id", { length: 255 }).notNull(),
+  playerId: int("player_id").notNull(),
   playerName: text("player_name").notNull(),
   playerPhoto: text("player_photo").default(""),
-  teamId: integer("team_id").notNull(),
+  teamId: int("team_id").notNull(),
   type: text("type").notNull().default(""),
   reason: text("reason").notNull().default(""),
-  fixtureId: integer("fixture_id"),
+  fixtureId: int("fixture_id"),
   fixtureDate: text("fixture_date").default(""),
-  season: integer("season").notNull(),
+  season: int("season").notNull(),
   updatedAt: bigint("updated_at", { mode: "number" })
     .notNull()
-    .default(sql`extract(epoch from now()) * 1000`),
+    .default(sql`(FLOOR(UNIX_TIMESTAMP() * 1000))`),
 });
 
-export const footballTransfers = pgTable("football_transfers", {
-  id: varchar("id")
+export const footballTransfers = mysqlTable("football_transfers", {
+  id: varchar("id", { length: 36 })
     .primaryKey()
-    .default(sql`gen_random_uuid()`),
-  leagueId: varchar("league_id").notNull(),
-  playerId: integer("player_id").notNull(),
+    .default(sql`(UUID())`),
+  leagueId: varchar("league_id", { length: 255 }).notNull(),
+  playerId: int("player_id").notNull(),
   playerName: text("player_name").notNull(),
   playerPhoto: text("player_photo").default(""),
-  teamInId: integer("team_in_id"),
+  teamInId: int("team_in_id"),
   teamInName: text("team_in_name").default(""),
   teamInLogo: text("team_in_logo").default(""),
-  teamOutId: integer("team_out_id"),
+  teamOutId: int("team_out_id"),
   teamOutName: text("team_out_name").default(""),
   teamOutLogo: text("team_out_logo").default(""),
   transferDate: text("transfer_date").default(""),
   transferType: text("transfer_type").default(""),
-  season: integer("season").notNull(),
+  season: int("season").notNull(),
   updatedAt: bigint("updated_at", { mode: "number" })
     .notNull()
-    .default(sql`extract(epoch from now()) * 1000`),
+    .default(sql`(FLOOR(UNIX_TIMESTAMP() * 1000))`),
 });
 
-export const syncLog = pgTable("sync_log", {
-  id: varchar("id")
+export const syncLog = mysqlTable("sync_log", {
+  id: varchar("id", { length: 36 })
     .primaryKey()
-    .default(sql`gen_random_uuid()`),
+    .default(sql`(UUID())`),
   syncType: text("sync_type").notNull(),
-  leagueId: varchar("league_id"),
-  requestCount: integer("request_count").notNull().default(0),
+  leagueId: varchar("league_id", { length: 255 }),
+  requestCount: int("request_count").notNull().default(0),
   status: text("status").notNull().default("success"),
   error: text("error"),
   syncedAt: bigint("synced_at", { mode: "number" })
     .notNull()
-    .default(sql`extract(epoch from now()) * 1000`),
+    .default(sql`(FLOOR(UNIX_TIMESTAMP() * 1000))`),
 });
 
-export const dailyPacks = pgTable(
+export const dailyPacks = mysqlTable(
   "daily_packs",
   {
-    id: varchar("id")
+    id: varchar("id", { length: 36 })
       .primaryKey()
-      .default(sql`gen_random_uuid()`),
-    userId: varchar("user_id")
+      .default(sql`(UUID())`),
+    userId: varchar("user_id", { length: 36 })
       .notNull()
       .references(() => users.id, { onDelete: "cascade" }),
     date: text("date").notNull(),
-    matchIds: jsonb("match_ids").$type<string[]>().notNull().default([]),
-    completedMatchIds: jsonb("completed_match_ids").$type<string[]>().notNull().default([]),
+    matchIds: json("match_ids").$type<string[]>().notNull().default([]),
+    completedMatchIds: json("completed_match_ids").$type<string[]>().notNull().default([]),
     boostMatchId: text("boost_match_id"),
-    totalPicks: integer("total_picks").notNull().default(0),
-    completedPicks: integer("completed_picks").notNull().default(0),
+    totalPicks: int("total_picks").notNull().default(0),
+    completedPicks: int("completed_picks").notNull().default(0),
     isComplete: boolean("is_complete").notNull().default(false),
-    pointsEarned: integer("points_earned").notNull().default(0),
+    pointsEarned: int("points_earned").notNull().default(0),
     createdAt: bigint("created_at", { mode: "number" })
       .notNull()
-      .default(sql`extract(epoch from now()) * 1000`),
+      .default(sql`(FLOOR(UNIX_TIMESTAMP() * 1000))`),
   },
   (table) => [
     uniqueIndex("daily_pack_user_date").on(table.userId, table.date),
@@ -355,25 +355,25 @@ export const dailyPacks = pgTable(
   ],
 );
 
-export const boostPicks = pgTable(
+export const boostPicks = mysqlTable(
   "boost_picks",
   {
-    id: varchar("id")
+    id: varchar("id", { length: 36 })
       .primaryKey()
-      .default(sql`gen_random_uuid()`),
-    userId: varchar("user_id")
+      .default(sql`(UUID())`),
+    userId: varchar("user_id", { length: 36 })
       .notNull()
       .references(() => users.id, { onDelete: "cascade" }),
     matchId: text("match_id").notNull(),
     date: text("date").notNull(),
-    multiplier: integer("multiplier").notNull().default(2),
+    multiplier: int("multiplier").notNull().default(2),
     isUpset: boolean("is_upset").notNull().default(false),
-    originalPoints: integer("original_points").default(0),
-    boostedPoints: integer("boosted_points").default(0),
+    originalPoints: int("original_points").default(0),
+    boostedPoints: int("boosted_points").default(0),
     settled: boolean("settled").notNull().default(false),
     createdAt: bigint("created_at", { mode: "number" })
       .notNull()
-      .default(sql`extract(epoch from now()) * 1000`),
+      .default(sql`(FLOOR(UNIX_TIMESTAMP() * 1000))`),
   },
   (table) => [
     uniqueIndex("boost_user_date").on(table.userId, table.date),
@@ -381,11 +381,11 @@ export const boostPicks = pgTable(
   ],
 );
 
-export const achievements = pgTable("achievements", {
-  id: varchar("id")
+export const achievements = mysqlTable("achievements", {
+  id: varchar("id", { length: 36 })
     .primaryKey()
-    .default(sql`gen_random_uuid()`),
-  userId: varchar("user_id")
+    .default(sql`(UUID())`),
+  userId: varchar("user_id", { length: 36 })
     .notNull()
     .references(() => users.id, { onDelete: "cascade" }),
   type: text("type").notNull(),
@@ -396,192 +396,192 @@ export const achievements = pgTable("achievements", {
   tier: text("tier").notNull().default("bronze"),
   season: text("season").notNull().default("2024-25"),
   period: text("period"),
-  metadata: jsonb("metadata").$type<Record<string, any>>().default({}),
+  metadata: json("metadata").$type<Record<string, any>>().default({}),
   earnedAt: bigint("earned_at", { mode: "number" })
     .notNull()
-    .default(sql`extract(epoch from now()) * 1000`),
+    .default(sql`(FLOOR(UNIX_TIMESTAMP() * 1000))`),
 });
 
-export const weeklyWinners = pgTable("weekly_winners", {
-  id: varchar("id")
+export const weeklyWinners = mysqlTable("weekly_winners", {
+  id: varchar("id", { length: 36 })
     .primaryKey()
-    .default(sql`gen_random_uuid()`),
-  userId: varchar("user_id")
+    .default(sql`(UUID())`),
+  userId: varchar("user_id", { length: 36 })
     .notNull()
     .references(() => users.id, { onDelete: "cascade" }),
   weekStart: text("week_start").notNull(),
-  points: integer("points").notNull().default(0),
-  rank: integer("rank").notNull().default(1),
+  points: int("points").notNull().default(0),
+  rank: int("rank").notNull().default(1),
   type: text("type").notNull().default("global"),
-  groupId: varchar("group_id").references(() => groups.id, { onDelete: "cascade" }),
+  groupId: varchar("group_id", { length: 36 }).references(() => groups.id, { onDelete: "cascade" }),
   createdAt: bigint("created_at", { mode: "number" })
     .notNull()
-    .default(sql`extract(epoch from now()) * 1000`),
+    .default(sql`(FLOOR(UNIX_TIMESTAMP() * 1000))`),
 });
 
-export const footballFixtureEvents = pgTable(
+export const footballFixtureEvents = mysqlTable(
   "football_fixture_events",
   {
-    id: varchar("id")
+    id: varchar("id", { length: 36 })
       .primaryKey()
-      .default(sql`gen_random_uuid()`),
-    fixtureId: integer("fixture_id").notNull(),
-    teamId: integer("team_id").notNull(),
-    playerId: integer("player_id"),
+      .default(sql`(UUID())`),
+    fixtureId: int("fixture_id").notNull(),
+    teamId: int("team_id").notNull(),
+    playerId: int("player_id"),
     playerName: text("player_name").default(""),
-    assistId: integer("assist_id"),
+    assistId: int("assist_id"),
     assistName: text("assist_name").default(""),
     type: text("type").notNull(), // "Goal" | "Card" | "subst" | "Var"
     detail: text("detail").default(""), // "Normal Goal" | "Yellow Card" etc.
     comments: text("comments").default(""),
-    elapsed: integer("elapsed").notNull(),
-    extraTime: integer("extra_time"),
+    elapsed: int("elapsed").notNull(),
+    extraTime: int("extra_time"),
     updatedAt: bigint("updated_at", { mode: "number" })
       .notNull()
-      .default(sql`extract(epoch from now()) * 1000`),
+      .default(sql`(FLOOR(UNIX_TIMESTAMP() * 1000))`),
   },
   (t) => [
     uniqueIndex("event_fixture_player_elapsed").on(t.fixtureId, t.playerId, t.elapsed, t.type),
   ],
 );
 
-export const footballFixtureLineups = pgTable(
+export const footballFixtureLineups = mysqlTable(
   "football_fixture_lineups",
   {
-    id: varchar("id")
+    id: varchar("id", { length: 36 })
       .primaryKey()
-      .default(sql`gen_random_uuid()`),
-    fixtureId: integer("fixture_id").notNull(),
-    teamId: integer("team_id").notNull(),
+      .default(sql`(UUID())`),
+    fixtureId: int("fixture_id").notNull(),
+    teamId: int("team_id").notNull(),
     formation: text("formation").default(""),
-    playerId: integer("player_id").notNull(),
+    playerId: int("player_id").notNull(),
     playerName: text("player_name").notNull().default(""),
-    playerNumber: integer("player_number"),
+    playerNumber: int("player_number"),
     playerPos: text("player_pos").default(""), // "G" | "D" | "M" | "F"
     grid: text("grid").default(""), // e.g. "1:1"
     isStarting: boolean("is_starting").notNull().default(true),
     updatedAt: bigint("updated_at", { mode: "number" })
       .notNull()
-      .default(sql`extract(epoch from now()) * 1000`),
+      .default(sql`(FLOOR(UNIX_TIMESTAMP() * 1000))`),
   },
   (t) => [uniqueIndex("lineup_fixture_player").on(t.fixtureId, t.teamId, t.playerId)],
 );
 
-export const footballFixtureStats = pgTable(
+export const footballFixtureStats = mysqlTable(
   "football_fixture_stats",
   {
-    id: varchar("id")
+    id: varchar("id", { length: 36 })
       .primaryKey()
-      .default(sql`gen_random_uuid()`),
-    fixtureId: integer("fixture_id").notNull(),
-    teamId: integer("team_id").notNull(),
-    shotsOnGoal: integer("shots_on_goal"),
-    shotsTotal: integer("shots_total"),
-    blockedShots: integer("blocked_shots"),
-    shotsInsideBox: integer("shots_inside_box"),
-    shotsOutsideBox: integer("shots_outside_box"),
-    fouls: integer("fouls"),
-    cornerKicks: integer("corner_kicks"),
-    offsides: integer("offsides"),
-    ballPossession: integer("ball_possession"),
-    yellowCards: integer("yellow_cards"),
-    redCards: integer("red_cards"),
-    goalkeeperSaves: integer("goalkeeper_saves"),
-    totalPasses: integer("total_passes"),
-    accuratePasses: integer("accurate_passes"),
+      .default(sql`(UUID())`),
+    fixtureId: int("fixture_id").notNull(),
+    teamId: int("team_id").notNull(),
+    shotsOnGoal: int("shots_on_goal"),
+    shotsTotal: int("shots_total"),
+    blockedShots: int("blocked_shots"),
+    shotsInsideBox: int("shots_inside_box"),
+    shotsOutsideBox: int("shots_outside_box"),
+    fouls: int("fouls"),
+    cornerKicks: int("corner_kicks"),
+    offsides: int("offsides"),
+    ballPossession: int("ball_possession"),
+    yellowCards: int("yellow_cards"),
+    redCards: int("red_cards"),
+    goalkeeperSaves: int("goalkeeper_saves"),
+    totalPasses: int("total_passes"),
+    accuratePasses: int("accurate_passes"),
     updatedAt: bigint("updated_at", { mode: "number" })
       .notNull()
-      .default(sql`extract(epoch from now()) * 1000`),
+      .default(sql`(FLOOR(UNIX_TIMESTAMP() * 1000))`),
   },
   (t) => [uniqueIndex("stats_fixture_team").on(t.fixtureId, t.teamId)],
 );
 
-export const footballH2H = pgTable(
+export const footballH2H = mysqlTable(
   "football_h2h",
   {
-    id: varchar("id")
+    id: varchar("id", { length: 36 })
       .primaryKey()
-      .default(sql`gen_random_uuid()`),
-    team1Id: integer("team1_id").notNull(),
-    team2Id: integer("team2_id").notNull(),
-    fixtureId: integer("fixture_id").notNull(),
-    leagueId: varchar("league_id").notNull().default(""),
+      .default(sql`(UUID())`),
+    team1Id: int("team1_id").notNull(),
+    team2Id: int("team2_id").notNull(),
+    fixtureId: int("fixture_id").notNull(),
+    leagueId: varchar("league_id", { length: 255 }).notNull().default(""),
     leagueName: text("league_name").notNull().default(""),
-    homeTeamId: integer("home_team_id").notNull(),
-    awayTeamId: integer("away_team_id").notNull(),
-    homeScore: integer("home_score"),
-    awayScore: integer("away_score"),
+    homeTeamId: int("home_team_id").notNull(),
+    awayTeamId: int("away_team_id").notNull(),
+    homeScore: int("home_score"),
+    awayScore: int("away_score"),
     status: text("status").notNull().default("finished"),
     kickoff: text("kickoff").notNull(),
     venue: text("venue").default(""),
-    season: integer("season").notNull(),
+    season: int("season").notNull(),
     updatedAt: bigint("updated_at", { mode: "number" })
       .notNull()
-      .default(sql`extract(epoch from now()) * 1000`),
+      .default(sql`(FLOOR(UNIX_TIMESTAMP() * 1000))`),
   },
   (t) => [uniqueIndex("h2h_fixture").on(t.fixtureId)],
 );
 
-export const footballTeamStats = pgTable(
+export const footballTeamStats = mysqlTable(
   "football_team_stats",
   {
-    id: varchar("id")
+    id: varchar("id", { length: 36 })
       .primaryKey()
-      .default(sql`gen_random_uuid()`),
-    teamId: integer("team_id").notNull(),
-    leagueId: varchar("league_id").notNull(),
-    season: integer("season").notNull(),
-    matchesPlayed: integer("matches_played").default(0),
-    wins: integer("wins").default(0),
-    draws: integer("draws").default(0),
-    losses: integer("losses").default(0),
-    goalsFor: integer("goals_for").default(0),
-    goalsAgainst: integer("goals_against").default(0),
+      .default(sql`(UUID())`),
+    teamId: int("team_id").notNull(),
+    leagueId: varchar("league_id", { length: 255 }).notNull(),
+    season: int("season").notNull(),
+    matchesPlayed: int("matches_played").default(0),
+    wins: int("wins").default(0),
+    draws: int("draws").default(0),
+    losses: int("losses").default(0),
+    goalsFor: int("goals_for").default(0),
+    goalsAgainst: int("goals_against").default(0),
     avgGoalsFor: text("avg_goals_for").default("0"),
     avgGoalsAgainst: text("avg_goals_against").default("0"),
-    cleanSheets: integer("clean_sheets").default(0),
-    failedToScore: integer("failed_to_score").default(0),
-    longestWinStreak: integer("longest_win_streak").default(0),
-    longestLoseStreak: integer("longest_lose_streak").default(0),
+    cleanSheets: int("clean_sheets").default(0),
+    failedToScore: int("failed_to_score").default(0),
+    longestWinStreak: int("longest_win_streak").default(0),
+    longestLoseStreak: int("longest_lose_streak").default(0),
     form: text("form").default(""),
     updatedAt: bigint("updated_at", { mode: "number" })
       .notNull()
-      .default(sql`extract(epoch from now()) * 1000`),
+      .default(sql`(FLOOR(UNIX_TIMESTAMP() * 1000))`),
   },
   (t) => [uniqueIndex("team_stats_league_season").on(t.teamId, t.leagueId, t.season)],
 );
 
-export const groupActivity = pgTable(
+export const groupActivity = mysqlTable(
   "group_activity",
   {
-    id: varchar("id")
+    id: varchar("id", { length: 36 })
       .primaryKey()
-      .default(sql`gen_random_uuid()`),
-    groupId: varchar("group_id")
+      .default(sql`(UUID())`),
+    groupId: varchar("group_id", { length: 36 })
       .notNull()
       .references(() => groups.id, { onDelete: "cascade" }),
-    userId: varchar("user_id")
+    userId: varchar("user_id", { length: 36 })
       .notNull()
       .references(() => users.id, { onDelete: "cascade" }),
     type: text("type").notNull(), // 'prediction' | 'exact_score' | 'points_earned' | 'streak' | 'boost_pick' | 'achievement' | 'rank_change' | 'weekly_winner' | 'joined'
     matchId: text("match_id"),
-    points: integer("points").default(0),
-    metadata: jsonb("metadata").$type<Record<string, any>>().default({}),
+    points: int("points").default(0),
+    metadata: json("metadata").$type<Record<string, any>>().default({}),
     createdAt: bigint("created_at", { mode: "number" })
       .notNull()
-      .default(sql`extract(epoch from now()) * 1000`),
+      .default(sql`(FLOOR(UNIX_TIMESTAMP() * 1000))`),
   },
   (table) => [index("group_activity_group_created_idx").on(table.groupId, table.createdAt)],
 );
 
-export const refreshTokens = pgTable(
+export const refreshTokens = mysqlTable(
   "refresh_tokens",
   {
-    id: varchar("id")
+    id: varchar("id", { length: 36 })
       .primaryKey()
-      .default(sql`gen_random_uuid()`),
+      .default(sql`(UUID())`),
     tokenHash: text("token_hash").notNull(),
-    userId: varchar("user_id")
+    userId: varchar("user_id", { length: 36 })
       .notNull()
       .references(() => users.id, { onDelete: "cascade" }),
     familyId: text("family_id").notNull(),
@@ -589,7 +589,7 @@ export const refreshTokens = pgTable(
     expiresAt: bigint("expires_at", { mode: "number" }).notNull(),
     createdAt: bigint("created_at", { mode: "number" })
       .notNull()
-      .default(sql`extract(epoch from now()) * 1000`),
+      .default(sql`(FLOOR(UNIX_TIMESTAMP() * 1000))`),
   },
   (t) => [
     uniqueIndex("refresh_tokens_hash_idx").on(t.tokenHash),
@@ -598,18 +598,18 @@ export const refreshTokens = pgTable(
   ],
 );
 
-export const eventLog = pgTable(
+export const eventLog = mysqlTable(
   "event_log",
   {
-    id: varchar("id")
+    id: varchar("id", { length: 36 })
       .primaryKey()
-      .default(sql`gen_random_uuid()`),
-    userId: varchar("user_id").references(() => users.id, { onDelete: "set null" }),
+      .default(sql`(UUID())`),
+    userId: varchar("user_id", { length: 36 }).references(() => users.id, { onDelete: "set null" }),
     eventType: text("event_type").notNull(),
-    eventData: jsonb("event_data").$type<Record<string, any>>().default({}),
+    eventData: json("event_data").$type<Record<string, any>>().default({}),
     timestamp: bigint("timestamp", { mode: "number" })
       .notNull()
-      .default(sql`extract(epoch from now()) * 1000`),
+      .default(sql`(FLOOR(UNIX_TIMESTAMP() * 1000))`),
   },
   (table) => [
     index("event_log_user_idx").on(table.userId),
@@ -650,20 +650,20 @@ export type FootballTopAssist = typeof footballTopAssists.$inferSelect;
 export type FootballTopYellowCard = typeof footballTopYellowCards.$inferSelect;
 export type FootballTopRedCard = typeof footballTopRedCards.$inferSelect;
 export type FootballInjury = typeof footballInjuries.$inferSelect;
-export const pushTokens = pgTable(
+export const pushTokens = mysqlTable(
   "push_tokens",
   {
-    id: varchar("id")
+    id: varchar("id", { length: 36 })
       .primaryKey()
-      .default(sql`gen_random_uuid()`),
-    userId: varchar("user_id")
+      .default(sql`(UUID())`),
+    userId: varchar("user_id", { length: 36 })
       .notNull()
       .references(() => users.id, { onDelete: "cascade" }),
     token: text("token").notNull(),
     platform: text("platform"), // "ios" | "android" | "web"
     createdAt: bigint("created_at", { mode: "number" })
       .notNull()
-      .default(sql`extract(epoch from now()) * 1000`),
+      .default(sql`(FLOOR(UNIX_TIMESTAMP() * 1000))`),
   },
   (t) => [uniqueIndex("push_tokens_user_token_unique").on(t.userId, t.token)],
 );
