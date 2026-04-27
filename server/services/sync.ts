@@ -958,9 +958,9 @@ export async function settlePredictions(): Promise<number> {
       try {
         if (!hasSentNotification("settlement", row.user_id, row.match_id)) {
           const teamQuery = await client.query(
-            `SELECT ht.name as home_name, at.name as away_name FROM football_teams ht
-           JOIN football_teams at ON true
-           WHERE ht.api_football_id=$1 AND at.api_football_id=$2`,
+            `SELECT ht.name as home_name, at.name as away_name
+             FROM football_teams ht, football_teams at
+             WHERE ht.api_football_id=$1 AND at.api_football_id=$2`,
             [row.home_team_id, row.away_team_id],
           );
           const teamName = teamQuery.rows[0] || { home_name: "Home", away_name: "Away" };
