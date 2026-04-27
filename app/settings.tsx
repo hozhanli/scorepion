@@ -58,27 +58,27 @@ export default function SettingsScreen() {
 
   // Toggles persist preferences to AsyncStorage.
   // When a push notification backend is added, wire expo-notifications here.
-  const toggleNotifications = useCallback(
-    async (value: boolean) => {
-      setNotifications(value);
-      await AsyncStorage.setItem(
+  const toggleNotifications = useCallback((value: boolean) => {
+    setNotifications(value);
+    setLiveAlerts((prevLiveAlerts) => {
+      AsyncStorage.setItem(
         "settings:notifications",
-        JSON.stringify({ notifications: value, liveAlerts }),
+        JSON.stringify({ notifications: value, liveAlerts: prevLiveAlerts }),
       );
-    },
-    [liveAlerts],
-  );
+      return prevLiveAlerts;
+    });
+  }, []);
 
-  const toggleLiveAlerts = useCallback(
-    async (value: boolean) => {
-      setLiveAlerts(value);
-      await AsyncStorage.setItem(
+  const toggleLiveAlerts = useCallback((value: boolean) => {
+    setLiveAlerts(value);
+    setNotifications((prevNotifications) => {
+      AsyncStorage.setItem(
         "settings:notifications",
-        JSON.stringify({ notifications, liveAlerts: value }),
+        JSON.stringify({ notifications: prevNotifications, liveAlerts: value }),
       );
-    },
-    [notifications],
-  );
+      return prevNotifications;
+    });
+  }, []);
   const [showLangPicker, setShowLangPicker] = useState(false);
   const currentLangLabel = LANGUAGE_OPTIONS.find((l) => l.code === language)?.label || "English";
 

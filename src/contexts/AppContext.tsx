@@ -100,7 +100,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const pendingMatchIds = useRef(new Set<string>());
   const dailyPackRef = useRef(dailyPack);
   const profileRef = useRef(profile);
-  const submitPredictionRef = useRef<AppContextValue["submitPrediction"]>(null as any);
+  const groupsRef = useRef(groups);
+  const submitPredictionRef = useRef<AppContextValue["submitPrediction"] | null>(null);
   // Dedup sets for commiseration toasts
   const announcedMisses = useRef(new Set<string>());
   const lastStreakResetAnnounced = useRef<number | null>(null);
@@ -158,6 +159,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     profileRef.current = profile;
   }, [profile]);
+
+  // Update groupsRef whenever groups changes
+  useEffect(() => {
+    groupsRef.current = groups;
+  }, [groups]);
 
   // Observe prediction settlements for miss toast
   useEffect(() => {
@@ -238,7 +244,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
     let cancelled = false;
     (async () => {
       setIsLoading(true);
-      await pruneStaleDrafts();
+      try {
+        await pruneStaleDrafts();
+      } catch (e) {
+        if (__DEV__) console.warn("pruneStaleDrafts failed:", e);
+      }
       const [localPreds, prof, grps, obDone, favLeagues, premium] = await Promise.all([
         getPredictions(),
         getUserProfile(),
@@ -278,7 +288,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
           }
         }
       } catch (error) {
-        console.warn("Failed to load predictions:", error);
+        if (__DEV__) console.warn("Failed to load predictions:", error);
       }
 
       try {
@@ -300,7 +310,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
           }
         }
       } catch (error) {
-        console.warn("AppContext:loadData auth/me", { error });
+        if (__DEV__) console.warn("AppContext:loadData auth/me", { error });
       }
 
       if (!cancelled) {
@@ -316,6 +326,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
     // Only fetch server data when the user is authenticated and auth is resolved
     if (authLoading || !isAuthenticated) {
       setIsLoading(false);
+      // Clear stale refs so previous user data doesn't leak on re-login
+      profileRef.current = null;
+      dailyPackRef.current = null;
       return;
     }
     const cleanup = loadData();
@@ -352,10 +365,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
     async (matchId: string, homeScore: number, awayScore: number, boosted?: boolean) => {
       // Guard against rapid submit on same matchId
       if (pendingMatchIds.current.has(matchId)) {
-        console.warn("AppContext:submitPrediction guard", {
-          matchId,
-          message: "submit already in-flight",
-        });
+        if (__DEV__)
+          console.warn("AppContext:submitPrediction guard", {
+            matchId,
+            message: "submit already in-flight",
+          });
         return;
       }
       pendingMatchIds.current.add(matchId);
@@ -383,7 +397,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
           }
         } catch (err) {
           const errMsg = err instanceof Error ? err.message : String(err);
-          console.error("AppContext:submitPrediction server sync", { matchId, errMsg });
+          if (__DEV__)
+            console.error("AppContext:submitPrediction server sync", { matchId, errMsg });
           setLastError({
             message: `Failed to sync prediction to server: ${errMsg}`,
             timestamp: Date.now(),
@@ -391,7 +406,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
           showErrorToast({
             title: "Prediction didn't save",
             message: "We'll retry automatically. Check back soon.",
-            retry: () => submitPredictionRef.current(matchId, homeScore, awayScore, boosted),
+            retry: () => submitPredictionRef.current?.(matchId, homeScore, awayScore, boosted),
           });
         }
 
@@ -429,10 +444,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
           // 404 = no daily pack for today — expected when packs haven't been generated yet
           const is404 = dpErrMsg.startsWith("404");
           if (!is404) {
-            console.error("AppContext:submitPrediction daily-pack complete", {
-              matchId,
-              errMsg: dpErrMsg,
-            });
+            if (__DEV__)
+              console.error("AppContext:submitPrediction daily-pack complete", {
+                matchId,
+                errMsg: dpErrMsg,
+              });
             setLastError({
               message: `Failed to complete daily pack event: ${dpErrMsg}`,
               timestamp: Date.now(),
@@ -445,7 +461,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
             await apiRequest("POST", "/api/retention/boost", { matchId });
           } catch (err) {
             const boostErrMsg = err instanceof Error ? err.message : String(err);
-            console.error("AppContext:submitPrediction boost", { matchId, errMsg: boostErrMsg });
+            if (__DEV__)
+              console.error("AppContext:submitPrediction boost", { matchId, errMsg: boostErrMsg });
             setLastError({
               message: `Failed to record boost event: ${boostErrMsg}`,
               timestamp: Date.now(),
@@ -492,7 +509,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       try {
         await apiRequest("POST", "/api/retention/boost", { matchId });
       } catch (err) {
-        console.error("AppContext:toggleBoostPick", { matchId, err });
+        if (__DEV__) console.error("AppContext:toggleBoostPick", { matchId, err });
         await saveDailyPack(previous);
         setDailyPack(previous);
         setLastError({
@@ -513,66 +530,51 @@ export function AppProvider({ children }: { children: ReactNode }) {
     [dailyPackRef],
   );
 
-  const updateProfile = useCallback(
-    async (updates: Partial<UserProfile>) => {
-      if (!profile) return;
-      const updated = { ...profile, ...updates };
+  const updateProfile = useCallback(async (updates: Partial<UserProfile>) => {
+    if (!profileRef.current) return;
+    const updated = { ...profileRef.current, ...updates };
+    await saveUserProfile(updated);
+    setProfile(updated);
+  }, []);
+
+  const joinGroup = useCallback(async (group: Group) => {
+    if (groupsRef.current.some((g) => g.id === group.id)) return; // Already joined
+    const updated = [...groupsRef.current, { ...group, joined: true }];
+    await saveGroups(updated);
+    setGroups(updated);
+  }, []);
+
+  const leaveGroup = useCallback(async (groupId: string) => {
+    const updated = groupsRef.current.filter((g) => g.id !== groupId);
+    await saveGroups(updated);
+    setGroups(updated);
+  }, []);
+
+  const createGroup = useCallback(async (name: string, isPublic: boolean, leagueIds: string[]) => {
+    const newGroup: Group = {
+      id: Date.now().toString() + Math.random().toString(36).substr(2, 9),
+      name,
+      code: Math.random().toString(36).substr(2, 6).toUpperCase(),
+      isPublic,
+      memberCount: 1,
+      createdAt: Date.now(),
+      joined: true,
+      leagueIds,
+    };
+    const updated = [...groupsRef.current, newGroup];
+    await saveGroups(updated);
+    setGroups(updated);
+  }, []);
+
+  const setFavLeagues = useCallback(async (ids: string[]) => {
+    await saveFavoriteLeagues(ids);
+    setFavoriteLeaguesState(ids);
+    if (profileRef.current) {
+      const updated = { ...profileRef.current, favoriteLeagues: ids };
       await saveUserProfile(updated);
       setProfile(updated);
-    },
-    [profile],
-  );
-
-  const joinGroup = useCallback(
-    async (group: Group) => {
-      if (groups.some((g) => g.id === group.id)) return; // Already joined
-      const updated = [...groups, { ...group, joined: true }];
-      await saveGroups(updated);
-      setGroups(updated);
-    },
-    [groups],
-  );
-
-  const leaveGroup = useCallback(
-    async (groupId: string) => {
-      const updated = groups.filter((g) => g.id !== groupId);
-      await saveGroups(updated);
-      setGroups(updated);
-    },
-    [groups],
-  );
-
-  const createGroup = useCallback(
-    async (name: string, isPublic: boolean, leagueIds: string[]) => {
-      const newGroup: Group = {
-        id: Date.now().toString() + Math.random().toString(36).substr(2, 9),
-        name,
-        code: Math.random().toString(36).substr(2, 6).toUpperCase(),
-        isPublic,
-        memberCount: 1,
-        createdAt: Date.now(),
-        joined: true,
-        leagueIds,
-      };
-      const updated = [...groups, newGroup];
-      await saveGroups(updated);
-      setGroups(updated);
-    },
-    [groups],
-  );
-
-  const setFavLeagues = useCallback(
-    async (ids: string[]) => {
-      await saveFavoriteLeagues(ids);
-      setFavoriteLeaguesState(ids);
-      if (profile) {
-        const updated = { ...profile, favoriteLeagues: ids };
-        await saveUserProfile(updated);
-        setProfile(updated);
-      }
-    },
-    [profile],
-  );
+    }
+  }, []);
 
   const upgradeToPremium = useCallback(async () => {
     await storePremium(true);
