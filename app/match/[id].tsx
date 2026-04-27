@@ -226,6 +226,7 @@ export default function MatchScreen() {
 
   // Race condition guard for submit button (same pattern as AppContext)
   const submitInFlight = useRef(false);
+  const submitTimerRef = useRef<NodeJS.Timeout | null>(null);
   const receiptCardRef = useRef<View>(null);
   const [showShareButton, setShowShareButton] = useState(false);
 
@@ -423,6 +424,14 @@ export default function MatchScreen() {
     };
   }, []);
 
+  // Cleanup submit auto-dismiss timer on unmount to prevent navigation to
+  // a stale screen if the component is torn down before the 650ms fires.
+  useEffect(() => {
+    return () => {
+      if (submitTimerRef.current) clearTimeout(submitTimerRef.current);
+    };
+  }, []);
+
   if (!match) {
     return (
       <View style={[styles.container, styles.center]}>
@@ -492,7 +501,7 @@ export default function MatchScreen() {
       // Auto-dismiss the Match Detail screen so the user lands back on the
       // match list and can see the celebration toast overlap the row they
       // just predicted. 650ms feels snappy without eating the toast.
-      setTimeout(() => {
+      submitTimerRef.current = setTimeout(() => {
         if (router.canGoBack()) {
           router.back();
         }
