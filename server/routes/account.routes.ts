@@ -14,6 +14,7 @@ import {
   eventLog,
 } from "@shared/schema";
 import { eq } from "drizzle-orm";
+import { revokeAllUserTokens } from "../services/token.service";
 
 export const accountRouter = Router();
 
@@ -29,6 +30,9 @@ accountRouter.delete(
     const userId = req.userId!;
 
     try {
+      // Revoke all refresh tokens first to prevent leaked tokens from generating new access tokens
+      await revokeAllUserTokens(userId);
+
       await db.delete(predictions).where(eq(predictions.userId, userId));
       await db.delete(groupMembers).where(eq(groupMembers.userId, userId));
       await db.delete(pushTokens).where(eq(pushTokens.userId, userId));
