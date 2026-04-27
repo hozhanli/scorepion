@@ -470,42 +470,48 @@ export function AppProvider({ children }: { children: ReactNode }) {
     submitPredictionRef.current = submitPrediction;
   }, [submitPrediction]);
 
-  const toggleBoostPick = useCallback(async (matchId: string) => {
-    const current = dailyPackRef.current;
-    if (!current) return;
-    const previous = current;
-    const updatedPicks = current.picks.map((p: DailyPick) => ({
-      ...p,
-      boosted: p.matchId === matchId ? !p.boosted : false,
-    }));
-    const updatedPack: DailyPackState = {
-      ...current,
-      picks: updatedPicks,
-      boostUsed: updatedPicks.some((p: DailyPick) => p.boosted),
-    };
-    // Optimistic local update — the UI updates immediately.
-    await saveDailyPack(updatedPack);
-    setDailyPack(updatedPack);
+  const toggleBoostPick = useCallback(
+    async (matchId: string) => {
+      const current = dailyPackRef.current;
+      if (!current) return;
+      const previous = current;
+      const updatedPicks = current.picks.map((p: DailyPick) => ({
+        ...p,
+        boosted: p.matchId === matchId ? !p.boosted : false,
+      }));
+      const updatedPack: DailyPackState = {
+        ...current,
+        picks: updatedPicks,
+        boostUsed: updatedPicks.some((p: DailyPick) => p.boosted),
+      };
+      // Optimistic local update — the UI updates immediately.
+      await saveDailyPack(updatedPack);
+      setDailyPack(updatedPack);
 
-    // Sync to server; on failure, roll back and show error toast.
-    try {
-      await apiRequest("POST", "/api/retention/boost", { matchId });
-    } catch (err) {
-      console.error("AppContext:toggleBoostPick", { matchId, err });
-      await saveDailyPack(previous);
-      setDailyPack(previous);
-      setLastError({
-        message: "Failed to toggle boost; reverted",
-        timestamp: Date.now(),
-      });
-      showErrorToast({
-        title: "Boost didn't apply",
-        message: "Your prediction is still safe. Try again?",
-        retry: () => apiRequest("POST", "/api/retention/boost", { matchId }).catch(() => {}),
-      });
-      throw err;
-    }
-  }, []);
+      // Sync to server; on failure, roll back and show error toast.
+      try {
+        await apiRequest("POST", "/api/retention/boost", { matchId });
+      } catch (err) {
+        console.error("AppContext:toggleBoostPick", { matchId, err });
+        await saveDailyPack(previous);
+        setDailyPack(previous);
+        setLastError({
+          message: "Failed to toggle boost; reverted",
+          timestamp: Date.now(),
+        });
+        showErrorToast({
+          title: "Boost didn't apply",
+          message: "Your prediction is still safe. Try again?",
+          retry: () => apiRequest("POST", "/api/retention/boost", { matchId }).catch(() => {}),
+        });
+        throw err;
+      }
+    },
+    // dailyPackRef is a ref (stable identity) kept in sync via useEffect above.
+    // State setters (setDailyPack, setLastError) and module imports (apiRequest,
+    // saveDailyPack, showErrorToast) are stable — listed for exhaustive-deps clarity.
+    [dailyPackRef],
+  );
 
   const updateProfile = useCallback(
     async (updates: Partial<UserProfile>) => {
