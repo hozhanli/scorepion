@@ -136,13 +136,11 @@ const LEAGUE_GROUP_NAMES: Record<string, { name: string; code: string }> = {
 export async function seedLeagueGroups(): Promise<void> {
   let [systemUser] = await db.select().from(users).where(eq(users.username, "scorepion_system"));
   if (!systemUser) {
-    await db
-      .insert(users)
-      .values({
-        username: "scorepion_system",
-        password: "SYSTEM_NO_LOGIN",
-        avatar: "",
-      });
+    await db.insert(users).values({
+      username: "scorepion_system",
+      password: "SYSTEM_NO_LOGIN",
+      avatar: "",
+    });
     [systemUser] = await db.select().from(users).where(eq(users.username, "scorepion_system"));
   }
 
@@ -234,8 +232,14 @@ export async function syncFixturesForLeague(localId: string): Promise<number> {
 
   let count = 0;
   for (const f of data.response) {
-    await db.insert(footballTeams).values(upsertTeamValues(f.teams.home)).onDuplicateKeyUpdate({ set: { id: sql`id` } });
-    await db.insert(footballTeams).values(upsertTeamValues(f.teams.away)).onDuplicateKeyUpdate({ set: { id: sql`id` } });
+    await db
+      .insert(footballTeams)
+      .values(upsertTeamValues(f.teams.home))
+      .onDuplicateKeyUpdate({ set: { id: sql`id` } });
+    await db
+      .insert(footballTeams)
+      .values(upsertTeamValues(f.teams.away))
+      .onDuplicateKeyUpdate({ set: { id: sql`id` } });
 
     const values = {
       apiFixtureId: f.fixture.id,
@@ -450,7 +454,10 @@ export async function syncStandingsForLeague(localId: string): Promise<number> {
   let count = 0;
   for (const group of leagueData.standings) {
     for (const row of group) {
-      await db.insert(footballTeams).values(upsertTeamValues(row.team)).onDuplicateKeyUpdate({ set: { id: sql`id` } });
+      await db
+        .insert(footballTeams)
+        .values(upsertTeamValues(row.team))
+        .onDuplicateKeyUpdate({ set: { id: sql`id` } });
 
       await db.insert(footballStandings).values({
         leagueId: localId,
@@ -497,7 +504,10 @@ export async function syncTopScorersForLeague(localId: string): Promise<number> 
   for (const e of data.response.slice(0, 20)) {
     const pl = e.player;
     const st = e.statistics[0];
-    await db.insert(footballTeams).values(upsertTeamValues(st.team)).onDuplicateKeyUpdate({ set: { id: sql`id` } });
+    await db
+      .insert(footballTeams)
+      .values(upsertTeamValues(st.team))
+      .onDuplicateKeyUpdate({ set: { id: sql`id` } });
     await db.insert(footballTopScorers).values({
       leagueId: localId,
       playerId: pl.id,
@@ -533,7 +543,10 @@ export async function syncTopAssistsForLeague(localId: string): Promise<number> 
   for (const e of data.response.slice(0, 20)) {
     const pl = e.player;
     const st = e.statistics[0];
-    await db.insert(footballTeams).values(upsertTeamValues(st.team)).onDuplicateKeyUpdate({ set: { id: sql`id` } });
+    await db
+      .insert(footballTeams)
+      .values(upsertTeamValues(st.team))
+      .onDuplicateKeyUpdate({ set: { id: sql`id` } });
     await db.insert(footballTopAssists).values({
       leagueId: localId,
       playerId: pl.id,
@@ -570,7 +583,10 @@ export async function syncTopYellowCardsForLeague(localId: string): Promise<numb
   for (const e of data.response.slice(0, 20)) {
     const pl = e.player;
     const st = e.statistics[0];
-    await db.insert(footballTeams).values(upsertTeamValues(st.team)).onDuplicateKeyUpdate({ set: { id: sql`id` } });
+    await db
+      .insert(footballTeams)
+      .values(upsertTeamValues(st.team))
+      .onDuplicateKeyUpdate({ set: { id: sql`id` } });
     await db.insert(footballTopYellowCards).values({
       leagueId: localId,
       playerId: pl.id,
@@ -603,7 +619,10 @@ export async function syncTopRedCardsForLeague(localId: string): Promise<number>
   for (const e of data.response.slice(0, 20)) {
     const pl = e.player;
     const st = e.statistics[0];
-    await db.insert(footballTeams).values(upsertTeamValues(st.team)).onDuplicateKeyUpdate({ set: { id: sql`id` } });
+    await db
+      .insert(footballTeams)
+      .values(upsertTeamValues(st.team))
+      .onDuplicateKeyUpdate({ set: { id: sql`id` } });
     await db.insert(footballTopRedCards).values({
       leagueId: localId,
       playerId: pl.id,
@@ -636,7 +655,10 @@ export async function syncInjuriesForLeague(localId: string): Promise<number> {
   for (const e of data.response) {
     const pl = e.player;
     const team = e.team;
-    await db.insert(footballTeams).values(upsertTeamValues(team)).onDuplicateKeyUpdate({ set: { id: sql`id` } });
+    await db
+      .insert(footballTeams)
+      .values(upsertTeamValues(team))
+      .onDuplicateKeyUpdate({ set: { id: sql`id` } });
     await db.insert(footballInjuries).values({
       leagueId: localId,
       playerId: pl.id,
@@ -796,7 +818,7 @@ export async function enrichFinishedFixtures(): Promise<number> {
   const fourHoursAgo = new Date(Date.now() - 4 * 3600 * 1000).toISOString();
   const oneDayAgo = new Date(Date.now() - 24 * 3600 * 1000).toISOString();
 
-  const [pending] = await pool.query(
+  const [pending] = (await pool.query(
     `
     SELECT DISTINCT f.api_fixture_id, f.home_team_id, f.away_team_id
     FROM football_fixtures f
@@ -809,7 +831,7 @@ export async function enrichFinishedFixtures(): Promise<number> {
     LIMIT 10
   `,
     [oneDayAgo, fourHoursAgo],
-  ) as any;
+  )) as any;
 
   let enriched = 0;
   for (const row of pending) {
@@ -844,19 +866,19 @@ export async function settlePredictions(): Promise<number> {
     // Fetch ALL unsettled predictions joined with their finished fixture data
     // in a single query at the start of the transaction, so we work with a
     // consistent snapshot and avoid per-row queries inside the loop.
-    const [unsettledRows] = await client.query(`
+    const [unsettledRows] = (await client.query(`
       SELECT
         p.id, p.match_id, p.home_score AS pred_home, p.away_score AS pred_away, p.user_id,
         f.home_score AS act_home, f.away_score AS act_away,
         f.home_team_id, f.away_team_id
       FROM predictions p
       JOIN football_fixtures f
-        ON CAST(f.api_fixture_id AS CHAR) = p.match_id
+        ON CAST(f.api_fixture_id AS CHAR) COLLATE utf8mb4_unicode_ci = p.match_id
         AND f.status = 'finished'
         AND f.home_score IS NOT NULL
         AND f.away_score IS NOT NULL
       WHERE p.settled = false
-    `) as any;
+    `)) as any;
 
     if (unsettledRows.length === 0) {
       await client.query("COMMIT");
@@ -892,10 +914,10 @@ export async function settlePredictions(): Promise<number> {
       let upsetBonus = 0;
       if (basePts >= 5 && !isExact) {
         try {
-          const [stgRows] = await client.query(
+          const [stgRows] = (await client.query(
             `SELECT team_id, position FROM football_standings WHERE team_id IN (?,?) ORDER BY position ASC LIMIT 2`,
             [row.home_team_id, row.away_team_id],
-          ) as any;
+          )) as any;
           if (stgRows.length === 2) {
             const fav = stgRows[0].team_id;
             const aRes = actHome > actAway ? "home" : actHome < actAway ? "away" : "draw";
@@ -913,10 +935,10 @@ export async function settlePredictions(): Promise<number> {
 
       // Boost
       let pts = basePts;
-      const [boostRows] = await client.query(
+      const [boostRows] = (await client.query(
         `SELECT id, multiplier FROM boost_picks WHERE user_id=? AND match_id=? AND settled=false`,
         [row.user_id, row.match_id],
-      ) as any;
+      )) as any;
       const isBoosted = boostRows.length > 0;
       if (isBoosted && basePts > 0) {
         pts = basePts * (boostRows[0].multiplier || 2);
@@ -931,10 +953,7 @@ export async function settlePredictions(): Promise<number> {
         );
       }
 
-      await client.query(`UPDATE predictions SET points=?,settled=true WHERE id=?`, [
-        pts,
-        row.id,
-      ]);
+      await client.query(`UPDATE predictions SET points=?,settled=true WHERE id=?`, [pts, row.id]);
       if (pts > 0) {
         await client.query(
           `UPDATE users SET total_points=total_points+?,weekly_points=weekly_points+?,monthly_points=monthly_points+? WHERE id=?`,
@@ -953,12 +972,12 @@ export async function settlePredictions(): Promise<number> {
       // Send settlement push notification (with dedup)
       try {
         if (!hasSentNotification("settlement", row.user_id, row.match_id)) {
-          const [teamQueryRows] = await client.query(
+          const [teamQueryRows] = (await client.query(
             `SELECT ht.name as home_name, at2.name as away_name
              FROM football_teams ht, football_teams at2
              WHERE ht.api_football_id=? AND at2.api_football_id=?`,
             [row.home_team_id, row.away_team_id],
-          ) as any;
+          )) as any;
           const teamName = teamQueryRows[0] || { home_name: "Home", away_name: "Away" };
           const matchSummary = `${teamName.home_name} ${actHome}-${actAway} ${teamName.away_name}`;
           await sendSettlementPush(row.user_id, pts, matchSummary, row.match_id);
@@ -986,7 +1005,9 @@ export async function settlePredictions(): Promise<number> {
             pts,
           );
         }
-        const [streakRows] = await client.query(`SELECT streak FROM users WHERE id=?`, [row.user_id]) as any;
+        const [streakRows] = (await client.query(`SELECT streak FROM users WHERE id=?`, [
+          row.user_id,
+        ])) as any;
         const { streak } = streakRows[0] ?? {};
         if ((SCORING.STREAK_MILESTONES as readonly number[]).includes(Number(streak))) {
           await logGroupActivity(client, row.user_id, "streak", { streak }, undefined, 0);
@@ -1051,10 +1072,10 @@ async function cronWeeklyReset(): Promise<void> {
     // Guard: check if we already ran the reset this week by looking for a
     // weekly_winners row with this Monday's date. If it exists, skip.
     const weekStart = now.toISOString().split("T")[0];
-    const [alreadyRanRows] = await client.query(
+    const [alreadyRanRows] = (await client.query(
       `SELECT 1 FROM weekly_winners WHERE week_start=? AND type='global' LIMIT 1`,
       [weekStart],
-    ) as any;
+    )) as any;
     if (alreadyRanRows.length > 0) {
       await client.query("COMMIT");
       console.log(`[Cron] Weekly reset already ran for ${weekStart}, skipping`);
@@ -1062,9 +1083,9 @@ async function cronWeeklyReset(): Promise<void> {
     }
 
     // Snapshot top 3 weekly performers BEFORE resetting points
-    const [topRows] = await client.query(
+    const [topRows] = (await client.query(
       `SELECT id, weekly_points FROM users ORDER BY weekly_points DESC LIMIT 3`,
-    ) as any;
+    )) as any;
 
     const { logGroupActivity } = await import("./group-activity.service");
     for (let i = 0; i < topRows.length; i++) {
@@ -1105,7 +1126,9 @@ async function cronWeeklyReset(): Promise<void> {
 
 async function hasLiveFixtures(): Promise<boolean> {
   const { pool } = await import("../db");
-  const [rows] = await pool.query(`SELECT 1 FROM football_fixtures WHERE status='live' LIMIT 1`) as any;
+  const [rows] = (await pool.query(
+    `SELECT 1 FROM football_fixtures WHERE status='live' LIMIT 1`,
+  )) as any;
   return rows.length > 0;
 }
 
@@ -1189,7 +1212,7 @@ async function sendKickoffReminders(): Promise<void> {
     const maxTime = new Date(now + 35 * 60 * 1000).toISOString();
 
     // Single batch query: fixtures + team names + user IDs with predictions
-    const [resultRows] = await pool.query(
+    const [resultRows] = (await pool.query(
       `SELECT f.api_fixture_id,
               ht.name AS home_name,
               at2.name AS away_name,
@@ -1197,20 +1220,20 @@ async function sendKickoffReminders(): Promise<void> {
        FROM football_fixtures f
        JOIN football_teams ht ON ht.api_football_id = f.home_team_id
        JOIN football_teams at2 ON at2.api_football_id = f.away_team_id
-       JOIN predictions p ON p.match_id = CAST(f.api_fixture_id AS CHAR)
+       JOIN predictions p ON p.match_id = CAST(f.api_fixture_id AS CHAR) COLLATE utf8mb4_unicode_ci
             AND p.settled = false
        WHERE f.kickoff >= ?
          AND f.kickoff <= ?
          AND f.status = 'upcoming'
        GROUP BY f.api_fixture_id, ht.name, at2.name`,
       [minTime, maxTime],
-    ) as any;
+    )) as any;
 
     for (const row of resultRows) {
       const fixtureId = String(row.api_fixture_id);
       const homeName: string = row.home_name || "Home";
       const awayName: string = row.away_name || "Away";
-      const userIds: string[] = row.user_ids ? String(row.user_ids).split(',') : [];
+      const userIds: string[] = row.user_ids ? String(row.user_ids).split(",") : [];
 
       for (const userId of userIds) {
         if (!hasSentNotification("kickoff", userId, fixtureId)) {
@@ -1595,9 +1618,9 @@ export async function syncAllData() {
 export { hasLiveFixtures };
 export async function getSyncStatus() {
   const { pool } = await import("../db");
-  const [recentSyncRows] = await pool.query(
+  const [recentSyncRows] = (await pool.query(
     `SELECT sync_type,league_id,status,synced_at FROM sync_log ORDER BY synced_at DESC LIMIT 20`,
-  ) as any;
+  )) as any;
   return {
     dailyRequests: api.getRequestCount(),
     remaining: api.getRemainingRequests(),

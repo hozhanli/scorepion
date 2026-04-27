@@ -19,9 +19,9 @@ interface UserStats {
   totalPredictions: number;
   streak: number;
   bestStreak: number;
-  exactScores: number;       // count of exact score predictions
+  exactScores: number; // count of exact score predictions
   weeklyPoints: number;
-  consecutiveDays: number;   // days with at least 1 correct prediction
+  consecutiveDays: number; // days with at least 1 correct prediction
 }
 
 const ACHIEVEMENT_DEFS: AchievementDef[] = [
@@ -136,7 +136,7 @@ const ACHIEVEMENT_DEFS: AchievementDef[] = [
     icon: "eye",
     color: "#14B8A6",
     tier: "silver",
-    check: (s) => s.totalPredictions >= 20 && (s.correctPredictions / s.totalPredictions) >= 0.6,
+    check: (s) => s.totalPredictions >= 20 && s.correctPredictions / s.totalPredictions >= 0.6,
   },
   {
     type: "accuracy_75",
@@ -145,31 +145,30 @@ const ACHIEVEMENT_DEFS: AchievementDef[] = [
     icon: "eye",
     color: "#FFD700",
     tier: "gold",
-    check: (s) => s.totalPredictions >= 30 && (s.correctPredictions / s.totalPredictions) >= 0.75,
+    check: (s) => s.totalPredictions >= 30 && s.correctPredictions / s.totalPredictions >= 0.75,
   },
 ];
 
 export async function checkAndAwardAchievements(
   pool: any,
   userId: string,
-  stats: UserStats
+  stats: UserStats,
 ): Promise<{ type: string; title: string }[]> {
   // Fetch exact score count for this user
-  const [exactResult] = await pool.query(
+  const [exactResult] = (await pool.query(
     `SELECT COUNT(*) as cnt FROM predictions p
-     JOIN football_fixtures f ON CAST(f.api_fixture_id AS CHAR) = p.match_id
+     JOIN football_fixtures f ON CAST(f.api_fixture_id AS CHAR) COLLATE utf8mb4_unicode_ci = p.match_id
      WHERE p.user_id = ? AND p.settled = true
        AND p.home_score = f.home_score AND p.away_score = f.away_score`,
-    [userId]
-  ) as any;
+    [userId],
+  )) as any;
   const exactScores = parseInt(exactResult[0]?.cnt || "0", 10);
   const enrichedStats = { ...stats, exactScores };
 
   // Get already-earned achievements
-  const [existingRows] = await pool.query(
-    `SELECT type FROM achievements WHERE user_id = ?`,
-    [userId]
-  ) as any;
+  const [existingRows] = (await pool.query(`SELECT type FROM achievements WHERE user_id = ?`, [
+    userId,
+  ])) as any;
   const earned = new Set(existingRows.map((r: any) => r.type));
 
   const newAchievements: { type: string; title: string }[] = [];
@@ -182,7 +181,7 @@ export async function checkAndAwardAchievements(
     await pool.query(
       `INSERT IGNORE INTO achievements (user_id, type, title, description, icon, color, tier, season)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-      [userId, def.type, def.title, def.description, def.icon, def.color, def.tier, "2024-25"]
+      [userId, def.type, def.title, def.description, def.icon, def.color, def.tier, "2024-25"],
     );
     newAchievements.push({ type: def.type, title: def.title });
   }
@@ -191,11 +190,11 @@ export async function checkAndAwardAchievements(
 }
 
 export async function getUserStats(pool: any, userId: string): Promise<UserStats> {
-  const [userRows] = await pool.query(
+  const [userRows] = (await pool.query(
     `SELECT total_points, correct_predictions, total_predictions, streak, best_streak, weekly_points
      FROM users WHERE id = ?`,
-    [userId]
-  ) as any;
+    [userId],
+  )) as any;
   const userRow = userRows[0];
 
   return {

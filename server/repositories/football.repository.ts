@@ -66,7 +66,7 @@ export async function getFixtures(filters: FixtureFilters = {}) {
   }
 
   const whereClause = `WHERE ${conditions.join(" AND ")}`;
-  const [rows] = await pool.query(
+  const [rows] = (await pool.query(
     `
     SELECT
       f.api_fixture_id, f.league_id, f.home_score, f.away_score,
@@ -85,7 +85,7 @@ export async function getFixtures(filters: FixtureFilters = {}) {
     ORDER BY f.kickoff ASC
   `,
     params,
-  ) as any;
+  )) as any;
 
   return rows.map((r: any) => ({
     id: String(r.api_fixture_id),
@@ -126,10 +126,10 @@ export async function getFixtures(filters: FixtureFilters = {}) {
 }
 
 export async function getFixtureKickoff(matchId: string) {
-  const [rows] = await pool.query(
-    `SELECT kickoff, status, status_short FROM football_fixtures WHERE CAST(api_fixture_id AS CHAR) = ? LIMIT 1`,
+  const [rows] = (await pool.query(
+    `SELECT kickoff, status, status_short FROM football_fixtures WHERE CAST(api_fixture_id AS CHAR) COLLATE utf8mb4_unicode_ci = ? LIMIT 1`,
     [matchId],
-  ) as any;
+  )) as any;
   return rows[0] ?? null;
 }
 
@@ -338,7 +338,7 @@ export async function getCommunityPicks(matchId: string) {
 // ── Fixture events ────────────────────────────────────────────────────────────
 
 export async function getFixtureEvents(fixtureApiId: number) {
-  const [rows] = await pool.query(
+  const [rows] = (await pool.query(
     `
     SELECT e.fixture_id, e.team_id, e.player_id, e.player_name,
            e.assist_id, e.assist_name, e.type, e.detail, e.comments,
@@ -350,7 +350,7 @@ export async function getFixtureEvents(fixtureApiId: number) {
     ORDER BY e.elapsed ASC, CASE WHEN e.extra_time IS NULL THEN 1 ELSE 0 END, e.extra_time ASC
   `,
     [fixtureApiId],
-  ) as any;
+  )) as any;
 
   return rows.map((r: any) => ({
     elapsed: r.elapsed,
@@ -372,7 +372,7 @@ export async function getFixtureEvents(fixtureApiId: number) {
 // ── Fixture lineups ───────────────────────────────────────────────────────────
 
 export async function getFixtureLineups(fixtureApiId: number) {
-  const [rows] = await pool.query(
+  const [rows] = (await pool.query(
     `
     SELECT l.fixture_id, l.team_id, l.formation, l.player_id, l.player_name,
            l.player_number, l.player_pos, l.grid, l.is_starting,
@@ -383,7 +383,7 @@ export async function getFixtureLineups(fixtureApiId: number) {
     ORDER BY l.team_id, l.is_starting DESC, l.player_number ASC
   `,
     [fixtureApiId],
-  ) as any;
+  )) as any;
 
   // Group by team
   const teams: Record<number, any> = {};
@@ -412,7 +412,7 @@ export async function getFixtureLineups(fixtureApiId: number) {
 // ── Fixture match statistics ──────────────────────────────────────────────────
 
 export async function getFixtureMatchStats(fixtureApiId: number) {
-  const [rows] = await pool.query(
+  const [rows] = (await pool.query(
     `
     SELECT fs.*, t.name as team_name, t.logo as team_logo, t.color as team_color
     FROM football_fixture_stats fs
@@ -420,7 +420,7 @@ export async function getFixtureMatchStats(fixtureApiId: number) {
     WHERE fs.fixture_id = ?
   `,
     [fixtureApiId],
-  ) as any;
+  )) as any;
 
   return rows.map((r: any) => ({
     team: { id: r.team_id, name: r.team_name, logo: r.team_logo, color: r.team_color },
@@ -448,7 +448,7 @@ export async function getH2H(team1ApiId: number, team2ApiId: number) {
   const t1 = Math.min(team1ApiId, team2ApiId);
   const t2 = Math.max(team1ApiId, team2ApiId);
 
-  const [rows] = await pool.query(
+  const [rows] = (await pool.query(
     `
     SELECT h.*,
            ht.name as home_name, ht.short_name as home_short, ht.logo as home_logo, ht.color as home_color,
@@ -462,7 +462,7 @@ export async function getH2H(team1ApiId: number, team2ApiId: number) {
     LIMIT 15
   `,
     [t1, t2],
-  ) as any;
+  )) as any;
 
   return rows.map((r: any) => ({
     date: r.kickoff,
@@ -490,7 +490,7 @@ export async function getH2H(team1ApiId: number, team2ApiId: number) {
 // ── Team statistics ───────────────────────────────────────────────────────────
 
 export async function getTeamStats(teamApiId: number) {
-  const [rows] = await pool.query(
+  const [rows] = (await pool.query(
     `
     SELECT ts.*, t.name as team_name, t.logo as team_logo
     FROM football_team_stats ts
@@ -500,7 +500,7 @@ export async function getTeamStats(teamApiId: number) {
     LIMIT 3
   `,
     [teamApiId],
-  ) as any;
+  )) as any;
 
   if (rows.length === 0) return null;
 
@@ -530,12 +530,12 @@ export async function getSyncStatus(
   getRequestCount: () => number,
   getRemainingRequests: () => number,
 ) {
-  const [rows] = await pool.query(`
+  const [rows] = (await pool.query(`
     SELECT sync_type, league_id, status, request_count, synced_at, error
     FROM sync_log
     ORDER BY synced_at DESC
     LIMIT 30
-  `) as any;
+  `)) as any;
   return {
     dailyRequests: getRequestCount(),
     remaining: getRemainingRequests(),

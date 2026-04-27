@@ -21,17 +21,15 @@ export async function createGroup(
   leagueIds: string[],
   createdBy: string,
 ): Promise<Group> {
-  await db
-    .insert(groups)
-    .values({
-      name,
-      code,
-      isPublic,
-      leagueIds,
-      memberCount: 1,
-      createdBy,
-      createdAt: Date.now(),
-    });
+  await db.insert(groups).values({
+    name,
+    code,
+    isPublic,
+    leagueIds,
+    memberCount: 1,
+    createdBy,
+    createdAt: Date.now(),
+  });
 
   const [group] = await db.select().from(groups).where(eq(groups.code, code));
 
@@ -53,9 +51,7 @@ export async function joinGroup(groupId: string, userId: string): Promise<boolea
 
   if (existing.length > 0) return false;
 
-  await db
-    .insert(groupMembers)
-    .values({ groupId, userId, joinedAt: Date.now() });
+  await db.insert(groupMembers).values({ groupId, userId, joinedAt: Date.now() });
 
   await db
     .update(groups)
@@ -230,7 +226,7 @@ export async function getGroupPredictions(groupId: string): Promise<GroupMatchPr
   if (matchIds.length === 0) return [];
 
   const placeholders = matchIds.map(() => `?`).join(",");
-  const [fixtureRows] = await pool.query(
+  const [fixtureRows] = (await pool.query(
     `
     SELECT f.api_fixture_id, f.home_score, f.away_score, f.status, f.kickoff,
            ht.name as home_name, ht.short_name as home_short, ht.logo as home_logo,
@@ -240,10 +236,10 @@ export async function getGroupPredictions(groupId: string): Promise<GroupMatchPr
     JOIN football_teams ht ON f.home_team_id = ht.api_football_id
     JOIN football_teams at2 ON f.away_team_id = at2.api_football_id
     JOIN football_leagues l ON f.league_id = l.id
-    WHERE CAST(f.api_fixture_id AS CHAR) IN (${placeholders})
+    WHERE CAST(f.api_fixture_id AS CHAR) COLLATE utf8mb4_unicode_ci IN (${placeholders})
   `,
     matchIds,
-  ) as any;
+  )) as any;
 
   const fixtureMap = new Map<string, any>();
   for (const row of fixtureRows) {
@@ -339,7 +335,7 @@ export async function getGroupActivity(groupId: string): Promise<GroupActivity[]
 
   // Try reading from the new group_activity table first
   try {
-    const [activityRows] = await pool.query(
+    const [activityRows] = (await pool.query(
       `SELECT ga.id, ga.type, ga.points, ga.metadata, ga.created_at, ga.match_id,
                     u.username, u.avatar
              FROM group_activity ga
@@ -348,7 +344,7 @@ export async function getGroupActivity(groupId: string): Promise<GroupActivity[]
              ORDER BY ga.created_at DESC
              LIMIT 50`,
       [groupId],
-    ) as any;
+    )) as any;
 
     if (activityRows.length > 0) {
       return activityRows.map((row: any, idx: number) => {
@@ -447,14 +443,14 @@ export async function getGroupActivity(groupId: string): Promise<GroupActivity[]
   }
 
   // Fallback: derive from predictions (legacy path until DB migrated)
-  const userPlaceholders = userIds.map(() => '?').join(',');
-  const [recentPredsRows] = await pool.query(
+  const userPlaceholders = userIds.map(() => "?").join(",");
+  const [recentPredsRows] = (await pool.query(
     `
     SELECT p.id, p.user_id, p.match_id, p.home_score as pred_home, p.away_score as pred_away,
            p.points, p.settled, p.timestamp,
            ht.short_name as home_short, at2.short_name as away_short
     FROM predictions p
-    LEFT JOIN football_fixtures f ON CAST(f.api_fixture_id AS CHAR) = p.match_id
+    LEFT JOIN football_fixtures f ON CAST(f.api_fixture_id AS CHAR) COLLATE utf8mb4_unicode_ci = p.match_id
     LEFT JOIN football_teams ht ON f.home_team_id = ht.api_football_id
     LEFT JOIN football_teams at2 ON f.away_team_id = at2.api_football_id
     WHERE p.user_id IN (${userPlaceholders})
@@ -462,7 +458,7 @@ export async function getGroupActivity(groupId: string): Promise<GroupActivity[]
     LIMIT 30
   `,
     userIds,
-  ) as any;
+  )) as any;
 
   const items: GroupActivity[] = [];
 

@@ -67,7 +67,7 @@ export async function calculateMatchImportance(matchId: string): Promise<MatchIm
     JOIN football_teams ht ON f.home_team_id = ht.api_football_id
     JOIN football_teams at2 ON f.away_team_id = at2.api_football_id
     JOIN football_leagues l ON f.league_id = l.id
-    WHERE CAST(f.api_fixture_id AS CHAR) = ?
+    WHERE CAST(f.api_fixture_id AS CHAR) COLLATE utf8mb4_unicode_ci = ?
     LIMIT 1
   `,
     [matchId],
@@ -210,7 +210,7 @@ export async function getOrCreateDailyPack(
 
   const [fixturesRows] = (await pool.query(
     `
-    SELECT CAST(f.api_fixture_id AS CHAR) as match_id, f.kickoff, f.league_id,
+    SELECT CAST(f.api_fixture_id AS CHAR) COLLATE utf8mb4_unicode_ci as match_id, f.kickoff, f.league_id,
            ht.name as home_name, at2.name as away_name
     FROM football_fixtures f
     JOIN football_teams ht ON f.home_team_id = ht.api_football_id
@@ -228,7 +228,7 @@ export async function getOrCreateDailyPack(
   if (matchIds.length === 0) {
     const [allFixturesRows] = (await pool.query(
       `
-      SELECT CAST(f.api_fixture_id AS CHAR) as match_id, f.kickoff
+      SELECT CAST(f.api_fixture_id AS CHAR) COLLATE utf8mb4_unicode_ci as match_id, f.kickoff
       FROM football_fixtures f
       WHERE f.kickoff >= ? AND f.kickoff < ?
       AND f.status IN ('upcoming', 'NS', 'TBD')
@@ -535,7 +535,7 @@ export async function getChaseData(userId: string, period: string = "alltime"): 
 
   const [upcomingRows] = (await pool.query(
     `
-    SELECT CAST(f.api_fixture_id AS CHAR) as match_id,
+    SELECT CAST(f.api_fixture_id AS CHAR) COLLATE utf8mb4_unicode_ci as match_id,
            ht.name as home_name, at2.name as away_name
     FROM football_fixtures f
     JOIN football_teams ht ON f.home_team_id = ht.api_football_id
@@ -906,7 +906,7 @@ export async function getGroupActivityEnhanced(groupId: string): Promise<any[]> 
     `
     SELECT bp.*, ht.name as home_name, at2.name as away_name
     FROM boost_picks bp
-    LEFT JOIN football_fixtures f ON bp.match_id = CAST(f.api_fixture_id AS CHAR)
+    LEFT JOIN football_fixtures f ON bp.match_id = CAST(f.api_fixture_id AS CHAR) COLLATE utf8mb4_unicode_ci
     LEFT JOIN football_teams ht ON f.home_team_id = ht.api_football_id
     LEFT JOIN football_teams at2 ON f.away_team_id = at2.api_football_id
     WHERE bp.user_id IN (${userPlaceholders})
@@ -1073,7 +1073,7 @@ export async function getUserPerformanceInsights(userId: string): Promise<any> {
            CAST(COUNT(CASE WHEN p.points >= 5 THEN 1 END) AS SIGNED) as correct,
            CAST(COALESCE(SUM(p.points), 0) AS SIGNED) as points
     FROM predictions p
-    JOIN football_fixtures f ON p.match_id = CAST(f.api_fixture_id AS CHAR)
+    JOIN football_fixtures f ON p.match_id = CAST(f.api_fixture_id AS CHAR) COLLATE utf8mb4_unicode_ci
     JOIN football_leagues l ON f.league_id = l.id
     WHERE p.user_id = ? AND p.settled = true
     GROUP BY l.name, l.id
