@@ -9,10 +9,10 @@
  * - Subtle scale bounce on every change via Reanimated
  * - Team logo ring with brand color border
  */
-import React, { useCallback, useRef } from 'react';
-import { View, Text, Pressable, StyleSheet, Image } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
-import * as Haptics from 'expo-haptics';
+import React, { useCallback, useRef } from "react";
+import { View, Text, Pressable, StyleSheet, Image } from "react-native";
+import { Ionicons } from "@expo/vector-icons";
+import * as Haptics from "expo-haptics";
 import Animated, {
   useAnimatedStyle,
   useSharedValue,
@@ -20,13 +20,13 @@ import Animated, {
   withTiming,
   withSpring,
   useReducedMotion,
-} from 'react-native-reanimated';
-import Colors from '@/constants/colors';
-import { useTheme } from '@/contexts/ThemeContext';
+} from "react-native-reanimated";
+import Colors from "@/constants/colors";
+import { useTheme } from "@/contexts/ThemeContext";
 
 /** Returns relative luminance of a hex color (0 = black, 1 = white). */
 function getLuminance(hex: string): number {
-  const c = hex.replace('#', '');
+  const c = hex.replace("#", "");
   const r = parseInt(c.substring(0, 2), 16) / 255;
   const g = parseInt(c.substring(2, 4), 16) / 255;
   const b = parseInt(c.substring(4, 6), 16) / 255;
@@ -58,7 +58,7 @@ export function ScoreSelector({
   maxScore = 15,
 }: ScoreSelectorProps) {
   const { colors, isDark } = useTheme();
-  const scoreTextColor = getLuminance(teamColor) > 0.4 ? '#1a1a2e' : '#fff';
+  const scoreTextColor = getLuminance(teamColor) > 0.4 ? "#1a1a2e" : "#fff";
   const scale = useSharedValue(1);
   const reduceMotion = useReducedMotion();
   const longPressTimer = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -79,25 +79,19 @@ export function ScoreSelector({
     transform: [{ scale: scale.value }],
   }));
 
-  const handleStep = useCallback(
-    (action: () => void) => {
+  const handleStep = useCallback((action: () => void) => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    bounce();
+    action();
+  }, []);
+
+  const startLongPress = useCallback((action: () => void) => {
+    longPressTimer.current = setInterval(() => {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
       bounce();
       action();
-    },
-    [],
-  );
-
-  const startLongPress = useCallback(
-    (action: () => void) => {
-      longPressTimer.current = setInterval(() => {
-        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-        bounce();
-        action();
-      }, LONG_PRESS_INTERVAL);
-    },
-    [],
-  );
+    }, LONG_PRESS_INTERVAL);
+  }, []);
 
   const stopLongPress = useCallback(() => {
     if (longPressTimer.current) {
@@ -106,7 +100,7 @@ export function ScoreSelector({
     }
   }, []);
 
-  const btnBg = isDark ? 'rgba(255,255,255,0.09)' : 'rgba(0,0,0,0.05)';
+  const btnBg = isDark ? "rgba(255,255,255,0.09)" : "rgba(0,0,0,0.05)";
 
   return (
     <View style={styles.container}>
@@ -116,9 +110,7 @@ export function ScoreSelector({
           <Image source={{ uri: teamLogo }} style={styles.logoImg} resizeMode="contain" />
         ) : (
           <View style={[styles.logoFallback, { backgroundColor: teamColor }]}>
-            <Text style={styles.logoFallbackText}>
-              {(teamShort || teamName).charAt(0)}
-            </Text>
+            <Text style={styles.logoFallbackText}>{(teamShort || teamName).charAt(0)}</Text>
           </View>
         )}
       </View>
@@ -128,7 +120,12 @@ export function ScoreSelector({
       </Text>
 
       {/* Score stepper */}
-      <View style={[styles.stepper, { backgroundColor: isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.03)' }]}>
+      <View
+        style={[
+          styles.stepper,
+          { backgroundColor: isDark ? "rgba(255,255,255,0.05)" : "rgba(0,0,0,0.03)" },
+        ]}
+      >
         {/* Minus */}
         <Pressable
           onPress={() => score > 0 && handleStep(onDecrement)}
@@ -152,7 +149,11 @@ export function ScoreSelector({
         </Pressable>
 
         {/* Score */}
-        <Animated.View style={[styles.scoreDisplay, { backgroundColor: teamColor }, animStyle]}>
+        <Animated.View
+          style={[styles.scoreDisplay, { backgroundColor: teamColor }, animStyle]}
+          accessibilityLabel={`Score: ${score}`}
+          accessibilityRole="text"
+        >
           <Text style={[styles.scoreText, { color: scoreTextColor }]}>{score}</Text>
         </Animated.View>
 
@@ -184,7 +185,7 @@ export function ScoreSelector({
 
 const styles = StyleSheet.create({
   container: {
-    alignItems: 'center',
+    alignItems: "center",
     flex: 1,
     gap: 8,
   },
@@ -193,36 +194,36 @@ const styles = StyleSheet.create({
     height: 60,
     borderRadius: 30,
     borderWidth: 2.5,
-    alignItems: 'center',
-    justifyContent: 'center',
-    overflow: 'hidden',
+    alignItems: "center",
+    justifyContent: "center",
+    overflow: "hidden",
   },
   logoImg: {
     width: 44,
     height: 44,
   },
   logoFallback: {
-    width: '100%',
-    height: '100%',
+    width: "100%",
+    height: "100%",
     borderRadius: 30,
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
   },
   logoFallbackText: {
     fontSize: 22,
-    fontFamily: 'Inter_700Bold',
-    color: '#fff',
+    fontFamily: "Inter_700Bold",
+    color: "#fff",
   },
   teamLabel: {
     fontSize: 13,
-    fontFamily: 'Inter_600SemiBold',
-    textAlign: 'center',
+    fontFamily: "Inter_600SemiBold",
+    textAlign: "center",
     maxWidth: 110,
     lineHeight: 18,
   },
   stepper: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: 6,
     borderRadius: 18,
     padding: 6,
@@ -232,8 +233,8 @@ const styles = StyleSheet.create({
     width: 44,
     height: 44,
     borderRadius: 13,
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
   },
   stepBtnPressed: {
     transform: [{ scale: 0.88 }],
@@ -246,13 +247,13 @@ const styles = StyleSheet.create({
     width: 56,
     height: 56,
     borderRadius: 16,
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
   },
   scoreText: {
     fontSize: 28,
-    fontFamily: 'Inter_700Bold',
-    color: '#fff',
+    fontFamily: "Inter_700Bold",
+    color: "#fff",
     lineHeight: 34,
   },
 });
