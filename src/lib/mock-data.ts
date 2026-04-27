@@ -6,7 +6,7 @@
  * the app could run without a populated database.
  *
  * All of that mock data has been removed. The app now renders exclusively
- * from the Postgres database, which is populated by the API-Football sync
+ * from the MySQL database, which is populated by the API-Football sync
  * (server/services/sync.ts). Types live in `./types`; the pure logic that
  * used to live here (daily-pick ranking, social-proof deterministic fallback)
  * lives in `./daily-picks`.

@@ -47,11 +47,11 @@ scorepion/
 
 ## Path aliases
 
-| Alias        | Resolves to   | Used by           |
-|--------------|---------------|-------------------|
-| `@/*`        | `./src/*`     | Mobile (app + src)|
-| `@shared/*`  | `./shared/*`  | Both              |
-| `@server/*`  | `./server/*`  | Server only       |
+| Alias       | Resolves to  | Used by            |
+| ----------- | ------------ | ------------------ |
+| `@/*`       | `./src/*`    | Mobile (app + src) |
+| `@shared/*` | `./shared/*` | Both               |
+| `@server/*` | `./server/*` | Server only        |
 
 ## Boundary rules
 
@@ -64,7 +64,7 @@ Tsconfigs enforce this: `tsconfig.json` (mobile) excludes `server/**`, and `serv
 
 ## CI pipelines
 
-- **`backend.yml`** — runs on `server/**`, `shared/**` changes. Lint → typecheck → vitest (Postgres 16 service) → build → Docker image → GHCR push.
+- **`backend.yml`** — runs on `server/**`, `shared/**` changes. Lint → typecheck → vitest (MySQL 8.0 service) → build → Docker image → GHCR push.
 - **`mobile.yml`** — runs on `app/**`, `src/**`, `shared/**`, `assets/**`, `app.json`, `eas.json`. Lint + typecheck on all branches; EAS build (preview on PRs, production on `main`).
 
 ## Why this structure (short version)

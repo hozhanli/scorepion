@@ -82,7 +82,7 @@ Everything else is either optional for v1 or already done.
 **What's needed:**
 
 - Pick a host (Fly.io / Railway / Render / VPS)
-- Provision production Postgres (Neon / Supabase / RDS recommended over self-host)
+- Provision production MySQL (PlanetScale / RDS / DigitalOcean recommended over self-host)
 - Deploy the Express server
 - Point the chosen domain at it, provision TLS
 - Set every `[R]` variable from `.env.example` via the host's secret manager
@@ -173,7 +173,7 @@ Can defer to v1.1. First release is fine via manual upload.
 - Pipe each dump to off-site storage (S3 / R2 / B2 — R2 is free egress, cheapest)
 - Healthchecks.io ping on success so you notice if cron dies
 
-Can also defer to v1.1 if the managed Postgres host (Neon/Supabase) provides point-in-time recovery.
+Can also defer to v1.1 if the managed MySQL host (PlanetScale/RDS) provides point-in-time recovery.
 
 ### 7. 50-user beta run
 

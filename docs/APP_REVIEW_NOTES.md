@@ -94,7 +94,7 @@ No other permissions requested.
 
 ## Backend Health
 
-- Database: PostgreSQL, 3 tables (users, predictions, groups)
+- Database: MySQL, 3 tables (users, predictions, groups)
 - API: Express.js, health check at `/api/health`
 - Stripe: Scaffolded (not activated; returns 404 on billing endpoints)
 - Push Notifications: APNs (iOS) + FCM (Android) configured but optional feature

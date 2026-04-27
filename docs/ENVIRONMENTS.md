@@ -98,7 +98,7 @@ into the AAB.
 ```bash
 cp .env.example .env
 # edit .env with real values (DATABASE_URL, FOOTBALL_API_KEY, JWT_SECRET…)
-npm run db:start     # local Postgres
+npm run db:start     # local MySQL
 npm run server:dev   # Express
 npm start            # Metro + Expo client
 ```

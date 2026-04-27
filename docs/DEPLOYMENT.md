@@ -11,7 +11,7 @@ Before deploying to production for the first time, verify all items:
 ### Secrets & Configuration
 
 - [ ] `.env` populated with all required variables (see [`OPERATIONS.md`](./OPERATIONS.md) for full list)
-- [ ] `DATABASE_URL` points to a production-grade Postgres (managed service, not local container)
+- [ ] `DATABASE_URL` points to a production-grade MySQL (managed service, not local container)
 - [ ] `FOOTBALL_API_KEY` set with Pro plan for live polling (or free for batch-only)
 - [ ] `JWT_SECRET` generated securely (64+ random hex chars)
 - [ ] `ADMIN_SECRET` generated securely (different from JWT_SECRET)
@@ -20,7 +20,7 @@ Before deploying to production for the first time, verify all items:
 
 ### Infrastructure
 
-- [ ] Postgres database created and accessible via `DATABASE_URL`
+- [ ] MySQL database created and accessible via `DATABASE_URL`
 - [ ] Migrations will run automatically on server startup (no manual step needed)
 - [ ] Server instance ready (1–2GB RAM minimum for <100k MAU)
 - [ ] Node.js 18+ installed and npm/pnpm available
@@ -120,7 +120,7 @@ curl https://api.scorepion.com/api/health
 If health check fails:
 
 1. Check logs: `fly logs` or `pm2 logs`
-2. Verify Postgres connectivity: `psql $DATABASE_URL -c "SELECT 1"`
+2. Verify MySQL connectivity: `mysql -h $DB_HOST -u $DB_USER -p$DB_PASS $DB_NAME -e "SELECT 1"`
 3. Check for migration errors in startup logs
 4. See [`INCIDENT_RESPONSE.md`](./INCIDENT_RESPONSE.md) for troubleshooting
 
@@ -208,8 +208,8 @@ Confirm with typing `restore` at the prompt.
 ### 1. Smoke Tests (10 min)
 
 - [ ] Server health check returns 200: `curl https://api.scorepion.com/api/health`
-- [ ] Database is accessible: `psql $DATABASE_URL -c "SELECT count(*) FROM users"`
-- [ ] Migrations applied: `psql $DATABASE_URL -c "SELECT * FROM _migrations"`
+- [ ] Database is accessible: `mysql -h $DB_HOST -u $DB_USER -p$DB_PASS $DB_NAME -e "SELECT count(*) FROM users"`
+- [ ] Migrations applied: `mysql -h $DB_HOST -u $DB_USER -p$DB_PASS $DB_NAME -e "SELECT * FROM _migrations"`
 - [ ] Latest fixture sync is recent (within 1 hour): check logs or admin endpoint
 
 ### 2. Manual Testing (15 min)
@@ -268,17 +268,17 @@ Increase percentage every 6 hours if no crash reports.
 **Fix**:
 
 1. Check migration SQL syntax: review latest `.sql` file in `server/migrations/`
-2. Test locally: `psql $DATABASE_URL -f server/migrations/006_*.sql`
+2. Test locally: `mysql -h $DB_HOST -u $DB_USER -p$DB_PASS $DB_NAME < server/migrations/006_*.sql`
 3. If broken, roll back to previous commit and re-deploy
 
-### Postgres Connection Timeout
+### MySQL Connection Timeout
 
-**Symptom**: `psql: error: could not translate host name`
+**Symptom**: `mysql: error: could not translate host name`
 
 **Fix**:
 
-1. Verify `DATABASE_URL` format: `postgresql://user:pass@host:5432/db`
-2. Check Postgres is running and accessible (security groups, firewall)
+1. Verify `DATABASE_URL` format: `mysql://user:pass@host:3306/db`
+2. Check MySQL is running and accessible (security groups, firewall)
 3. Verify credentials are correct
 
 ### Secrets Not Loaded
@@ -327,4 +327,4 @@ jobs:
 
 - **Deployment issues**: Check logs and [`INCIDENT_RESPONSE.md`](./INCIDENT_RESPONSE.md)
 - **Database questions**: See [`OPERATIONS.md`](./OPERATIONS.md)
-- **Troubleshooting**: Check Sentry, server logs, and Postgres connectivity
+- **Troubleshooting**: Check Sentry, server logs, and MySQL connectivity

@@ -34,7 +34,7 @@ DEALLOCATE PREPARE stmt;
 
 -- ============================================================
 -- 3. push_tokens.created_at is already BIGINT in MySQL migration 007
---    (no conversion needed — PostgreSQL timestamp migration is skipped)
+--    (no conversion needed — push_tokens.created_at is already BIGINT)
 -- ============================================================
 
 -- ============================================================

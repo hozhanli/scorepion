@@ -24,7 +24,7 @@ pm2 logs scorepion | tail -50
 fly logs -n 50
 
 # Test database connectivity
-psql $DATABASE_URL -c "SELECT 1"
+mysql -h $DB_HOST -u $DB_USER -p$DB_PASS $DB_NAME -e "SELECT 1"
 # Expected: 1 (zero latency ~1ms)
 
 # Check Sentry dashboard
@@ -46,7 +46,7 @@ pm2 restart scorepion
 fly deploy
 ```
 
-#### Postgres Connection Failed
+#### MySQL Connection Failed
 
 **Signs in logs**: `ECONNREFUSED`, `could not translate host name`, or `password authentication failed`.
 
@@ -57,10 +57,10 @@ fly deploy
 echo $DATABASE_URL
 
 # 2. Test connection directly
-psql $DATABASE_URL -c "SELECT 1"
+mysql -h $DB_HOST -u $DB_USER -p$DB_PASS $DB_NAME -e "SELECT 1"
 
 # 3. If connection fails:
-#    - Check Postgres is running (cloud provider dashboard)
+#    - Check MySQL is running (cloud provider dashboard)
 #    - Verify security group / firewall allows your IP
 #    - Rotate DATABASE_URL if password was exposed
 
@@ -76,7 +76,7 @@ pm2 restart scorepion
 
 ```bash
 # 1. Check which migration failed
-psql $DATABASE_URL -c "SELECT * FROM _migrations ORDER BY applied_at DESC LIMIT 1"
+mysql -h $DB_HOST -u $DB_USER -p$DB_PASS $DB_NAME -e "SELECT * FROM _migrations ORDER BY applied_at DESC LIMIT 1"
 
 # 2. Inspect the SQL file
 cat server/migrations/006_*.sql
@@ -88,8 +88,8 @@ cat server/migrations/006_*.sql
 
 # 4. If SQL is correct but DB already partially applied:
 #    - Delete the failed migration from _migrations
-psql $DATABASE_URL -c "DELETE FROM _migrations WHERE name = '006_h2h_league_and_venue.sql'"
-#    - Manually fix the schema via psql
+mysql -h $DB_HOST -u $DB_USER -p$DB_PASS $DB_NAME -e "DELETE FROM _migrations WHERE name = '006_h2h_league_and_venue.sql'"
+#    - Manually fix the schema via mysql
 #    - Restart server (will re-apply migrations)
 ```
 
@@ -221,29 +221,29 @@ If quota exhausted and can't upgrade immediately:
 
 ```bash
 # Check database size
-psql $DATABASE_URL -c "
+mysql -h $DB_HOST -u $DB_USER -p$DB_PASS $DB_NAME -e "
   SELECT
-    schemaname,
-    ROUND(SUM(pg_total_relation_size(tablename)) / 1024 / 1024 / 1024, 2) AS size_gb
-  FROM pg_tables
-  GROUP BY schemaname
+    table_schema,
+    ROUND(SUM(data_length + index_length) / 1024 / 1024 / 1024, 2) AS size_gb
+  FROM information_schema.tables
+  GROUP BY table_schema
   ORDER BY size_gb DESC;
 "
 
 # Check for long-running queries
-psql $DATABASE_URL -c "
-  SELECT pid, usename, state, query, (NOW() - query_start) AS duration
-  FROM pg_stat_activity
-  WHERE state != 'idle' AND query NOT LIKE '%pg_stat_activity%'
-  ORDER BY duration DESC
+mysql -h $DB_HOST -u $DB_USER -p$DB_PASS $DB_NAME -e "
+  SELECT id, user, command, info AS query, time AS duration_seconds
+  FROM information_schema.processlist
+  WHERE command != 'Sleep' AND info NOT LIKE '%processlist%'
+  ORDER BY time DESC
   LIMIT 10;
 "
 
 # Check table sizes (predictions table often largest)
-psql $DATABASE_URL -c "
-  SELECT tablename, ROUND(pg_total_relation_size(tablename) / 1024 / 1024) AS size_mb
-  FROM pg_tables
-  WHERE schemaname = 'public'
+mysql -h $DB_HOST -u $DB_USER -p$DB_PASS $DB_NAME -e "
+  SELECT table_name, ROUND((data_length + index_length) / 1024 / 1024) AS size_mb
+  FROM information_schema.tables
+  WHERE table_schema = DATABASE()
   ORDER BY size_mb DESC
   LIMIT 10;
 "
@@ -259,7 +259,7 @@ psql $DATABASE_URL -c "
 
 ```bash
 # Identify slow query
-psql $DATABASE_URL -c "EXPLAIN ANALYZE SELECT ..."
+mysql -h $DB_HOST -u $DB_USER -p$DB_PASS $DB_NAME -e "EXPLAIN ANALYZE SELECT ..."
 
 # Look for "Seq Scan" on large tables — indicates missing index
 ```
@@ -268,7 +268,7 @@ psql $DATABASE_URL -c "EXPLAIN ANALYZE SELECT ..."
 
 ```bash
 # Add index for common query filters
-psql $DATABASE_URL -c "CREATE INDEX idx_predictions_user_league ON predictions(user_id, league_id)"
+mysql -h $DB_HOST -u $DB_USER -p$DB_PASS $DB_NAME -e "CREATE INDEX idx_predictions_user_league ON predictions(user_id, league_id)"
 
 # Restart server (queries will use new index)
 ```
@@ -281,18 +281,22 @@ psql $DATABASE_URL -c "CREATE INDEX idx_predictions_user_league ON predictions(u
 
 ```bash
 # Count predictions
-psql $DATABASE_URL -c "SELECT count(*) FROM predictions"
+mysql -h $DB_HOST -u $DB_USER -p$DB_PASS $DB_NAME -e "SELECT count(*) FROM predictions"
 
 # Check table size
-psql $DATABASE_URL -c "SELECT pg_size_pretty(pg_total_relation_size('predictions'))"
+mysql -h $DB_HOST -u $DB_USER -p$DB_PASS $DB_NAME -e "
+  SELECT ROUND((data_length + index_length) / 1024 / 1024, 2) AS size_mb
+  FROM information_schema.tables
+  WHERE table_schema = DATABASE() AND table_name = 'predictions';
+"
 ```
 
 **Fix (short-term)**:
 
 ```bash
-# Vacuum and reindex (non-blocking)
-psql $DATABASE_URL -c "VACUUM ANALYZE predictions"
-psql $DATABASE_URL -c "REINDEX TABLE CONCURRENTLY predictions"
+# Optimize table (reclaims space, rebuilds indexes)
+mysql -h $DB_HOST -u $DB_USER -p$DB_PASS $DB_NAME -e "OPTIMIZE TABLE predictions"
+mysql -h $DB_HOST -u $DB_USER -p$DB_PASS $DB_NAME -e "ANALYZE TABLE predictions"
 ```
 
 **Fix (long-term)**:
@@ -303,7 +307,7 @@ psql $DATABASE_URL -c "REINDEX TABLE CONCURRENTLY predictions"
 
 #### Disk Full
 
-**Symptom**: `Disk full` error in Postgres logs.
+**Symptom**: `Disk full` error in MySQL logs.
 
 **Fix**:
 
@@ -311,7 +315,7 @@ psql $DATABASE_URL -c "REINDEX TABLE CONCURRENTLY predictions"
 2. Upgrade disk size (takes 10–30 min downtime usually)
 3. Meanwhile, identify bloat:
    ```bash
-   psql $DATABASE_URL -c "VACUUM FULL"  # ~10 min, blocks reads
+   mysql -h $DB_HOST -u $DB_USER -p$DB_PASS $DB_NAME -e "OPTIMIZE TABLE predictions, refresh_tokens, users"  # ~10 min, blocks reads
    ```
 
 ---
@@ -329,11 +333,13 @@ psql $DATABASE_URL -c "REINDEX TABLE CONCURRENTLY predictions"
 echo "Current JWT_SECRET: $(echo $JWT_SECRET | cut -c1-8)..."
 
 # Check refresh_tokens table size (shouldn't grow unboundedly)
-psql $DATABASE_URL -c "
-  SELECT count(*) AS token_count,
-         COUNT(DISTINCT user_id) AS unique_users,
-         ROUND(pg_total_relation_size('refresh_tokens') / 1024 / 1024, 2) AS size_mb
-  FROM refresh_tokens;
+mysql -h $DB_HOST -u $DB_USER -p$DB_PASS $DB_NAME -e "
+  SELECT
+    (SELECT count(*) FROM refresh_tokens) AS token_count,
+    (SELECT COUNT(DISTINCT user_id) FROM refresh_tokens) AS unique_users,
+    ROUND((data_length + index_length) / 1024 / 1024, 2) AS size_mb
+  FROM information_schema.tables
+  WHERE table_schema = DATABASE() AND table_name = 'refresh_tokens';
 "
 
 # Check Sentry for JWT/Stripe errors
@@ -358,7 +364,7 @@ psql $DATABASE_URL -c "
 
 2. **If compromised**: invalidate all tokens immediately
    ```bash
-   psql $DATABASE_URL -c "TRUNCATE TABLE refresh_tokens"
+   mysql -h $DB_HOST -u $DB_USER -p$DB_PASS $DB_NAME -e "TRUNCATE TABLE refresh_tokens"
    # Users will be logged out; warn them to re-authenticate
    ```
    Then rotate JWT_SECRET:
@@ -377,13 +383,13 @@ psql $DATABASE_URL -c "
 
 ```bash
 # Delete expired refresh tokens (safe)
-psql $DATABASE_URL -c "
+mysql -h $DB_HOST -u $DB_USER -p$DB_PASS $DB_NAME -e "
   DELETE FROM refresh_tokens
-  WHERE created_at < NOW() - INTERVAL '30 days'
+  WHERE created_at < NOW() - INTERVAL 30 DAY
 "
 
-# Vacuum to reclaim space
-psql $DATABASE_URL -c "VACUUM ANALYZE refresh_tokens"
+# Optimize to reclaim space
+mysql -h $DB_HOST -u $DB_USER -p$DB_PASS $DB_NAME -e "OPTIMIZE TABLE refresh_tokens"
 ```
 
 #### Stripe Webhook Not Signing Correctly
@@ -411,7 +417,7 @@ grep "Stripe" logs/* | grep -i "signature\|invalid"
 
 ```bash
 # Immediate mitigation: clear all sessions (WARN USERS)
-psql $DATABASE_URL -c "TRUNCATE TABLE refresh_tokens"
+mysql -h $DB_HOST -u $DB_USER -p$DB_PASS $DB_NAME -e "TRUNCATE TABLE refresh_tokens"
 # → Users will be forced to re-auth on next app open
 
 # Then investigate root cause in Sentry / logs

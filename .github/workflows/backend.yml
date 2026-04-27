@@ -35,7 +35,7 @@ jobs:
       mysql:
         image: mysql:8.0
         env:
-          MYSQL_ROOT_PASSWORD: postgres
+          MYSQL_ROOT_PASSWORD: root
           MYSQL_DATABASE: scorepion_test
         ports:
           - 3306:3306
@@ -46,7 +46,7 @@ jobs:
           --health-retries=5
 
     env:
-      DATABASE_URL: mysql://root:postgres@localhost:3306/scorepion_test
+      DATABASE_URL: mysql://root:root@localhost:3306/scorepion_test
       NODE_ENV: test
       SESSION_SECRET: test-session-secret-not-used-outside-ci
       ADMIN_SECRET: test-admin-secret
@@ -74,7 +74,7 @@ jobs:
           npx drizzle-kit push --force
           for f in $(ls server/migrations/*.sql | sort); do
             echo "Applying $f ..."
-            mysql -h 127.0.0.1 -u root -ppostgres scorepion_test < "$f" || true
+            mysql -h 127.0.0.1 -u root -proot scorepion_test < "$f" || true
           done
 
       - name: Test

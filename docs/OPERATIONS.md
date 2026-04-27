@@ -10,23 +10,23 @@ A guide to running and maintaining the Scorepion football prediction app in prod
 
 Configure these in your `.env` file or via your platform's secrets management (Fly.io, Heroku, AWS Systems Manager, etc.):
 
-| Variable                 | Required | Notes                                                                                                                    |
-| ------------------------ | -------- | ------------------------------------------------------------------------------------------------------------------------ |
-| `DATABASE_URL`           | Yes      | Postgres 14+ connection string; managed Postgres (Fly, Supabase, RDS) recommended. 2GB RAM minimum for 10k MAU.          |
-| `FOOTBALL_API_KEY`       | Yes      | RapidAPI API-Football key (Pro plan recommended for live polling; free tier is batch-only).                              |
-| `JWT_SECRET`             | Yes      | 64+ random hex chars. Generate: `node -e "console.log(require('crypto').randomBytes(64).toString('hex'))"`               |
-| `ADMIN_SECRET`           | Yes      | Secret for admin-only endpoints (e.g., `/api/football/sync/full`). Rotate quarterly.                                     |
-| `SENTRY_DSN`             | Yes      | Error tracking DSN from [sentry.io](https://sentry.io). Create two projects: `scorepion-server`, `scorepion-client`.     |
-| `STRIPE_SECRET_KEY`      | No       | Production Stripe secret key (if using premium features).                                                                |
-| `STRIPE_WEBHOOK_SECRET`  | No       | Stripe webhook signing key.                                                                                              |
-| `ALLOWED_ORIGINS`        | No       | Comma-separated CORS origins (e.g., `https://scorepion.com,https://www.scorepion.com`). Localhost always allowed in dev. |
-| `NODE_ENV`               | Yes      | Set to `production` in prod.                                                                                             |
-| `APP_URL`                | Yes      | Public-facing server URL for Stripe/Expo redirects (e.g., `https://api.scorepion.com`).                                  |
-| `EXPO_PUBLIC_SENTRY_DSN` | Yes      | Client-side Sentry DSN (React Native). Different from server DSN.                                                        |
+| Variable                 | Required | Notes                                                                                                                      |
+| ------------------------ | -------- | -------------------------------------------------------------------------------------------------------------------------- |
+| `DATABASE_URL`           | Yes      | MySQL 8.0+ connection string; managed MySQL (PlanetScale, AWS RDS, DigitalOcean) recommended. 2GB RAM minimum for 10k MAU. |
+| `FOOTBALL_API_KEY`       | Yes      | RapidAPI API-Football key (Pro plan recommended for live polling; free tier is batch-only).                                |
+| `JWT_SECRET`             | Yes      | 64+ random hex chars. Generate: `node -e "console.log(require('crypto').randomBytes(64).toString('hex'))"`                 |
+| `ADMIN_SECRET`           | Yes      | Secret for admin-only endpoints (e.g., `/api/football/sync/full`). Rotate quarterly.                                       |
+| `SENTRY_DSN`             | Yes      | Error tracking DSN from [sentry.io](https://sentry.io). Create two projects: `scorepion-server`, `scorepion-client`.       |
+| `STRIPE_SECRET_KEY`      | No       | Production Stripe secret key (if using premium features).                                                                  |
+| `STRIPE_WEBHOOK_SECRET`  | No       | Stripe webhook signing key.                                                                                                |
+| `ALLOWED_ORIGINS`        | No       | Comma-separated CORS origins (e.g., `https://scorepion.com,https://www.scorepion.com`). Localhost always allowed in dev.   |
+| `NODE_ENV`               | Yes      | Set to `production` in prod.                                                                                               |
+| `APP_URL`                | Yes      | Public-facing server URL for Stripe/Expo redirects (e.g., `https://api.scorepion.com`).                                    |
+| `EXPO_PUBLIC_SENTRY_DSN` | Yes      | Client-side Sentry DSN (React Native). Different from server DSN.                                                          |
 
 ### Recommended Infrastructure
 
-- **Postgres**: Fly.io, Supabase, AWS RDS, or DigitalOcean managed (not containerized in prod)
+- **MySQL**: PlanetScale, AWS RDS, DigitalOcean managed, or Fly.io (not containerized in prod)
   - Min 2GB RAM for 10k MAU; 8GB for 100k MAU
   - Daily automated backups via managed provider
   - Single region acceptable up to 100k MAU
@@ -139,7 +139,7 @@ If `used >= limit`, quota is exhausted. Wait until `resetAt` or upgrade plan.
 If a user reports locked-out auth:
 
 ```bash
-psql $DATABASE_URL -c "
+mysql -h $DB_HOST -u $DB_USER -p$DB_PASS $DB_NAME -e "
   DELETE FROM refresh_tokens WHERE user_id = 'user_id_here';
   SELECT 'Token invalidated. User will re-auth on next app open.';
 "
@@ -150,7 +150,7 @@ psql $DATABASE_URL -c "
 If JWT_SECRET is suspected compromised:
 
 ```bash
-psql $DATABASE_URL -c "
+mysql -h $DB_HOST -u $DB_USER -p$DB_PASS $DB_NAME -e "
   TRUNCATE TABLE refresh_tokens;
   SELECT 'All refresh tokens invalidated.';
 "
@@ -161,12 +161,12 @@ Then rotate `JWT_SECRET` in production and restart.
 ### Check Database Size
 
 ```bash
-psql $DATABASE_URL -c "
+mysql -h $DB_HOST -u $DB_USER -p$DB_PASS $DB_NAME -e "
   SELECT
-    schemaname,
-    ROUND(SUM(pg_total_relation_size(tablename)) / 1024 / 1024) AS size_mb
-  FROM pg_tables
-  GROUP BY schemaname
+    table_schema,
+    ROUND(SUM(data_length + index_length) / 1024 / 1024) AS size_mb
+  FROM information_schema.tables
+  GROUP BY table_schema
   ORDER BY size_mb DESC;
 "
 ```
@@ -175,7 +175,7 @@ psql $DATABASE_URL -c "
 
 If a migration breaks prod:
 
-1. Manually revert schema via `psql` (consult migration file)
+1. Manually revert schema via `mysql` (consult migration file)
 2. Delete the migration from `_migrations` table: `DELETE FROM _migrations WHERE name = '006_*.sql';`
 3. Redeploy server (will re-apply migrations on startup)
 
@@ -185,21 +185,21 @@ If a migration breaks prod:
 
 ### 10k MAU
 
-- Single Postgres (2GB RAM, automated backups, ~daily growth)
+- Single MySQL (2GB RAM, automated backups, ~daily growth)
 - Single Node box (1GB RAM, stateless)
 - API-Football free or pro (batch-only acceptable)
 - No caching needed
 
 ### 100k MAU
 
-- Postgres 8GB RAM with read replica (for reporting queries)
+- MySQL 8GB RAM with read replica (for reporting queries)
 - 2–3 Node boxes behind load balancer
 - Redis for rate limiting (shared state across LB)
 - API-Football Pro (7,500 req/day, grows with users but caching mitigates linear scaling)
 
 ### 1M+ MAU
 
-- Postgres cluster (primary + hot standby) in same region
+- MySQL cluster (primary + hot standby) in same region
 - 5+ stateless Node boxes (horizontal scaling)
 - Redis cluster for sessions + rate limiting
 - Consider read replicas in other regions for latency
@@ -237,7 +237,7 @@ After rotation, restart server to apply.
 ### Key Metrics
 
 - **Server uptime**: `/api/health` should return 200 every minute
-- **Database latency**: Query p95 latency <200ms (check Postgres logs)
+- **Database latency**: Query p95 latency <200ms (check MySQL logs)
 - **API-Football sync lag**: Latest fixture sync should be <1 hour old
 - **Error rate**: Sentry error groups should trend toward zero
 - **Disk usage**: Database size should grow <10% monthly

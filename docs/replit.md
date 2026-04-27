@@ -2,7 +2,7 @@
 
 ## Overview
 
-Scorepion is a cross-platform mobile application built with React Native and Expo, designed for football fans to predict match scores, compete on leaderboards, and join groups. It integrates real match data, standings, and top scorers from major football leagues (Premier League, La Liga, Serie A, Bundesliga, Ligue 1, Champions League, Europa League) via API-Football. The app features user authentication, session management, and data persistence through a PostgreSQL backend, with a focus on daily engagement, competitive mechanics, and a youth-targeted, visually rich UI/UX.
+Scorepion is a cross-platform mobile application built with React Native and Expo, designed for football fans to predict match scores, compete on leaderboards, and join groups. It integrates real match data, standings, and top scorers from major football leagues (Premier League, La Liga, Serie A, Bundesliga, Ligue 1, Champions League, Europa League) via API-Football. The app features user authentication, session management, and data persistence through a MySQL backend, with a focus on daily engagement, competitive mechanics, and a youth-targeted, visually rich UI/UX.
 
 ## User Preferences
 
@@ -41,9 +41,9 @@ Preferred communication style: Simple, everyday language.
 - **Performance Insights**: League-specific performance, best/worst leagues, recent form, overall stats
 - **API Routes**: 12 endpoints under `/api/retention/*` for all retention features
 
-### Database Schema (Drizzle + PostgreSQL)
+### Database Schema (Drizzle + MySQL)
 
-- **ORM**: Drizzle ORM with PostgreSQL dialect.
+- **ORM**: Drizzle ORM with MySQL dialect.
 - **Schema**: Defined in `shared/schema.ts`, including tables for `users`, `football_leagues`, `football_teams`, `football_fixtures`, `football_standings`, `football_top_scorers`, `sync_log`, `daily_packs`, `boost_picks`, `achievements`, `weekly_winners`, and `event_log`.
 - **Validation**: Uses `drizzle-zod` for generating Zod schemas.
 - **Migrations**: Managed via `drizzle-kit`.
@@ -59,22 +59,25 @@ Preferred communication style: Simple, everyday language.
 ## External Dependencies
 
 ### Required Services
-- **PostgreSQL Database**: Stores all application data, including user profiles and synced football data (fixtures, standings, top scorers).
+
+- **MySQL Database**: Stores all application data, including user profiles and synced football data (fixtures, standings, top scorers).
 - **API-Football**: Third-party API (api-sports.io) for real-time football match data.
 
 ### Environment Variables
-- `DATABASE_URL`: PostgreSQL connection string.
+
+- `DATABASE_URL`: MySQL connection string.
 - `FOOTBALL_API_KEY`: API-Football authentication key.
 - `FOOTBALL_API_BASE_URL`: Base URL for the API-Football service.
 - `REPLIT_DEV_DOMAIN`: Used for local development and CORS configuration.
 - `EXPO_PUBLIC_DOMAIN`: Client-side API base URL.
 
 ### Key npm Dependencies
+
 - `expo`: Core React Native framework.
 - `expo-router`: File-based routing for Expo.
 - `express`: Backend web framework.
 - `drizzle-orm`, `drizzle-kit`: ORM for database interaction.
-- `pg`: PostgreSQL client.
+- `mysql2`: MySQL client.
 - `@tanstack/react-query`: Data fetching and caching.
 - `@react-native-async-storage/async-storage`: Local data persistence.
 - `react-native-reanimated`: Animations.

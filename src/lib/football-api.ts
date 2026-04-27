@@ -198,7 +198,7 @@ export function useFootballMatches(options?: { leagueId?: string; status?: strin
   //   - Unfiltered but contains LIVE match(es): 20s (tight)
   //   - Unfiltered, no LIVE matches: 60s (idle background keep-fresh)
   //
-  // The server's live poller writes to Postgres every 30s. Client polling at 20s
+  // The server's live poller writes to MySQL every 30s. Client polling at 20s
   // when any match is live keeps the UI within 50s of backend reality. Idle polling
   // at 60s keeps mixed-list feeds current without excess requests.
   const hasLiveFilter = options?.status === "live";
