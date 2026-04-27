@@ -36,6 +36,7 @@ import { ThisWeekCard } from "@/components/ui/ThisWeekCard";
 import StyledText from "@/components/ui/StyledText";
 import { getLastVisit, setLastVisit } from "@/lib/storage";
 import { computeLevel } from "@/lib/leveling";
+export { ErrorBoundary } from "@/components/ErrorBoundary";
 
 function MetricCard({
   icon,

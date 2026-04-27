@@ -31,6 +31,7 @@ import { useLeaderboard, useChaseData, useWeeklyWinners } from "@/lib/football-a
 import { LeaderboardRowSkeleton } from "@/components/SkeletonLoader";
 import { getPeriodContext as getPeriodContextFromDatetime } from "@/lib/datetime";
 import { useFilterPersistence } from "@/lib/hooks/useFilterPersistence";
+export { ErrorBoundary } from "@/components/ErrorBoundary";
 
 type TimeFilter = "weekly" | "monthly" | "alltime";
 
