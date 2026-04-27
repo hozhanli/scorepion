@@ -92,7 +92,17 @@ function setupBodyParsing(app: express.Application) {
 function setupSecurity(app: express.Application) {
   app.use(
     helmet({
-      contentSecurityPolicy: process.env.NODE_ENV === "production" ? undefined : false,
+      contentSecurityPolicy: {
+        directives: {
+          defaultSrc: ["'self'"],
+          scriptSrc: ["'self'"],
+          styleSrc: ["'self'", "'unsafe-inline'"],
+          imgSrc: ["'self'", "https:", "data:"],
+          connectSrc: ["'self'", "https://api-sports.io", "https://*.sentry.io"],
+          frameSrc: ["'none'"],
+          objectSrc: ["'none'"],
+        },
+      },
       crossOriginResourcePolicy: { policy: "cross-origin" },
     }),
   );
