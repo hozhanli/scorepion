@@ -837,32 +837,39 @@ export async function settlePredictions(): Promise<number> {
   const { checkAndAwardAchievements, getUserStats } = await import("./achievements.service");
   const { logGroupActivity } = await import("./group-activity.service");
 
-  const unsettled = await pool.query(`
-    SELECT p.id, p.match_id, p.home_score as pred_home, p.away_score as pred_away, p.user_id
-    FROM predictions p WHERE p.settled = false
-  `);
-  if (unsettled.rows.length === 0) return 0;
-
   let settled = 0;
   const client = await pool.connect();
   try {
     await client.query("BEGIN");
-    for (const row of unsettled.rows) {
-      const fixture = await client.query(
-        `
-      SELECT home_score, away_score, status, home_team_id, away_team_id
-      FROM football_fixtures
-      WHERE CAST(api_fixture_id AS TEXT) = $1
-        AND status = 'finished'
-        AND home_score IS NOT NULL
-        AND away_score IS NOT NULL
-    `,
-        [row.match_id],
-      );
-      if (fixture.rows.length === 0) continue;
 
-      const actHome = fixture.rows[0].home_score;
-      const actAway = fixture.rows[0].away_score;
+    // Advisory lock prevents concurrent settlement runs (lock id = 1 for settlement)
+    await client.query("SELECT pg_advisory_xact_lock(1)");
+
+    // Fetch ALL unsettled predictions joined with their finished fixture data
+    // in a single query at the start of the transaction, so we work with a
+    // consistent snapshot and avoid per-row queries inside the loop.
+    const unsettled = await client.query(`
+      SELECT
+        p.id, p.match_id, p.home_score AS pred_home, p.away_score AS pred_away, p.user_id,
+        f.home_score AS act_home, f.away_score AS act_away,
+        f.home_team_id, f.away_team_id
+      FROM predictions p
+      JOIN football_fixtures f
+        ON CAST(f.api_fixture_id AS TEXT) = p.match_id
+        AND f.status = 'finished'
+        AND f.home_score IS NOT NULL
+        AND f.away_score IS NOT NULL
+      WHERE p.settled = false
+    `);
+
+    if (unsettled.rows.length === 0) {
+      await client.query("COMMIT");
+      return 0;
+    }
+
+    for (const row of unsettled.rows) {
+      const actHome = row.act_home;
+      const actAway = row.act_away;
       const predHome = row.pred_home;
       const predAway = row.pred_away;
 
@@ -891,15 +898,15 @@ export async function settlePredictions(): Promise<number> {
         try {
           const stg = await client.query(
             `SELECT team_id, position FROM football_standings WHERE team_id IN ($1,$2) ORDER BY position ASC LIMIT 2`,
-            [fixture.rows[0].home_team_id, fixture.rows[0].away_team_id],
+            [row.home_team_id, row.away_team_id],
           );
           if (stg.rows.length === 2) {
             const fav = stg.rows[0].team_id;
             const aRes = actHome > actAway ? "home" : actHome < actAway ? "away" : "draw";
             const pRes = predHome > predAway ? "home" : predHome < predAway ? "away" : "draw";
             const udWon =
-              (aRes === "away" && fav === fixture.rows[0].home_team_id) ||
-              (aRes === "home" && fav === fixture.rows[0].away_team_id);
+              (aRes === "away" && fav === row.home_team_id) ||
+              (aRes === "home" && fav === row.away_team_id);
             if (udWon && pRes === aRes) upsetBonus = SCORING.UPSET_BONUS;
           }
         } catch (err) {
@@ -954,7 +961,7 @@ export async function settlePredictions(): Promise<number> {
             `SELECT ht.name as home_name, at.name as away_name FROM football_teams ht
            JOIN football_teams at ON true
            WHERE ht.api_football_id=$1 AND at.api_football_id=$2`,
-            [fixture.rows[0].home_team_id, fixture.rows[0].away_team_id],
+            [row.home_team_id, row.away_team_id],
           );
           const teamName = teamQuery.rows[0] || { home_name: "Home", away_name: "Away" };
           const matchSummary = `${teamName.home_name} ${actHome}-${actAway} ${teamName.away_name}`;
