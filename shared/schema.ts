@@ -9,7 +9,6 @@ import {
   jsonb,
   uniqueIndex,
   index,
-  timestamp,
 } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
@@ -60,6 +59,7 @@ export const predictions = pgTable(
   (table) => [
     index("predictions_user_idx").on(table.userId),
     uniqueIndex("predictions_user_match_uniq").on(table.userId, table.matchId),
+    index("predictions_settled_timestamp_idx").on(table.settled, table.timestamp),
   ],
 );
 
@@ -99,6 +99,7 @@ export const groupMembers = pgTable(
   (table) => [
     index("group_members_user_idx").on(table.userId),
     index("group_members_group_idx").on(table.groupId),
+    uniqueIndex("group_members_group_user_uniq").on(table.groupId, table.userId),
   ],
 );
 
@@ -348,7 +349,10 @@ export const dailyPacks = pgTable(
       .notNull()
       .default(sql`extract(epoch from now()) * 1000`),
   },
-  (table) => [uniqueIndex("daily_pack_user_date").on(table.userId, table.date)],
+  (table) => [
+    uniqueIndex("daily_pack_user_date").on(table.userId, table.date),
+    index("daily_packs_date_idx").on(table.date),
+  ],
 );
 
 export const boostPicks = pgTable(
@@ -371,7 +375,10 @@ export const boostPicks = pgTable(
       .notNull()
       .default(sql`extract(epoch from now()) * 1000`),
   },
-  (table) => [uniqueIndex("boost_user_date").on(table.userId, table.date)],
+  (table) => [
+    uniqueIndex("boost_user_date").on(table.userId, table.date),
+    index("boost_picks_date_idx").on(table.date),
+  ],
 );
 
 export const achievements = pgTable("achievements", {
@@ -406,7 +413,7 @@ export const weeklyWinners = pgTable("weekly_winners", {
   points: integer("points").notNull().default(0),
   rank: integer("rank").notNull().default(1),
   type: text("type").notNull().default("global"),
-  groupId: varchar("group_id"),
+  groupId: varchar("group_id").references(() => groups.id, { onDelete: "cascade" }),
   createdAt: bigint("created_at", { mode: "number" })
     .notNull()
     .default(sql`extract(epoch from now()) * 1000`),
@@ -544,24 +551,28 @@ export const footballTeamStats = pgTable(
   (t) => [uniqueIndex("team_stats_league_season").on(t.teamId, t.leagueId, t.season)],
 );
 
-export const groupActivity = pgTable("group_activity", {
-  id: varchar("id")
-    .primaryKey()
-    .default(sql`gen_random_uuid()`),
-  groupId: varchar("group_id")
-    .notNull()
-    .references(() => groups.id, { onDelete: "cascade" }),
-  userId: varchar("user_id")
-    .notNull()
-    .references(() => users.id, { onDelete: "cascade" }),
-  type: text("type").notNull(), // 'prediction' | 'exact_score' | 'points_earned' | 'streak' | 'boost_pick' | 'achievement' | 'rank_change' | 'weekly_winner' | 'joined'
-  matchId: text("match_id"),
-  points: integer("points").default(0),
-  metadata: jsonb("metadata").$type<Record<string, any>>().default({}),
-  createdAt: bigint("created_at", { mode: "number" })
-    .notNull()
-    .default(sql`extract(epoch from now()) * 1000`),
-});
+export const groupActivity = pgTable(
+  "group_activity",
+  {
+    id: varchar("id")
+      .primaryKey()
+      .default(sql`gen_random_uuid()`),
+    groupId: varchar("group_id")
+      .notNull()
+      .references(() => groups.id, { onDelete: "cascade" }),
+    userId: varchar("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    type: text("type").notNull(), // 'prediction' | 'exact_score' | 'points_earned' | 'streak' | 'boost_pick' | 'achievement' | 'rank_change' | 'weekly_winner' | 'joined'
+    matchId: text("match_id"),
+    points: integer("points").default(0),
+    metadata: jsonb("metadata").$type<Record<string, any>>().default({}),
+    createdAt: bigint("created_at", { mode: "number" })
+      .notNull()
+      .default(sql`extract(epoch from now()) * 1000`),
+  },
+  (table) => [index("group_activity_group_created_idx").on(table.groupId, table.createdAt)],
+);
 
 export const refreshTokens = pgTable(
   "refresh_tokens",
@@ -587,17 +598,24 @@ export const refreshTokens = pgTable(
   ],
 );
 
-export const eventLog = pgTable("event_log", {
-  id: varchar("id")
-    .primaryKey()
-    .default(sql`gen_random_uuid()`),
-  userId: varchar("user_id"),
-  eventType: text("event_type").notNull(),
-  eventData: jsonb("event_data").$type<Record<string, any>>().default({}),
-  timestamp: bigint("timestamp", { mode: "number" })
-    .notNull()
-    .default(sql`extract(epoch from now()) * 1000`),
-});
+export const eventLog = pgTable(
+  "event_log",
+  {
+    id: varchar("id")
+      .primaryKey()
+      .default(sql`gen_random_uuid()`),
+    userId: varchar("user_id").references(() => users.id, { onDelete: "set null" }),
+    eventType: text("event_type").notNull(),
+    eventData: jsonb("event_data").$type<Record<string, any>>().default({}),
+    timestamp: bigint("timestamp", { mode: "number" })
+      .notNull()
+      .default(sql`extract(epoch from now()) * 1000`),
+  },
+  (table) => [
+    index("event_log_user_idx").on(table.userId),
+    index("event_log_timestamp_idx").on(table.timestamp),
+  ],
+);
 
 export const insertUserSchema = createInsertSchema(users).pick({
   username: true,
@@ -643,7 +661,9 @@ export const pushTokens = pgTable(
       .references(() => users.id, { onDelete: "cascade" }),
     token: text("token").notNull(),
     platform: text("platform"), // "ios" | "android" | "web"
-    createdAt: timestamp("created_at").defaultNow(),
+    createdAt: bigint("created_at", { mode: "number" })
+      .notNull()
+      .default(sql`extract(epoch from now()) * 1000`),
   },
   (t) => [uniqueIndex("push_tokens_user_token_unique").on(t.userId, t.token)],
 );
