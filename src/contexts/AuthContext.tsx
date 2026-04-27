@@ -5,6 +5,7 @@ import React, {
   useEffect,
   useMemo,
   useCallback,
+  useRef,
   ReactNode,
 } from "react";
 import AsyncStorage from "@react-native-async-storage/async-storage";
@@ -201,17 +202,51 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
+  // Stable ref wrappers: prevent cascading re-renders through the context
+  // value when callback identities change. Even though the current callbacks
+  // have only stable deps (imports + state setters), wrapping through refs
+  // guarantees that adding a non-stable dep later won't cascade into every
+  // consumer.
+  const loginRef = useRef(login);
+  const registerRef = useRef(register);
+  const logoutRef = useRef(logout);
+  const refreshUserRef = useRef(refreshUser);
+
+  useEffect(() => {
+    loginRef.current = login;
+  }, [login]);
+  useEffect(() => {
+    registerRef.current = register;
+  }, [register]);
+  useEffect(() => {
+    logoutRef.current = logout;
+  }, [logout]);
+  useEffect(() => {
+    refreshUserRef.current = refreshUser;
+  }, [refreshUser]);
+
+  const stableLogin = useCallback(
+    (username: string, password: string) => loginRef.current(username, password),
+    [],
+  );
+  const stableRegister = useCallback(
+    (username: string, password: string) => registerRef.current(username, password),
+    [],
+  );
+  const stableLogout = useCallback(() => logoutRef.current(), []);
+  const stableRefreshUser = useCallback(() => refreshUserRef.current(), []);
+
   const value = useMemo(
     () => ({
       user,
       isLoading,
       isAuthenticated: !!user,
-      login,
-      register,
-      logout,
-      refreshUser,
+      login: stableLogin,
+      register: stableRegister,
+      logout: stableLogout,
+      refreshUser: stableRefreshUser,
     }),
-    [user, isLoading, login, register, logout, refreshUser],
+    [user, isLoading, stableLogin, stableRegister, stableLogout, stableRefreshUser],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
