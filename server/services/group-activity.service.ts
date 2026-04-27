@@ -24,18 +24,18 @@ export async function logGroupActivity(
 ): Promise<void> {
   try {
     // Get all groups this user belongs to
-    const groups = await pool.query(
-      `SELECT group_id FROM group_members WHERE user_id = $1`,
+    const [groupRows] = await pool.query(
+      `SELECT group_id FROM group_members WHERE user_id = ?`,
       [userId]
-    );
-    if (groups.rows.length === 0) return;
+    ) as any;
+    if (groupRows.length === 0) return;
 
-    const groupIds: string[] = groups.rows.map((r: any) => r.group_id);
+    const groupIds: string[] = groupRows.map((r: any) => r.group_id);
 
     for (const groupId of groupIds) {
       await pool.query(
         `INSERT INTO group_activity (group_id, user_id, type, match_id, points, metadata, created_at)
-         VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+         VALUES (?, ?, ?, ?, ?, ?, ?)`,
         [
           groupId,
           userId,
@@ -57,7 +57,7 @@ export async function getGroupActivityFeed(
   groupId: string,
   limit = 50
 ): Promise<any[]> {
-  const result = await pool.query(
+  const [rows] = await pool.query(
     `SELECT
        ga.id,
        ga.type,
@@ -70,12 +70,12 @@ export async function getGroupActivityFeed(
        u.streak
      FROM group_activity ga
      JOIN users u ON u.id = ga.user_id
-     WHERE ga.group_id = $1
+     WHERE ga.group_id = ?
      ORDER BY ga.created_at DESC
-     LIMIT $2`,
+     LIMIT ?`,
     [groupId, limit]
-  );
-  return result.rows;
+  ) as any;
+  return rows;
 }
 
 export function buildActivityMessage(
