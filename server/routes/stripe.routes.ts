@@ -6,11 +6,20 @@ import { asyncHandler } from "../middleware/asyncHandler";
 
 export const stripeRouter = Router();
 
+const VALID_PRICE_IDS = new Set(
+  [process.env.STRIPE_PRICE_PREMIUM_MONTHLY, process.env.STRIPE_PRICE_PREMIUM_YEARLY].filter(
+    Boolean,
+  ),
+);
+
 stripeRouter.get(
   "/config",
   asyncHandler(async (_req: Request, res: Response) => {
     try {
       const config = await stripeService.getStripeConfig();
+      if (config?.code === "NOT_IMPLEMENTED") {
+        return res.status(501).json({ message: config.error });
+      }
       return res.json(config);
     } catch (err) {
       console.error("Stripe config error:", err);
@@ -24,6 +33,9 @@ stripeRouter.get(
   asyncHandler(async (_req: Request, res: Response) => {
     try {
       const products = await stripeService.getStripeProducts();
+      if (products?.code === "NOT_IMPLEMENTED") {
+        return res.status(501).json({ message: products.error });
+      }
       return res.json(products);
     } catch (err) {
       console.error("Stripe products error:", err);
@@ -39,6 +51,10 @@ stripeRouter.post(
     try {
       const { priceId } = req.body;
       if (!priceId) return res.status(400).json({ message: "Price ID required" });
+
+      if (VALID_PRICE_IDS.size > 0 && !VALID_PRICE_IDS.has(priceId)) {
+        return res.status(400).json({ message: "Invalid price ID" });
+      }
 
       const user = await authRepo.getUserById(req.userId!);
       if (!user) return res.status(404).json({ message: "User not found" });
@@ -123,6 +139,9 @@ stripeRouter.post(
       if (!user) return res.status(404).json({ message: "User not found" });
 
       const session = await stripeService.createBillingPortalSession(user);
+      if (session?.code === "NOT_IMPLEMENTED") {
+        return res.status(501).json({ message: session.error });
+      }
       return res.json(session);
     } catch (err: any) {
       console.error("Portal error:", err);

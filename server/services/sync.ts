@@ -57,30 +57,35 @@ import { sendSettlementPush, sendKickoffReminder, sendStreakAtRiskPush } from ".
 export const LEAGUE_IDS = api.LEAGUE_MAP;
 const CURRENT_SEASON = 2025;
 
-// ── Push notification dedup (in-memory Set, resets on server restart) ──────────
-// Key: `${notificationType}:${userId}:${matchId}` or `${notificationType}:${userId}`
-const sentNotifications = new Set<string>();
-const SENT_NOTIFICATIONS_MAX = 10_000;
+// ── Push notification dedup (in-memory TTL Map, resets on server restart) ─────
+// Key: `${notificationType}:${userId}:${matchId}` → timestamp
+const sentNotifications = new Map<string, number>();
 
 function makeNotificationKey(type: string, userId: string, matchId?: string): string {
   return `${type}:${userId}:${matchId || ""}`;
 }
 
 function hasSentNotification(type: string, userId: string, matchId?: string): boolean {
-  return sentNotifications.has(makeNotificationKey(type, userId, matchId));
+  const key = makeNotificationKey(type, userId, matchId);
+  const ts = sentNotifications.get(key);
+  if (!ts) return false;
+  if (Date.now() - ts > 24 * 60 * 60 * 1000) {
+    sentNotifications.delete(key);
+    return false;
+  }
+  return true;
 }
 
 function markNotificationSent(type: string, userId: string, matchId?: string): void {
-  // Prevent unbounded memory growth: clear the entire set when it gets too large.
-  // A full clear is acceptable because the worst-case consequence is a duplicate
-  // push notification, which is harmless.
-  if (sentNotifications.size >= SENT_NOTIFICATIONS_MAX) {
-    console.log(
-      `[Notifications] sentNotifications Set reached ${SENT_NOTIFICATIONS_MAX} entries, clearing`,
-    );
-    sentNotifications.clear();
+  const key = makeNotificationKey(type, userId, matchId);
+  sentNotifications.set(key, Date.now());
+  // Prune old entries periodically
+  if (sentNotifications.size > 10_000) {
+    const cutoff = Date.now() - 24 * 60 * 60 * 1000;
+    for (const [k, v] of sentNotifications) {
+      if (v < cutoff) sentNotifications.delete(k);
+    }
   }
-  sentNotifications.add(makeNotificationKey(type, userId, matchId));
 }
 
 // ── League and team seeding ──────────────────────────────────────────────────
@@ -189,7 +194,9 @@ async function logSync(
       error,
       syncedAt: Date.now(),
     });
-  } catch {}
+  } catch (err) {
+    console.error("[Sync] logSync failed:", err instanceof Error ? err.message : err);
+  }
 }
 
 async function getLastSyncTime(syncType: string, leagueId?: string): Promise<number | null> {

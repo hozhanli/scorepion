@@ -51,8 +51,18 @@ export async function requireAuth(req: Request, res: Response, next: NextFunctio
 // ---------------------------------------------------------------------------
 
 const adminAttempts = new Map<string, { count: number; resetAt: number }>();
-const ADMIN_RATE_LIMIT = 10; // max attempts per window
-const ADMIN_RATE_WINDOW_MS = 60_000; // 1 minute
+const ADMIN_RATE_LIMIT = parseInt(process.env.ADMIN_RATE_LIMIT ?? "10", 10); // max attempts per window
+const ADMIN_RATE_WINDOW_MS = parseInt(process.env.ADMIN_RATE_WINDOW_MS ?? "60000", 10); // 1 minute
+
+// Periodic cleanup of expired rate-limit entries to prevent memory leaks
+setInterval(() => {
+  const now = Date.now();
+  for (const [ip, entry] of adminAttempts) {
+    if (now > entry.resetAt) {
+      adminAttempts.delete(ip);
+    }
+  }
+}, 60_000);
 
 export function requireAdmin(req: Request, res: Response, next: NextFunction): void {
   const adminSecret = process.env.ADMIN_SECRET;

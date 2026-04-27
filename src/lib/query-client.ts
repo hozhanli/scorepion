@@ -219,6 +219,9 @@ export const queryClient = new QueryClient({
     mutations: {
       retry: 2,
       retryDelay: (attempt) => Math.min(1000 * Math.pow(2, attempt), 8000),
+      onError: (error) => {
+        console.error("[API]", error instanceof Error ? error.message : error);
+      },
     },
   },
 });

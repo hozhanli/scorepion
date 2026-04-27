@@ -262,6 +262,11 @@ export const MatchCard = memo(function MatchCard({
   const { homeFlash, awayFlash, flashScore } = useScoreFlash();
   const prevScores = useRef({ home: match.homeScore, away: match.awayScore });
 
+  // Reset prevScores when the component is reused for a different match
+  useEffect(() => {
+    prevScores.current = { home: match.homeScore, away: match.awayScore };
+  }, [match.id]);
+
   // Trigger flash on score changes (skip first mount)
   useEffect(() => {
     if (!isLive) return;

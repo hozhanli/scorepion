@@ -101,13 +101,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const dailyPackRef = useRef(dailyPack);
   const profileRef = useRef(profile);
   const groupsRef = useRef(groups);
-  const submitPredictionRef = useRef<AppContextValue["submitPrediction"] | null>(null);
+  const submitPredictionRef = useRef<AppContextValue["submitPrediction"]>(null!);
   // Dedup sets for commiseration toasts
   const announcedMisses = useRef(new Set<string>());
   const lastStreakResetAnnounced = useRef<number | null>(null);
   const lastRankDropAnnounced = useRef<{ timestamp: number; rank: number } | null>(null);
   const previousStreak = useRef<number>(0);
   const previousRank = useRef<number>(0);
+  const loadingRef = useRef(false);
 
   const {
     data: apiMatches,
@@ -242,79 +243,85 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const loadData = useCallback(() => {
     let cancelled = false;
+    if (loadingRef.current) return () => {};
+    loadingRef.current = true;
     (async () => {
-      setIsLoading(true);
       try {
-        await pruneStaleDrafts();
-      } catch (e) {
-        if (__DEV__) console.warn("pruneStaleDrafts failed:", e);
-      }
-      const [localPreds, prof, grps, obDone, favLeagues, premium] = await Promise.all([
-        getPredictions(),
-        getUserProfile(),
-        getGroups(),
-        getOnboardingDone(),
-        getFavoriteLeagues(),
-        getIsPremium(),
-      ]);
-      if (!cancelled) {
-        setPredictions(localPreds);
-        setProfile(prof);
-        setGroups(grps);
-        setOnboardingDoneState(obDone);
-        setFavoriteLeaguesState(favLeagues);
-        setIsPremiumState(premium);
-      }
-      await initDailyPack(favLeagues);
+        setIsLoading(true);
+        try {
+          await pruneStaleDrafts();
+        } catch (e) {
+          if (__DEV__) console.warn("pruneStaleDrafts failed:", e);
+        }
+        const [localPreds, prof, grps, obDone, favLeagues, premium] = await Promise.all([
+          getPredictions(),
+          getUserProfile(),
+          getGroups(),
+          getOnboardingDone(),
+          getFavoriteLeagues(),
+          getIsPremium(),
+        ]);
+        if (!cancelled) {
+          setPredictions(localPreds);
+          setProfile(prof);
+          setGroups(grps);
+          setOnboardingDoneState(obDone);
+          setFavoriteLeaguesState(favLeagues);
+          setIsPremiumState(premium);
+        }
+        await initDailyPack(favLeagues);
 
-      try {
-        const res = await apiRequest("GET", "/api/predictions");
-        const dbPreds = await res.json();
-        if (!cancelled && Array.isArray(dbPreds) && dbPreds.length > 0) {
-          const merged: Record<string, Prediction> = { ...localPreds };
-          for (const p of dbPreds) {
-            merged[p.matchId] = {
-              matchId: p.matchId,
-              homeScore: p.homeScore,
-              awayScore: p.awayScore,
-              timestamp: p.timestamp,
-              points: p.points ?? undefined,
-              settled: p.settled ?? false,
-              boosted: false,
+        try {
+          const res = await apiRequest("GET", "/api/predictions");
+          const dbPreds = await res.json();
+          if (!cancelled && Array.isArray(dbPreds) && dbPreds.length > 0) {
+            const merged: Record<string, Prediction> = { ...localPreds };
+            for (const p of dbPreds) {
+              merged[p.matchId] = {
+                matchId: p.matchId,
+                homeScore: p.homeScore,
+                awayScore: p.awayScore,
+                timestamp: p.timestamp,
+                points: p.points ?? undefined,
+                settled: p.settled ?? false,
+                boosted: false,
+              };
+            }
+            if (!cancelled) {
+              setPredictions(merged);
+            }
+          }
+        } catch (error) {
+          if (__DEV__) console.warn("Failed to load predictions:", error);
+        }
+
+        try {
+          const res = await apiRequest("GET", "/api/auth/me");
+          const data = await res.json();
+          if (!cancelled && data?.user && prof) {
+            const serverProfile: UserProfile = {
+              ...prof,
+              id: data.user.id,
+              totalPoints: data.user.totalPoints ?? prof.totalPoints,
+              correctPredictions: data.user.correctPredictions ?? prof.correctPredictions,
+              totalPredictions: data.user.totalPredictions ?? prof.totalPredictions,
+              streak: data.user.streak ?? prof.streak,
+              bestStreak: data.user.bestStreak ?? prof.bestStreak,
             };
+            await saveUserProfile(serverProfile);
+            if (!cancelled) {
+              setProfile(serverProfile);
+            }
           }
-          if (!cancelled) {
-            setPredictions(merged);
-          }
+        } catch (error) {
+          if (__DEV__) console.warn("AppContext:loadData auth/me", { error });
         }
-      } catch (error) {
-        if (__DEV__) console.warn("Failed to load predictions:", error);
-      }
 
-      try {
-        const res = await apiRequest("GET", "/api/auth/me");
-        const data = await res.json();
-        if (!cancelled && data?.user && prof) {
-          const serverProfile: UserProfile = {
-            ...prof,
-            id: data.user.id,
-            totalPoints: data.user.totalPoints ?? prof.totalPoints,
-            correctPredictions: data.user.correctPredictions ?? prof.correctPredictions,
-            totalPredictions: data.user.totalPredictions ?? prof.totalPredictions,
-            streak: data.user.streak ?? prof.streak,
-            bestStreak: data.user.bestStreak ?? prof.bestStreak,
-          };
-          await saveUserProfile(serverProfile);
-          if (!cancelled) {
-            setProfile(serverProfile);
-          }
+        if (!cancelled) {
+          setIsLoading(false);
         }
-      } catch (error) {
-        if (__DEV__) console.warn("AppContext:loadData auth/me", { error });
-      }
-
-      if (!cancelled) {
-        setIsLoading(false);
+      } finally {
+        loadingRef.current = false;
       }
     })();
     return () => {
@@ -593,10 +600,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
       const res = await apiRequest("DELETE", "/api/account");
       if (!res.ok) throw new Error("Delete failed");
       // Clear all local state + storage
-      await import("@react-native-async-storage/async-storage").then(({ default: AsyncStorage }) =>
-        AsyncStorage.clear(),
-      );
-      logout();
+      try {
+        const { default: AsyncStorage } = await import("@react-native-async-storage/async-storage");
+        await AsyncStorage.clear();
+      } catch (err) {
+        console.error("[Account] Failed to clear storage:", err);
+      }
+      await logout();
     } catch (err) {
       const errMsg = err instanceof Error ? err.message : String(err);
       throw new Error(`Failed to delete account: ${errMsg}`);

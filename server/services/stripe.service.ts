@@ -147,23 +147,22 @@ export async function getUserSubscription(userId: string): Promise<any | null> {
 
 export async function getStripeConfig(): Promise<any> {
   if (!isBillingEnabled()) {
-    throw new Error("Billing is not enabled");
+    return { error: "Billing is not yet available", code: "NOT_IMPLEMENTED" };
   }
-  // TODO: return publishable key from Stripe Dashboard
   return { publishableKey: process.env.STRIPE_PUBLISHABLE_KEY ?? "" };
 }
 
-export async function getStripeProducts(): Promise<any[]> {
+export async function getStripeProducts(): Promise<any> {
   if (!isBillingEnabled()) {
-    throw new Error("Billing is not enabled");
+    return { error: "Billing is not yet available", code: "NOT_IMPLEMENTED" };
   }
   // TODO: fetch from Stripe API
   return [];
 }
 
-export async function handleCheckoutSuccess(sessionId: string): Promise<void> {
+export async function handleCheckoutSuccess(sessionId: string): Promise<any> {
   if (!isBillingEnabled()) {
-    throw new Error("Billing is not enabled");
+    return { error: "Billing is not yet available", code: "NOT_IMPLEMENTED" };
   }
   // TODO: update user subscription in DB
 }
@@ -178,8 +177,8 @@ export async function getSubscriptionStatus(user: any): Promise<any> {
 
 export async function createBillingPortalSession(user: any): Promise<any> {
   if (!isBillingEnabled()) {
-    throw new Error("Billing is not enabled");
+    return { error: "Billing is not yet available", code: "NOT_IMPLEMENTED" };
   }
   // TODO: create Stripe billing portal session
-  throw new Error("Not implemented");
+  return { error: "Billing is not yet available", code: "NOT_IMPLEMENTED" };
 }

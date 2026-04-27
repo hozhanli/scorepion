@@ -93,7 +93,7 @@ Expected response: `{ "status": "ok" }`
 If the scheduled sync is stuck or behind:
 
 ```bash
-curl -X POST http://server:5847/api/football/sync/full \
+curl -X POST http://server:13291/api/football/sync/full \
   -H "x-admin-secret: $ADMIN_SECRET"
 ```
 
@@ -104,7 +104,7 @@ Logs will show progress.
 ### Check API-Football Quota
 
 ```bash
-curl http://server:5847/api/football/sync/quota \
+curl http://server:13291/api/football/sync/quota \
   -H "x-admin-secret: $ADMIN_SECRET"
 ```
 

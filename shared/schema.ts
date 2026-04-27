@@ -49,7 +49,7 @@ export const predictions = mysqlTable(
     matchId: varchar("match_id", { length: 255 }).notNull(),
     homeScore: int("home_score").notNull(),
     awayScore: int("away_score").notNull(),
-    points: int("points").default(0),
+    points: int("points").notNull().default(0),
     settled: boolean("settled").default(false),
     timestamp: bigint("timestamp", { mode: "number" })
       .notNull()
@@ -59,6 +59,7 @@ export const predictions = mysqlTable(
     index("predictions_user_idx").on(table.userId),
     uniqueIndex("predictions_user_match_uniq").on(table.userId, table.matchId),
     index("predictions_settled_timestamp_idx").on(table.settled, table.timestamp),
+    index("predictions_settled_idx").on(table.settled),
   ],
 );
 
@@ -126,28 +127,32 @@ export const footballTeams = mysqlTable("football_teams", {
   color: varchar("color", { length: 50 }).notNull().default("#333"),
 });
 
-export const footballFixtures = mysqlTable("football_fixtures", {
-  id: varchar("id", { length: 36 })
-    .primaryKey()
-    .default(sql`(UUID())`),
-  apiFixtureId: int("api_fixture_id").notNull().unique(),
-  leagueId: varchar("league_id", { length: 255 }).notNull(),
-  homeTeamId: int("home_team_id").notNull(),
-  awayTeamId: int("away_team_id").notNull(),
-  homeScore: int("home_score"),
-  awayScore: int("away_score"),
-  status: varchar("status", { length: 50 }).notNull().default("upcoming"),
-  statusShort: varchar("status_short", { length: 50 }).notNull().default("NS"),
-  minute: int("minute"),
-  kickoff: varchar("kickoff", { length: 255 }).notNull(),
-  venue: varchar("venue", { length: 255 }).default(""),
-  referee: varchar("referee", { length: 255 }).default(""),
-  round: varchar("round", { length: 255 }).default(""),
-  season: int("season").notNull(),
-  updatedAt: bigint("updated_at", { mode: "number" })
-    .notNull()
-    .default(sql`(FLOOR(UNIX_TIMESTAMP() * 1000))`),
-});
+export const footballFixtures = mysqlTable(
+  "football_fixtures",
+  {
+    id: varchar("id", { length: 36 })
+      .primaryKey()
+      .default(sql`(UUID())`),
+    apiFixtureId: int("api_fixture_id").notNull().unique(),
+    leagueId: varchar("league_id", { length: 255 }).notNull(),
+    homeTeamId: int("home_team_id").notNull(),
+    awayTeamId: int("away_team_id").notNull(),
+    homeScore: int("home_score"),
+    awayScore: int("away_score"),
+    status: varchar("status", { length: 50 }).notNull().default("upcoming"),
+    statusShort: varchar("status_short", { length: 50 }).notNull().default("NS"),
+    minute: int("minute"),
+    kickoff: varchar("kickoff", { length: 255 }).notNull(),
+    venue: varchar("venue", { length: 255 }).default(""),
+    referee: varchar("referee", { length: 255 }).default(""),
+    round: varchar("round", { length: 255 }).default(""),
+    season: int("season").notNull(),
+    updatedAt: bigint("updated_at", { mode: "number" })
+      .notNull()
+      .default(sql`(FLOOR(UNIX_TIMESTAMP() * 1000))`),
+  },
+  (table) => [index("fixtures_league_idx").on(table.leagueId)],
+);
 
 export const footballStandings = mysqlTable(
   "football_standings",
@@ -367,8 +372,8 @@ export const boostPicks = mysqlTable(
     date: varchar("date", { length: 255 }).notNull(),
     multiplier: int("multiplier").notNull().default(2),
     isUpset: boolean("is_upset").notNull().default(false),
-    originalPoints: int("original_points").default(0),
-    boostedPoints: int("boosted_points").default(0),
+    originalPoints: int("original_points").notNull().default(0),
+    boostedPoints: int("boosted_points").notNull().default(0),
     settled: boolean("settled").notNull().default(false),
     createdAt: bigint("created_at", { mode: "number" })
       .notNull()

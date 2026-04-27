@@ -51,12 +51,13 @@ export async function joinGroup(groupId: string, userId: string): Promise<boolea
 
   if (existing.length > 0) return false;
 
-  await db.insert(groupMembers).values({ groupId, userId, joinedAt: Date.now() });
-
-  await db
-    .update(groups)
-    .set({ memberCount: sql`member_count + 1` })
-    .where(eq(groups.id, groupId));
+  await db.transaction(async (tx) => {
+    await tx.insert(groupMembers).values({ groupId, userId, joinedAt: Date.now() });
+    await tx
+      .update(groups)
+      .set({ memberCount: sql`member_count + 1` })
+      .where(eq(groups.id, groupId));
+  });
   return true;
 }
 
@@ -68,14 +69,15 @@ export async function leaveGroup(groupId: string, userId: string): Promise<boole
 
   if (existing.length === 0) return false;
 
-  await db
-    .delete(groupMembers)
-    .where(and(eq(groupMembers.groupId, groupId), eq(groupMembers.userId, userId)));
-
-  await db
-    .update(groups)
-    .set({ memberCount: sql`GREATEST(member_count - 1, 0)` })
-    .where(eq(groups.id, groupId));
+  await db.transaction(async (tx) => {
+    await tx
+      .delete(groupMembers)
+      .where(and(eq(groupMembers.groupId, groupId), eq(groupMembers.userId, userId)));
+    await tx
+      .update(groups)
+      .set({ memberCount: sql`GREATEST(member_count - 1, 0)` })
+      .where(eq(groups.id, groupId));
+  });
 
   return true;
 }
@@ -132,25 +134,24 @@ const MEMBER_COLORS = [
 ];
 
 export async function getGroupMembersWithStats(groupId: string): Promise<GroupMemberStanding[]> {
-  const memberships = await db.select().from(groupMembers).where(eq(groupMembers.groupId, groupId));
+  const rows = await db
+    .select({ member: groupMembers, user: users })
+    .from(groupMembers)
+    .innerJoin(users, eq(groupMembers.userId, users.id))
+    .where(eq(groupMembers.groupId, groupId));
 
-  if (memberships.length === 0) return [];
+  if (rows.length === 0) return [];
 
-  const userIds = memberships.map((m) => m.userId);
-  const memberUsers = await db.select().from(users).where(inArray(users.id, userIds));
-
-  const joinedAtMap = new Map(memberships.map((m) => [m.userId, m.joinedAt]));
-
-  const standings: GroupMemberStanding[] = memberUsers.map((user, idx) => ({
-    id: user.id,
-    username: user.username,
-    avatar: user.avatar || user.username.substring(0, 2).toUpperCase(),
-    points: user.totalPoints,
-    correct: user.correctPredictions,
-    total: user.totalPredictions,
-    streak: user.streak,
+  const standings: GroupMemberStanding[] = rows.map((row, idx) => ({
+    id: row.user.id,
+    username: row.user.username,
+    avatar: row.user.avatar || row.user.username.substring(0, 2).toUpperCase(),
+    points: row.user.totalPoints,
+    correct: row.user.correctPredictions,
+    total: row.user.totalPredictions,
+    streak: row.user.streak,
     color: MEMBER_COLORS[idx % MEMBER_COLORS.length],
-    joinedAt: joinedAtMap.get(user.id) || Date.now(),
+    joinedAt: row.member.joinedAt,
   }));
 
   standings.sort((a, b) => b.points - a.points);

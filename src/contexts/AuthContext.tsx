@@ -45,6 +45,7 @@ const AuthContext = createContext<AuthContextValue | null>(null);
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const abortControllerRef = useRef<AbortController | null>(null);
 
   // Register auth-expiry callback so the API client can force logout
   useEffect(() => {
@@ -58,6 +59,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     let cancelled = false;
+    const controller = new AbortController();
+    abortControllerRef.current = controller;
 
     (async () => {
       try {
@@ -84,12 +87,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         // 3. Validate with server in background (auto-refresh handles token rotation)
         try {
           const res = await apiRequest("GET", "/api/auth/me");
+          if (controller.signal.aborted) return;
           const data = await res.json();
           if (!cancelled) {
             setUser(data.user);
             await AsyncStorage.setItem(CACHED_USER_KEY, JSON.stringify(data.user));
           }
-        } catch {
+        } catch (err) {
+          if ((err as Error).name === "AbortError") return;
           // Server says unauthorized or error — clear everything
           if (!cancelled) {
             setUser(null);
@@ -108,6 +113,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     return () => {
       cancelled = true;
+      controller.abort();
     };
   }, []);
 
@@ -176,6 +182,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const logout = useCallback(async () => {
+    abortControllerRef.current?.abort();
+
     try {
       await apiRequest("POST", "/api/auth/logout");
     } catch (err) {

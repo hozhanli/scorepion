@@ -77,7 +77,10 @@ groupsRouter.post(
   requireAuth,
   asyncHandler(async (req: Request, res: Response) => {
     try {
-      const groupId = req.params.id as string;
+      const groupId = String(req.params.id ?? "").trim();
+      if (!groupId || groupId.length > 50) {
+        return res.status(400).json({ message: "Invalid group ID" });
+      }
       await groupService.joinGroup(groupId, req.userId!);
       // Log to group activity feed
       try {
@@ -87,8 +90,7 @@ groupsRouter.post(
           [groupId, req.userId, Date.now()],
         );
       } catch (err: unknown) {
-        const msg = err instanceof Error ? err.message : "";
-        if (!msg.includes("relation") || !msg.includes("group_activity")) throw err;
+        if ((err as any).code !== "ER_NO_SUCH_TABLE") throw err;
         /* table may not exist yet — will be created on next migration run */
       }
       return res.json({ message: "Joined" });
@@ -106,7 +108,10 @@ groupsRouter.post(
   requireAuth,
   asyncHandler(async (req: Request, res: Response) => {
     try {
-      const groupId = req.params.id as string;
+      const groupId = String(req.params.id ?? "").trim();
+      if (!groupId || groupId.length > 50) {
+        return res.status(400).json({ message: "Invalid group ID" });
+      }
       await groupService.leaveGroup(groupId, req.userId!);
       return res.json({ message: "Left" });
     } catch (err: any) {
@@ -148,7 +153,10 @@ groupsRouter.get(
   requireAuth,
   asyncHandler(async (req: Request, res: Response) => {
     try {
-      const groupId = req.params.id as string;
+      const groupId = String(req.params.id ?? "").trim();
+      if (!groupId || groupId.length > 50) {
+        return res.status(400).json({ message: "Invalid group ID" });
+      }
       const hasAccess = await groupRepo.canAccessGroup(groupId, req.userId!);
       if (!hasAccess) {
         return res.status(403).json({ message: "You do not have access to this group" });
@@ -167,7 +175,10 @@ groupsRouter.get(
   requireAuth,
   asyncHandler(async (req: Request, res: Response) => {
     try {
-      const groupId = req.params.id as string;
+      const groupId = String(req.params.id ?? "").trim();
+      if (!groupId || groupId.length > 50) {
+        return res.status(400).json({ message: "Invalid group ID" });
+      }
       const hasAccess = await groupRepo.canAccessGroup(groupId, req.userId!);
       if (!hasAccess) {
         return res.status(403).json({ message: "You do not have access to this group" });
@@ -186,7 +197,10 @@ groupsRouter.get(
   requireAuth,
   asyncHandler(async (req: Request, res: Response) => {
     try {
-      const groupId = req.params.id as string;
+      const groupId = String(req.params.id ?? "").trim();
+      if (!groupId || groupId.length > 50) {
+        return res.status(400).json({ message: "Invalid group ID" });
+      }
       const hasAccess = await groupRepo.canAccessGroup(groupId, req.userId!);
       if (!hasAccess) {
         return res.status(403).json({ message: "You do not have access to this group" });
