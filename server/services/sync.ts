@@ -2,7 +2,7 @@
  * sync.ts — Scorepion data synchronisation engine
  *
  * Architecture:
- *   - Single source of truth: PostgreSQL
+ *   - Single source of truth: MySQL
  *   - API-Football populates the DB (supports both FREE and PRO plans)
  *   - The Express API serves ONLY from DB — zero live API calls in request path
  *
@@ -103,8 +103,7 @@ export async function seedLeagues(): Promise<void> {
         season: cfg.season,
         type: cfg.type,
       })
-      .onConflictDoUpdate({
-        target: footballLeagues.id,
+      .onDuplicateKeyUpdate({
         set: {
           name: cfg.name,
           country: cfg.country,
@@ -137,14 +136,14 @@ const LEAGUE_GROUP_NAMES: Record<string, { name: string; code: string }> = {
 export async function seedLeagueGroups(): Promise<void> {
   let [systemUser] = await db.select().from(users).where(eq(users.username, "scorepion_system"));
   if (!systemUser) {
-    [systemUser] = await db
+    await db
       .insert(users)
       .values({
         username: "scorepion_system",
         password: "SYSTEM_NO_LOGIN",
         avatar: "",
-      })
-      .returning();
+      });
+    [systemUser] = await db.select().from(users).where(eq(users.username, "scorepion_system"));
   }
 
   for (const [leagueId, info] of Object.entries(LEAGUE_GROUP_NAMES)) {
@@ -159,7 +158,7 @@ export async function seedLeagueGroups(): Promise<void> {
         createdBy: systemUser.id,
         createdAt: Date.now(),
       })
-      .onConflictDoNothing();
+      .onDuplicateKeyUpdate({ set: { id: sql`id` } });
   }
   console.log("[Sync] League groups seeded");
 }
@@ -235,8 +234,8 @@ export async function syncFixturesForLeague(localId: string): Promise<number> {
 
   let count = 0;
   for (const f of data.response) {
-    await db.insert(footballTeams).values(upsertTeamValues(f.teams.home)).onConflictDoNothing();
-    await db.insert(footballTeams).values(upsertTeamValues(f.teams.away)).onConflictDoNothing();
+    await db.insert(footballTeams).values(upsertTeamValues(f.teams.home)).onDuplicateKeyUpdate({ set: { id: sql`id` } });
+    await db.insert(footballTeams).values(upsertTeamValues(f.teams.away)).onDuplicateKeyUpdate({ set: { id: sql`id` } });
 
     const values = {
       apiFixtureId: f.fixture.id,
@@ -259,8 +258,7 @@ export async function syncFixturesForLeague(localId: string): Promise<number> {
     await db
       .insert(footballFixtures)
       .values(values)
-      .onConflictDoUpdate({
-        target: footballFixtures.apiFixtureId,
+      .onDuplicateKeyUpdate({
         set: { ...values },
       });
     count++;
@@ -328,7 +326,7 @@ export async function syncFixtureEventsById(fixtureApiId: number): Promise<void>
         extraTime: e.time.extra ?? null,
         updatedAt: Date.now(),
       })
-      .onConflictDoNothing();
+      .onDuplicateKeyUpdate({ set: { id: sql`id` } });
   }
 }
 
@@ -354,7 +352,7 @@ export async function syncFixtureLineupsById(fixtureApiId: number): Promise<void
           isStarting: true,
           updatedAt: Date.now(),
         })
-        .onConflictDoNothing();
+        .onDuplicateKeyUpdate({ set: { id: sql`id` } });
     }
 
     for (const p of teamLineup.substitutes ?? []) {
@@ -372,7 +370,7 @@ export async function syncFixtureLineupsById(fixtureApiId: number): Promise<void
           isStarting: false,
           updatedAt: Date.now(),
         })
-        .onConflictDoNothing();
+        .onDuplicateKeyUpdate({ set: { id: sql`id` } });
     }
   }
 }
@@ -412,8 +410,7 @@ export async function syncFixtureStatsById(fixtureApiId: number): Promise<void> 
         accuratePasses: stat(s, "Passes accurate"),
         updatedAt: Date.now(),
       })
-      .onConflictDoUpdate({
-        target: [footballFixtureStats.fixtureId, footballFixtureStats.teamId],
+      .onDuplicateKeyUpdate({
         set: {
           shotsOnGoal: stat(s, "Shots on Goal"),
           shotsTotal: stat(s, "Total Shots"),
@@ -453,7 +450,7 @@ export async function syncStandingsForLeague(localId: string): Promise<number> {
   let count = 0;
   for (const group of leagueData.standings) {
     for (const row of group) {
-      await db.insert(footballTeams).values(upsertTeamValues(row.team)).onConflictDoNothing();
+      await db.insert(footballTeams).values(upsertTeamValues(row.team)).onDuplicateKeyUpdate({ set: { id: sql`id` } });
 
       await db.insert(footballStandings).values({
         leagueId: localId,
@@ -500,7 +497,7 @@ export async function syncTopScorersForLeague(localId: string): Promise<number> 
   for (const e of data.response.slice(0, 20)) {
     const pl = e.player;
     const st = e.statistics[0];
-    await db.insert(footballTeams).values(upsertTeamValues(st.team)).onConflictDoNothing();
+    await db.insert(footballTeams).values(upsertTeamValues(st.team)).onDuplicateKeyUpdate({ set: { id: sql`id` } });
     await db.insert(footballTopScorers).values({
       leagueId: localId,
       playerId: pl.id,
@@ -536,7 +533,7 @@ export async function syncTopAssistsForLeague(localId: string): Promise<number> 
   for (const e of data.response.slice(0, 20)) {
     const pl = e.player;
     const st = e.statistics[0];
-    await db.insert(footballTeams).values(upsertTeamValues(st.team)).onConflictDoNothing();
+    await db.insert(footballTeams).values(upsertTeamValues(st.team)).onDuplicateKeyUpdate({ set: { id: sql`id` } });
     await db.insert(footballTopAssists).values({
       leagueId: localId,
       playerId: pl.id,
@@ -573,7 +570,7 @@ export async function syncTopYellowCardsForLeague(localId: string): Promise<numb
   for (const e of data.response.slice(0, 20)) {
     const pl = e.player;
     const st = e.statistics[0];
-    await db.insert(footballTeams).values(upsertTeamValues(st.team)).onConflictDoNothing();
+    await db.insert(footballTeams).values(upsertTeamValues(st.team)).onDuplicateKeyUpdate({ set: { id: sql`id` } });
     await db.insert(footballTopYellowCards).values({
       leagueId: localId,
       playerId: pl.id,
@@ -606,7 +603,7 @@ export async function syncTopRedCardsForLeague(localId: string): Promise<number>
   for (const e of data.response.slice(0, 20)) {
     const pl = e.player;
     const st = e.statistics[0];
-    await db.insert(footballTeams).values(upsertTeamValues(st.team)).onConflictDoNothing();
+    await db.insert(footballTeams).values(upsertTeamValues(st.team)).onDuplicateKeyUpdate({ set: { id: sql`id` } });
     await db.insert(footballTopRedCards).values({
       leagueId: localId,
       playerId: pl.id,
@@ -639,7 +636,7 @@ export async function syncInjuriesForLeague(localId: string): Promise<number> {
   for (const e of data.response) {
     const pl = e.player;
     const team = e.team;
-    await db.insert(footballTeams).values(upsertTeamValues(team)).onConflictDoNothing();
+    await db.insert(footballTeams).values(upsertTeamValues(team)).onDuplicateKeyUpdate({ set: { id: sql`id` } });
     await db.insert(footballInjuries).values({
       leagueId: localId,
       playerId: pl.id,
@@ -708,7 +705,7 @@ export async function syncTransfersForLeague(localId: string): Promise<number> {
           season: cfg.season,
           updatedAt: Date.now(),
         })
-        .onConflictDoNothing();
+        .onDuplicateKeyUpdate({ set: { id: sql`id` } });
       count++;
     }
   }
@@ -747,7 +744,7 @@ export async function syncH2H(team1Id: number, team2Id: number): Promise<number>
         season: f.league.season ?? CURRENT_SEASON,
         updatedAt: Date.now(),
       })
-      .onConflictDoNothing();
+      .onDuplicateKeyUpdate({ set: { id: sql`id` } });
     count++;
   }
   return count;
@@ -784,8 +781,7 @@ export async function syncTeamStatistics(teamId: number, localId: string): Promi
       form: r.form ?? "",
       updatedAt: Date.now(),
     })
-    .onConflictDoUpdate({
-      target: [footballTeamStats.teamId, footballTeamStats.leagueId, footballTeamStats.season],
+    .onDuplicateKeyUpdate({
       set: { updatedAt: Date.now(), form: r.form ?? "" },
     });
 }
@@ -800,23 +796,23 @@ export async function enrichFinishedFixtures(): Promise<number> {
   const fourHoursAgo = new Date(Date.now() - 4 * 3600 * 1000).toISOString();
   const oneDayAgo = new Date(Date.now() - 24 * 3600 * 1000).toISOString();
 
-  const pending = await pool.query(
+  const [pending] = await pool.query(
     `
     SELECT DISTINCT f.api_fixture_id, f.home_team_id, f.away_team_id
     FROM football_fixtures f
     WHERE f.status = 'finished'
-      AND f.kickoff >= $1
-      AND f.kickoff < $2
+      AND f.kickoff >= ?
+      AND f.kickoff < ?
       AND NOT EXISTS (
         SELECT 1 FROM football_fixture_events e WHERE e.fixture_id = f.api_fixture_id
       )
     LIMIT 10
   `,
     [oneDayAgo, fourHoursAgo],
-  );
+  ) as any;
 
   let enriched = 0;
-  for (const row of pending.rows) {
+  for (const row of pending) {
     if (!api.canMakeRequest() || api.getRemainingRequests() <= 50) break;
 
     const id = row.api_fixture_id;
@@ -838,36 +834,36 @@ export async function settlePredictions(): Promise<number> {
   const { logGroupActivity } = await import("./group-activity.service");
 
   let settled = 0;
-  const client = await pool.connect();
+  const client = await pool.getConnection();
   try {
-    await client.query("BEGIN");
+    // Session-level lock prevents concurrent settlement runs
+    await client.query("SELECT GET_LOCK('settlement_lock', 30)");
 
-    // Advisory lock prevents concurrent settlement runs (lock id = 1 for settlement)
-    await client.query("SELECT pg_advisory_xact_lock(1)");
+    await client.query("BEGIN");
 
     // Fetch ALL unsettled predictions joined with their finished fixture data
     // in a single query at the start of the transaction, so we work with a
     // consistent snapshot and avoid per-row queries inside the loop.
-    const unsettled = await client.query(`
+    const [unsettledRows] = await client.query(`
       SELECT
         p.id, p.match_id, p.home_score AS pred_home, p.away_score AS pred_away, p.user_id,
         f.home_score AS act_home, f.away_score AS act_away,
         f.home_team_id, f.away_team_id
       FROM predictions p
       JOIN football_fixtures f
-        ON CAST(f.api_fixture_id AS TEXT) = p.match_id
+        ON CAST(f.api_fixture_id AS CHAR) = p.match_id
         AND f.status = 'finished'
         AND f.home_score IS NOT NULL
         AND f.away_score IS NOT NULL
       WHERE p.settled = false
-    `);
+    `) as any;
 
-    if (unsettled.rows.length === 0) {
+    if (unsettledRows.length === 0) {
       await client.query("COMMIT");
       return 0;
     }
 
-    for (const row of unsettled.rows) {
+    for (const row of unsettledRows) {
       const actHome = row.act_home;
       const actAway = row.act_away;
       const predHome = row.pred_home;
@@ -896,12 +892,12 @@ export async function settlePredictions(): Promise<number> {
       let upsetBonus = 0;
       if (basePts >= 5 && !isExact) {
         try {
-          const stg = await client.query(
-            `SELECT team_id, position FROM football_standings WHERE team_id IN ($1,$2) ORDER BY position ASC LIMIT 2`,
+          const [stgRows] = await client.query(
+            `SELECT team_id, position FROM football_standings WHERE team_id IN (?,?) ORDER BY position ASC LIMIT 2`,
             [row.home_team_id, row.away_team_id],
-          );
-          if (stg.rows.length === 2) {
-            const fav = stg.rows[0].team_id;
+          ) as any;
+          if (stgRows.length === 2) {
+            const fav = stgRows[0].team_id;
             const aRes = actHome > actAway ? "home" : actHome < actAway ? "away" : "draw";
             const pRes = predHome > predAway ? "home" : predHome < predAway ? "away" : "draw";
             const udWon =
@@ -917,53 +913,53 @@ export async function settlePredictions(): Promise<number> {
 
       // Boost
       let pts = basePts;
-      const boost = await client.query(
-        `SELECT id, multiplier FROM boost_picks WHERE user_id=$1 AND match_id=$2 AND settled=false`,
+      const [boostRows] = await client.query(
+        `SELECT id, multiplier FROM boost_picks WHERE user_id=? AND match_id=? AND settled=false`,
         [row.user_id, row.match_id],
-      );
-      const isBoosted = boost.rows.length > 0;
+      ) as any;
+      const isBoosted = boostRows.length > 0;
       if (isBoosted && basePts > 0) {
-        pts = basePts * (boost.rows[0].multiplier || 2);
+        pts = basePts * (boostRows[0].multiplier || 2);
         await client.query(
-          `UPDATE boost_picks SET settled=true,original_points=$1,boosted_points=$2 WHERE user_id=$3 AND match_id=$4`,
+          `UPDATE boost_picks SET settled=true,original_points=?,boosted_points=? WHERE user_id=? AND match_id=?`,
           [basePts, pts, row.user_id, row.match_id],
         );
       } else if (isBoosted) {
         await client.query(
-          `UPDATE boost_picks SET settled=true,original_points=0,boosted_points=0 WHERE user_id=$1 AND match_id=$2`,
+          `UPDATE boost_picks SET settled=true,original_points=0,boosted_points=0 WHERE user_id=? AND match_id=?`,
           [row.user_id, row.match_id],
         );
       }
 
-      await client.query(`UPDATE predictions SET points=$1,settled=true WHERE id=$2`, [
+      await client.query(`UPDATE predictions SET points=?,settled=true WHERE id=?`, [
         pts,
         row.id,
       ]);
       if (pts > 0) {
         await client.query(
-          `UPDATE users SET total_points=total_points+$1,weekly_points=weekly_points+$1,monthly_points=monthly_points+$1 WHERE id=$2`,
-          [pts, row.user_id],
+          `UPDATE users SET total_points=total_points+?,weekly_points=weekly_points+?,monthly_points=monthly_points+? WHERE id=?`,
+          [pts, pts, pts, row.user_id],
         );
       }
       if (basePts >= 5) {
         await client.query(
-          `UPDATE users SET correct_predictions=correct_predictions+1,streak=streak+1,best_streak=GREATEST(best_streak,streak+1) WHERE id=$1`,
+          `UPDATE users SET correct_predictions=correct_predictions+1,streak=streak+1,best_streak=GREATEST(best_streak,streak+1) WHERE id=?`,
           [row.user_id],
         );
       } else {
-        await client.query(`UPDATE users SET streak=0 WHERE id=$1 AND streak>0`, [row.user_id]);
+        await client.query(`UPDATE users SET streak=0 WHERE id=? AND streak>0`, [row.user_id]);
       }
 
       // Send settlement push notification (with dedup)
       try {
         if (!hasSentNotification("settlement", row.user_id, row.match_id)) {
-          const teamQuery = await client.query(
-            `SELECT ht.name as home_name, at.name as away_name
-             FROM football_teams ht, football_teams at
-             WHERE ht.api_football_id=$1 AND at.api_football_id=$2`,
+          const [teamQueryRows] = await client.query(
+            `SELECT ht.name as home_name, at2.name as away_name
+             FROM football_teams ht, football_teams at2
+             WHERE ht.api_football_id=? AND at2.api_football_id=?`,
             [row.home_team_id, row.away_team_id],
-          );
-          const teamName = teamQuery.rows[0] || { home_name: "Home", away_name: "Away" };
+          ) as any;
+          const teamName = teamQueryRows[0] || { home_name: "Home", away_name: "Away" };
           const matchSummary = `${teamName.home_name} ${actHome}-${actAway} ${teamName.away_name}`;
           await sendSettlementPush(row.user_id, pts, matchSummary, row.match_id);
           markNotificationSent("settlement", row.user_id, row.match_id);
@@ -990,9 +986,8 @@ export async function settlePredictions(): Promise<number> {
             pts,
           );
         }
-        const { streak } = await client
-          .query(`SELECT streak FROM users WHERE id=$1`, [row.user_id])
-          .then((r) => r.rows[0] ?? {});
+        const [streakRows] = await client.query(`SELECT streak FROM users WHERE id=?`, [row.user_id]) as any;
+        const { streak } = streakRows[0] ?? {};
         if ((SCORING.STREAK_MILESTONES as readonly number[]).includes(Number(streak))) {
           await logGroupActivity(client, row.user_id, "streak", { streak }, undefined, 0);
         }
@@ -1019,9 +1014,10 @@ export async function settlePredictions(): Promise<number> {
     if (settled > 0) {
       // Recompute global ranks (within transaction)
       await client.query(`
-        UPDATE users u SET rank=sub.new_rank
-        FROM (SELECT id, ROW_NUMBER() OVER (ORDER BY total_points DESC) AS new_rank FROM users) sub
-        WHERE u.id=sub.id
+        UPDATE users u
+        JOIN (SELECT id, ROW_NUMBER() OVER (ORDER BY total_points DESC) AS new_rank FROM users) sub
+          ON u.id=sub.id
+        SET u.rank=sub.new_rank
       `);
     }
 
@@ -1032,6 +1028,7 @@ export async function settlePredictions(): Promise<number> {
     console.error("[Settlement] Transaction failed, rolled back:", err);
     throw err;
   } finally {
+    await client.query("SELECT RELEASE_LOCK('settlement_lock')").catch(() => {});
     client.release();
   }
   return settled;
@@ -1044,37 +1041,37 @@ async function cronWeeklyReset(): Promise<void> {
   const now = new Date();
   if (now.getUTCDay() !== 1) return;
 
-  const client = await pool.connect();
+  const client = await pool.getConnection();
   try {
-    await client.query("BEGIN");
+    // Session-level lock prevents concurrent weekly reset runs
+    await client.query("SELECT GET_LOCK('weekly_reset_lock', 30)");
 
-    // Advisory lock prevents concurrent weekly reset runs (lock id = 2 for weekly reset)
-    await client.query("SELECT pg_advisory_xact_lock(2)");
+    await client.query("BEGIN");
 
     // Guard: check if we already ran the reset this week by looking for a
     // weekly_winners row with this Monday's date. If it exists, skip.
     const weekStart = now.toISOString().split("T")[0];
-    const alreadyRan = await client.query(
-      `SELECT 1 FROM weekly_winners WHERE week_start=$1 AND type='global' LIMIT 1`,
+    const [alreadyRanRows] = await client.query(
+      `SELECT 1 FROM weekly_winners WHERE week_start=? AND type='global' LIMIT 1`,
       [weekStart],
-    );
-    if (alreadyRan.rows.length > 0) {
+    ) as any;
+    if (alreadyRanRows.length > 0) {
       await client.query("COMMIT");
       console.log(`[Cron] Weekly reset already ran for ${weekStart}, skipping`);
       return;
     }
 
     // Snapshot top 3 weekly performers BEFORE resetting points
-    const top = await client.query(
+    const [topRows] = await client.query(
       `SELECT id, weekly_points FROM users ORDER BY weekly_points DESC LIMIT 3`,
-    );
+    ) as any;
 
     const { logGroupActivity } = await import("./group-activity.service");
-    for (let i = 0; i < top.rows.length; i++) {
-      const u = top.rows[i];
+    for (let i = 0; i < topRows.length; i++) {
+      const u = topRows[i];
       if (u.weekly_points > 0) {
         await client.query(
-          `INSERT INTO weekly_winners(user_id,week_start,points,rank,type) VALUES($1,$2,$3,$4,'global') ON CONFLICT DO NOTHING`,
+          `INSERT IGNORE INTO weekly_winners(user_id,week_start,points,\`rank\`,type) VALUES(?,?,?,?,'global')`,
           [u.id, weekStart, u.weekly_points, i + 1],
         );
         await logGroupActivity(client, u.id, "weekly_winner", {
@@ -1099,6 +1096,7 @@ async function cronWeeklyReset(): Promise<void> {
     console.error("[Cron] Weekly reset transaction failed, rolled back:", err);
     throw err;
   } finally {
+    await client.query("SELECT RELEASE_LOCK('weekly_reset_lock')").catch(() => {});
     client.release();
   }
 }
@@ -1107,8 +1105,8 @@ async function cronWeeklyReset(): Promise<void> {
 
 async function hasLiveFixtures(): Promise<boolean> {
   const { pool } = await import("../db");
-  const r = await pool.query(`SELECT 1 FROM football_fixtures WHERE status='live' LIMIT 1`);
-  return r.rows.length > 0;
+  const [rows] = await pool.query(`SELECT 1 FROM football_fixtures WHERE status='live' LIMIT 1`) as any;
+  return rows.length > 0;
 }
 
 // ── Live polling ──────────────────────────────────────────────────────────────
@@ -1191,28 +1189,28 @@ async function sendKickoffReminders(): Promise<void> {
     const maxTime = new Date(now + 35 * 60 * 1000).toISOString();
 
     // Single batch query: fixtures + team names + user IDs with predictions
-    const result = await pool.query(
+    const [resultRows] = await pool.query(
       `SELECT f.api_fixture_id,
               ht.name AS home_name,
-              at.name AS away_name,
-              array_agg(DISTINCT p.user_id) AS user_ids
+              at2.name AS away_name,
+              GROUP_CONCAT(DISTINCT p.user_id) AS user_ids
        FROM football_fixtures f
        JOIN football_teams ht ON ht.api_football_id = f.home_team_id
-       JOIN football_teams at ON at.api_football_id = f.away_team_id
-       JOIN predictions p ON p.match_id = CAST(f.api_fixture_id AS TEXT)
+       JOIN football_teams at2 ON at2.api_football_id = f.away_team_id
+       JOIN predictions p ON p.match_id = CAST(f.api_fixture_id AS CHAR)
             AND p.settled = false
-       WHERE f.kickoff >= $1
-         AND f.kickoff <= $2
+       WHERE f.kickoff >= ?
+         AND f.kickoff <= ?
          AND f.status = 'upcoming'
-       GROUP BY f.api_fixture_id, ht.name, at.name`,
+       GROUP BY f.api_fixture_id, ht.name, at2.name`,
       [minTime, maxTime],
-    );
+    ) as any;
 
-    for (const row of result.rows) {
+    for (const row of resultRows) {
       const fixtureId = String(row.api_fixture_id);
       const homeName: string = row.home_name || "Home";
       const awayName: string = row.away_name || "Away";
-      const userIds: string[] = row.user_ids || [];
+      const userIds: string[] = row.user_ids ? String(row.user_ids).split(',') : [];
 
       for (const userId of userIds) {
         if (!hasSentNotification("kickoff", userId, fixtureId)) {
@@ -1597,13 +1595,12 @@ export async function syncAllData() {
 export { hasLiveFixtures };
 export async function getSyncStatus() {
   const { pool } = await import("../db");
+  const [recentSyncRows] = await pool.query(
+    `SELECT sync_type,league_id,status,synced_at FROM sync_log ORDER BY synced_at DESC LIMIT 20`,
+  ) as any;
   return {
     dailyRequests: api.getRequestCount(),
     remaining: api.getRemainingRequests(),
-    recentSyncs: (
-      await pool.query(
-        `SELECT sync_type,league_id,status,synced_at FROM sync_log ORDER BY synced_at DESC LIMIT 20`,
-      )
-    ).rows,
+    recentSyncs: recentSyncRows,
   };
 }

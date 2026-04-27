@@ -155,22 +155,22 @@ export async function checkAndAwardAchievements(
   stats: UserStats
 ): Promise<{ type: string; title: string }[]> {
   // Fetch exact score count for this user
-  const exactResult = await pool.query(
+  const [exactResult] = await pool.query(
     `SELECT COUNT(*) as cnt FROM predictions p
-     JOIN football_fixtures f ON CAST(f.api_fixture_id AS TEXT) = p.match_id
-     WHERE p.user_id = $1 AND p.settled = true
+     JOIN football_fixtures f ON CAST(f.api_fixture_id AS CHAR) = p.match_id
+     WHERE p.user_id = ? AND p.settled = true
        AND p.home_score = f.home_score AND p.away_score = f.away_score`,
     [userId]
-  );
-  const exactScores = parseInt(exactResult.rows[0]?.cnt || "0", 10);
+  ) as any;
+  const exactScores = parseInt(exactResult[0]?.cnt || "0", 10);
   const enrichedStats = { ...stats, exactScores };
 
   // Get already-earned achievements
-  const existing = await pool.query(
-    `SELECT type FROM achievements WHERE user_id = $1`,
+  const [existingRows] = await pool.query(
+    `SELECT type FROM achievements WHERE user_id = ?`,
     [userId]
-  );
-  const earned = new Set(existing.rows.map((r: any) => r.type));
+  ) as any;
+  const earned = new Set(existingRows.map((r: any) => r.type));
 
   const newAchievements: { type: string; title: string }[] = [];
 
@@ -180,9 +180,8 @@ export async function checkAndAwardAchievements(
 
     // Award it
     await pool.query(
-      `INSERT INTO achievements (user_id, type, title, description, icon, color, tier, season)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-       ON CONFLICT DO NOTHING`,
+      `INSERT IGNORE INTO achievements (user_id, type, title, description, icon, color, tier, season)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
       [userId, def.type, def.title, def.description, def.icon, def.color, def.tier, "2024-25"]
     );
     newAchievements.push({ type: def.type, title: def.title });
@@ -192,11 +191,12 @@ export async function checkAndAwardAchievements(
 }
 
 export async function getUserStats(pool: any, userId: string): Promise<UserStats> {
-  const [userRow] = (await pool.query(
+  const [userRows] = await pool.query(
     `SELECT total_points, correct_predictions, total_predictions, streak, best_streak, weekly_points
-     FROM users WHERE id = $1`,
+     FROM users WHERE id = ?`,
     [userId]
-  )).rows;
+  ) as any;
+  const userRow = userRows[0];
 
   return {
     totalPoints: userRow?.total_points ?? 0,

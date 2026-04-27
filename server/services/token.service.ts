@@ -98,7 +98,7 @@ export async function createRefreshToken(userId: string): Promise<string> {
 
   await pool.query(
     `INSERT INTO refresh_tokens (token_hash, user_id, family_id, expires_at)
-     VALUES ($1, $2, $3, $4)`,
+     VALUES (?, ?, ?, ?)`,
     [hash, userId, familyId, expiresAt],
   );
 
@@ -120,30 +120,30 @@ export interface RefreshResult {
  */
 export async function rotateRefreshToken(rawToken: string): Promise<RefreshResult> {
   const hash = hashToken(rawToken);
-  const client = await pool.connect();
+  const client = await pool.getConnection();
 
   try {
     await client.query("BEGIN");
 
     // Look up the token (lock the row)
-    const result = await client.query(
+    const [resultRows] = await client.query(
       `SELECT id, user_id, family_id, revoked, expires_at
        FROM refresh_tokens
-       WHERE token_hash = $1
+       WHERE token_hash = ?
        FOR UPDATE`,
       [hash],
-    );
+    ) as any;
 
-    if (result.rows.length === 0) {
+    if (resultRows.length === 0) {
       await client.query("ROLLBACK");
       throw new TokenError("Invalid refresh token", 401);
     }
 
-    const row = result.rows[0];
+    const row = resultRows[0];
 
     // Replay detection: if this token was already used/revoked, nuke the family
     if (row.revoked) {
-      await client.query(`UPDATE refresh_tokens SET revoked = true WHERE family_id = $1`, [
+      await client.query(`UPDATE refresh_tokens SET revoked = true WHERE family_id = ?`, [
         row.family_id,
       ]);
       await client.query("COMMIT");
@@ -152,13 +152,13 @@ export async function rotateRefreshToken(rawToken: string): Promise<RefreshResul
 
     // Check expiry
     if (Date.now() > Number(row.expires_at)) {
-      await client.query(`UPDATE refresh_tokens SET revoked = true WHERE id = $1`, [row.id]);
+      await client.query(`UPDATE refresh_tokens SET revoked = true WHERE id = ?`, [row.id]);
       await client.query("COMMIT");
       throw new TokenError("Refresh token expired", 401);
     }
 
     // Revoke old token
-    await client.query(`UPDATE refresh_tokens SET revoked = true WHERE id = $1`, [row.id]);
+    await client.query(`UPDATE refresh_tokens SET revoked = true WHERE id = ?`, [row.id]);
 
     // Issue new refresh token in the same family
     const { raw: newRaw, hash: newHash } = generateRefreshToken();
@@ -166,23 +166,23 @@ export async function rotateRefreshToken(rawToken: string): Promise<RefreshResul
 
     await client.query(
       `INSERT INTO refresh_tokens (token_hash, user_id, family_id, expires_at)
-       VALUES ($1, $2, $3, $4)`,
+       VALUES (?, ?, ?, ?)`,
       [newHash, row.user_id, row.family_id, newExpiresAt],
     );
 
     // Get username for access token
-    const userResult = await client.query(`SELECT username FROM users WHERE id = $1`, [
+    const [userResultRows] = await client.query(`SELECT username FROM users WHERE id = ?`, [
       row.user_id,
-    ]);
+    ]) as any;
 
-    if (userResult.rows.length === 0) {
+    if (userResultRows.length === 0) {
       await client.query("ROLLBACK");
       throw new TokenError("User not found", 401);
     }
 
     await client.query("COMMIT");
 
-    const username = userResult.rows[0].username;
+    const username = userResultRows[0].username;
     const accessToken = await signAccessToken(row.user_id, username);
 
     return {
@@ -206,7 +206,7 @@ export async function rotateRefreshToken(rawToken: string): Promise<RefreshResul
  */
 export async function revokeAllUserTokens(userId: string): Promise<void> {
   await pool.query(
-    `UPDATE refresh_tokens SET revoked = true WHERE user_id = $1 AND revoked = false`,
+    `UPDATE refresh_tokens SET revoked = true WHERE user_id = ? AND revoked = false`,
     [userId],
   );
 }
@@ -215,11 +215,11 @@ export async function revokeAllUserTokens(userId: string): Promise<void> {
  * Cleanup expired/revoked tokens (call periodically via cron).
  */
 export async function cleanupExpiredTokens(): Promise<number> {
-  const result = await pool.query(
-    `DELETE FROM refresh_tokens WHERE revoked = true OR expires_at < $1`,
+  const [result] = await pool.query(
+    `DELETE FROM refresh_tokens WHERE revoked = true OR expires_at < ?`,
     [Date.now()],
-  );
-  return result.rowCount ?? 0;
+  ) as any;
+  return result.affectedRows ?? 0;
 }
 
 // ---------------------------------------------------------------------------

@@ -59,7 +59,7 @@ export interface MatchImportance {
 }
 
 export async function calculateMatchImportance(matchId: string): Promise<MatchImportance> {
-  const result = await pool.query(
+  const [resultRows] = await pool.query(
     `
     SELECT f.api_fixture_id, f.home_team_id, f.away_team_id, f.league_id, f.kickoff, f.status,
            ht.name as home_name, at2.name as away_name,
@@ -68,32 +68,32 @@ export async function calculateMatchImportance(matchId: string): Promise<MatchIm
     JOIN football_teams ht ON f.home_team_id = ht.api_football_id
     JOIN football_teams at2 ON f.away_team_id = at2.api_football_id
     JOIN football_leagues l ON f.league_id = l.id
-    WHERE CAST(f.api_fixture_id AS TEXT) = $1
+    WHERE CAST(f.api_fixture_id AS CHAR) = ?
     LIMIT 1
   `,
     [matchId],
-  );
+  ) as any;
 
-  if (result.rows.length === 0) {
+  if (resultRows.length === 0) {
     return { matchId, score: 50, tags: [], factors: [] };
   }
 
-  const match = result.rows[0];
+  const match = resultRows[0];
   let score = 50;
   const tags: string[] = [];
   const factors: string[] = [];
 
-  const homeStanding = await pool.query(
-    `SELECT position, points FROM football_standings WHERE team_id = $1 AND league_id = $2 LIMIT 1`,
+  const [homeStandingRows] = await pool.query(
+    `SELECT position, points FROM football_standings WHERE team_id = ? AND league_id = ? LIMIT 1`,
     [match.home_team_id, match.league_id],
-  );
-  const awayStanding = await pool.query(
-    `SELECT position, points FROM football_standings WHERE team_id = $1 AND league_id = $2 LIMIT 1`,
+  ) as any;
+  const [awayStandingRows] = await pool.query(
+    `SELECT position, points FROM football_standings WHERE team_id = ? AND league_id = ? LIMIT 1`,
     [match.away_team_id, match.league_id],
-  );
+  ) as any;
 
-  const homePos = homeStanding.rows[0]?.position || 99;
-  const awayPos = awayStanding.rows[0]?.position || 99;
+  const homePos = homeStandingRows[0]?.position || 99;
+  const awayPos = awayStandingRows[0]?.position || 99;
 
   if (homePos <= 4 && awayPos <= 4) {
     score += 25;
@@ -171,13 +171,13 @@ export async function getOrCreateDailyPack(
 ): Promise<DailyPackResponse> {
   const today = getTodayStringUtc();
 
-  const existing = await pool.query(`SELECT * FROM daily_packs WHERE user_id = $1 AND date = $2`, [
+  const [existingRows] = await pool.query(`SELECT * FROM daily_packs WHERE user_id = ? AND date = ?`, [
     userId,
     today,
-  ]);
+  ]) as any;
 
-  if (existing.rows.length > 0) {
-    const pack = existing.rows[0];
+  if (existingRows.length > 0) {
+    const pack = existingRows[0];
     return {
       id: pack.id,
       date: pack.date,
@@ -204,40 +204,40 @@ export async function getOrCreateDailyPack(
   const params: any[] = [todayStart, tomorrowStart];
 
   if (favoriteLeagues.length > 0) {
-    const placeholders = favoriteLeagues.map((_, i) => `$${i + 3}`).join(",");
+    const placeholders = favoriteLeagues.map(() => `?`).join(",");
     leagueFilter = `AND f.league_id IN (${placeholders})`;
     params.push(...favoriteLeagues);
   }
 
-  const fixturesResult = await pool.query(
+  const [fixturesRows] = await pool.query(
     `
-    SELECT CAST(f.api_fixture_id AS TEXT) as match_id, f.kickoff, f.league_id,
+    SELECT CAST(f.api_fixture_id AS CHAR) as match_id, f.kickoff, f.league_id,
            ht.name as home_name, at2.name as away_name
     FROM football_fixtures f
     JOIN football_teams ht ON f.home_team_id = ht.api_football_id
     JOIN football_teams at2 ON f.away_team_id = at2.api_football_id
-    WHERE f.kickoff >= $1 AND f.kickoff < $2
+    WHERE f.kickoff >= ? AND f.kickoff < ?
     AND f.status IN ('upcoming', 'NS', 'TBD')
     ${leagueFilter}
     ORDER BY f.kickoff ASC
   `,
     params,
-  );
+  ) as any;
 
-  let matchIds = fixturesResult.rows.map((r: any) => r.match_id);
+  let matchIds = fixturesRows.map((r: any) => r.match_id);
 
   if (matchIds.length === 0) {
-    const allFixtures = await pool.query(
+    const [allFixturesRows] = await pool.query(
       `
-      SELECT CAST(f.api_fixture_id AS TEXT) as match_id, f.kickoff
+      SELECT CAST(f.api_fixture_id AS CHAR) as match_id, f.kickoff
       FROM football_fixtures f
-      WHERE f.kickoff >= $1 AND f.kickoff < $2
+      WHERE f.kickoff >= ? AND f.kickoff < ?
       AND f.status IN ('upcoming', 'NS', 'TBD')
       ORDER BY f.kickoff ASC
     `,
       [todayStart, tomorrowStart],
-    );
-    matchIds = allFixtures.rows.map((r: any) => r.match_id);
+    ) as any;
+    matchIds = allFixturesRows.map((r: any) => r.match_id);
   }
 
   const importanceMap = await calculateBatchImportance(matchIds);
@@ -250,17 +250,21 @@ export async function getOrCreateDailyPack(
   const selectedIds = matchIds.slice(0, Math.min(7, Math.max(3, matchIds.length)));
   const totalPicks = selectedIds.length;
 
-  const insertResult = await pool.query(
+  await pool.query(
     `
     INSERT INTO daily_packs (user_id, date, match_ids, completed_match_ids, total_picks, completed_picks)
-    VALUES ($1, $2, $3, '[]', $4, 0)
-    ON CONFLICT (user_id, date) DO UPDATE SET match_ids = EXCLUDED.match_ids
-    RETURNING *
+    VALUES (?, ?, ?, '[]', ?, 0)
+    ON DUPLICATE KEY UPDATE match_ids = VALUES(match_ids)
   `,
     [userId, today, JSON.stringify(selectedIds), totalPicks],
   );
 
-  const pack = insertResult.rows[0];
+  const [packRows] = await pool.query(
+    `SELECT * FROM daily_packs WHERE user_id = ? AND date = ?`,
+    [userId, today],
+  ) as any;
+
+  const pack = packRows[0];
   return {
     id: pack.id,
     date: pack.date,
@@ -281,21 +285,21 @@ export async function markDailyPickComplete(
   const today = getTodayStringUtc();
 
   // Use a transaction so completedIds update + streak update are atomic
-  const client = await pool.connect();
+  const client = await pool.getConnection();
   try {
     await client.query("BEGIN");
 
     // Lock the row to prevent concurrent updates (SELECT ... FOR UPDATE)
-    const pack = await client.query(
-      `SELECT * FROM daily_packs WHERE user_id = $1 AND date = $2 FOR UPDATE`,
+    const [packRows] = await client.query(
+      `SELECT * FROM daily_packs WHERE user_id = ? AND date = ? FOR UPDATE`,
       [userId, today],
-    );
-    if (pack.rows.length === 0) {
+    ) as any;
+    if (packRows.length === 0) {
       await client.query("ROLLBACK");
       return null;
     }
 
-    const row = pack.rows[0];
+    const row = packRows[0];
     const completedIds: string[] = row.completed_match_ids || [];
 
     // Idempotency: already completed this match
@@ -319,8 +323,8 @@ export async function markDailyPickComplete(
 
     await client.query(
       `
-      UPDATE daily_packs SET completed_match_ids = $1, completed_picks = $2, is_complete = $3
-      WHERE id = $4
+      UPDATE daily_packs SET completed_match_ids = ?, completed_picks = ?, is_complete = ?
+      WHERE id = ?
     `,
       [JSON.stringify(completedIds), completedIds.length, isComplete, row.id],
     );
@@ -328,17 +332,17 @@ export async function markDailyPickComplete(
     if (isComplete) {
       // Check if yesterday's pack was completed to decide streak continuation
       const yesterday = getYesterdayStringUtc();
-      const yesterdayPack = await client.query(
-        `SELECT is_complete FROM daily_packs WHERE user_id = $1 AND date = $2`,
+      const [yesterdayPackRows] = await client.query(
+        `SELECT is_complete FROM daily_packs WHERE user_id = ? AND date = ?`,
         [userId, yesterday],
-      );
-      const yesterdayComplete = yesterdayPack.rows.length > 0 && yesterdayPack.rows[0].is_complete;
+      ) as any;
+      const yesterdayComplete = yesterdayPackRows.length > 0 && yesterdayPackRows[0].is_complete;
 
       if (yesterdayComplete) {
         // Continue streak
         await client.query(
           `
-          UPDATE users SET streak = streak + 1, best_streak = GREATEST(best_streak, streak + 1) WHERE id = $1
+          UPDATE users SET streak = streak + 1, best_streak = GREATEST(best_streak, streak + 1) WHERE id = ?
         `,
           [userId],
         );
@@ -346,7 +350,7 @@ export async function markDailyPickComplete(
         // Reset streak to 1 (today is a fresh start)
         await client.query(
           `
-          UPDATE users SET streak = 1, best_streak = GREATEST(best_streak, 1) WHERE id = $1
+          UPDATE users SET streak = 1, best_streak = GREATEST(best_streak, 1) WHERE id = ?
         `,
           [userId],
         );
@@ -382,20 +386,20 @@ export async function setBoostPick(
   const today = getTodayStringUtc();
 
   // Use a transaction so daily_packs + boost_picks stay in sync
-  const client = await pool.connect();
+  const client = await pool.getConnection();
   try {
     await client.query("BEGIN");
 
-    const pack = await client.query(
-      `SELECT * FROM daily_packs WHERE user_id = $1 AND date = $2 FOR UPDATE`,
+    const [packRows] = await client.query(
+      `SELECT * FROM daily_packs WHERE user_id = ? AND date = ? FOR UPDATE`,
       [userId, today],
-    );
-    if (pack.rows.length === 0) {
+    ) as any;
+    if (packRows.length === 0) {
       await client.query("ROLLBACK");
       return { success: false, message: "No daily pack found" };
     }
 
-    const row = pack.rows[0];
+    const row = packRows[0];
     const packMatchIds: string[] = row.match_ids || [];
     if (!packMatchIds.includes(matchId)) {
       await client.query("ROLLBACK");
@@ -404,7 +408,7 @@ export async function setBoostPick(
 
     const newBoostId = row.boost_match_id === matchId ? null : matchId;
 
-    await client.query(`UPDATE daily_packs SET boost_match_id = $1 WHERE id = $2`, [
+    await client.query(`UPDATE daily_packs SET boost_match_id = ? WHERE id = ?`, [
       newBoostId,
       row.id,
     ]);
@@ -413,14 +417,14 @@ export async function setBoostPick(
       await client.query(
         `
         INSERT INTO boost_picks (user_id, match_id, date, multiplier)
-        VALUES ($1, $2, $3, 2)
-        ON CONFLICT (user_id, date) DO UPDATE SET match_id = $2
+        VALUES (?, ?, ?, 2)
+        ON DUPLICATE KEY UPDATE match_id = VALUES(match_id)
       `,
         [userId, matchId, today],
       );
       await logEvent(userId, "boost_pick", { matchId, date: today });
     } else {
-      await client.query(`DELETE FROM boost_picks WHERE user_id = $1 AND date = $2`, [
+      await client.query(`DELETE FROM boost_picks WHERE user_id = ? AND date = ?`, [
         userId,
         today,
       ]);
@@ -437,28 +441,28 @@ export async function setBoostPick(
 }
 
 export async function settleBoosts(): Promise<number> {
-  const unsettled = await pool.query(`
+  const [unsettledRows] = await pool.query(`
     SELECT bp.*, p.points as pred_points, p.settled as pred_settled
     FROM boost_picks bp
     LEFT JOIN predictions p ON p.match_id = bp.match_id AND p.user_id = bp.user_id
     WHERE bp.settled = false AND p.settled = true
-  `);
+  `) as any;
 
   let count = 0;
-  for (const row of unsettled.rows) {
+  for (const row of unsettledRows) {
     const originalPoints = row.pred_points || 0;
     const boostedPoints = originalPoints * row.multiplier;
     const bonusPoints = boostedPoints - originalPoints;
 
     await pool.query(
       `
-      UPDATE boost_picks SET original_points = $1, boosted_points = $2, settled = true WHERE id = $3
+      UPDATE boost_picks SET original_points = ?, boosted_points = ?, settled = true WHERE id = ?
     `,
       [originalPoints, boostedPoints, row.id],
     );
 
     if (bonusPoints > 0) {
-      await pool.query(`UPDATE users SET total_points = total_points + $1 WHERE id = $2`, [
+      await pool.query(`UPDATE users SET total_points = total_points + ? WHERE id = ?`, [
         bonusPoints,
         row.user_id,
       ]);
@@ -490,25 +494,25 @@ export interface ChaseData {
 }
 
 export async function getChaseData(userId: string, period: string = "alltime"): Promise<ChaseData> {
-  const userResult = await pool.query(
-    `SELECT username, total_points, streak, avatar FROM users WHERE id = $1`,
+  const [userResultRows] = await pool.query(
+    `SELECT username, total_points, streak, avatar FROM users WHERE id = ?`,
     [userId],
-  );
-  if (userResult.rows.length === 0) {
+  ) as any;
+  if (userResultRows.length === 0) {
     return { userRank: 0, userPoints: 0, chaseTarget: null, swingMatches: [], weeklyCountdown: "" };
   }
 
-  const user = userResult.rows[0];
+  const user = userResultRows[0];
   const userPoints = user.total_points;
 
-  const leaderboard = await pool.query(`
+  const [leaderboardRows] = await pool.query(`
     SELECT id, username, avatar, total_points as points
     FROM users WHERE username != 'scorepion_system'
     ORDER BY total_points DESC
     LIMIT 100
-  `);
+  `) as any;
 
-  const entries = leaderboard.rows;
+  const entries = leaderboardRows;
   const userIdx = entries.findIndex((e: any) => e.id === userId);
   const userRank = userIdx >= 0 ? userIdx + 1 : entries.length + 1;
 
@@ -533,22 +537,22 @@ export async function getChaseData(userId: string, period: string = "alltime"): 
     Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() + 2, 23, 59, 59, 999),
   ).toISOString();
 
-  const upcomingResult = await pool.query(
+  const [upcomingRows] = await pool.query(
     `
-    SELECT CAST(f.api_fixture_id AS TEXT) as match_id,
+    SELECT CAST(f.api_fixture_id AS CHAR) as match_id,
            ht.name as home_name, at2.name as away_name
     FROM football_fixtures f
     JOIN football_teams ht ON f.home_team_id = ht.api_football_id
     JOIN football_teams at2 ON f.away_team_id = at2.api_football_id
-    WHERE f.kickoff >= $1 AND f.kickoff < $2
+    WHERE f.kickoff >= ? AND f.kickoff < ?
     AND f.status IN ('upcoming', 'NS', 'TBD')
     ORDER BY f.kickoff ASC
     LIMIT 5
   `,
     [todayStart, tomorrowEnd],
-  );
+  ) as any;
 
-  const swingMatches = upcomingResult.rows.map((r: any) => ({
+  const swingMatches = upcomingRows.map((r: any) => ({
     matchId: r.match_id,
     potentialSwing: 10,
     homeTeam: r.home_name,
@@ -591,11 +595,11 @@ export interface AchievementData {
 }
 
 export async function getUserAchievements(userId: string): Promise<AchievementData[]> {
-  const result = await pool.query(
-    `SELECT * FROM achievements WHERE user_id = $1 ORDER BY earned_at DESC`,
+  const [resultRows] = await pool.query(
+    `SELECT * FROM achievements WHERE user_id = ? ORDER BY earned_at DESC`,
     [userId],
-  );
-  return result.rows.map((r: any) => ({
+  ) as any;
+  return resultRows.map((r: any) => ({
     id: r.id,
     type: r.type,
     title: r.title,
@@ -608,14 +612,14 @@ export async function getUserAchievements(userId: string): Promise<AchievementDa
 }
 
 export async function checkAndAwardAchievements(userId: string): Promise<AchievementData[]> {
-  const user = await pool.query(`SELECT * FROM users WHERE id = $1`, [userId]);
-  if (user.rows.length === 0) return [];
+  const [userRows] = await pool.query(`SELECT * FROM users WHERE id = ?`, [userId]) as any;
+  if (userRows.length === 0) return [];
 
-  const u = user.rows[0];
-  const existing = await pool.query(`SELECT type, tier FROM achievements WHERE user_id = $1`, [
+  const u = userRows[0];
+  const [existingRows] = await pool.query(`SELECT type, tier FROM achievements WHERE user_id = ?`, [
     userId,
-  ]);
-  const existingSet = new Set(existing.rows.map((r: any) => `${r.type}:${r.tier}`));
+  ]) as any;
+  const existingSet = new Set(existingRows.map((r: any) => `${r.type}:${r.tier}`));
 
   const newAchievements: AchievementData[] = [];
 
@@ -713,11 +717,11 @@ export async function checkAndAwardAchievements(userId: string): Promise<Achieve
     }
   }
 
-  const exactResult = await pool.query(
-    `SELECT COUNT(*) as cnt FROM predictions WHERE user_id = $1 AND settled = true AND points >= 10`,
+  const [exactResultRows] = await pool.query(
+    `SELECT COUNT(*) as cnt FROM predictions WHERE user_id = ? AND settled = true AND points >= 10`,
     [userId],
-  );
-  const exactCount = Number(exactResult.rows[0]?.cnt || 0);
+  ) as any;
+  const exactCount = Number(exactResultRows[0]?.cnt || 0);
 
   const exactAchievements = [
     { threshold: 1, tier: "bronze", title: "Bullseye", desc: "First exact score prediction" },
@@ -753,16 +757,20 @@ async function awardAchievement(
   tier: string,
 ): Promise<AchievementData | null> {
   try {
-    const result = await pool.query(
+    await pool.query(
       `
       INSERT INTO achievements (user_id, type, title, description, icon, color, tier)
-      VALUES ($1, $2, $3, $4, $5, $6, $7)
-      RETURNING *
+      VALUES (?, ?, ?, ?, ?, ?, ?)
     `,
       [userId, type, title, description, icon, color, tier],
     );
 
-    const r = result.rows[0];
+    const [achRows] = await pool.query(
+      `SELECT * FROM achievements WHERE user_id = ? AND type = ? AND tier = ? ORDER BY earned_at DESC LIMIT 1`,
+      [userId, type, tier],
+    ) as any;
+
+    const r = achRows[0];
     await logEvent(userId, "achievement_earned", { type, tier, title });
 
     return {
@@ -781,13 +789,13 @@ async function awardAchievement(
 }
 
 export async function getWeeklyWinners(): Promise<any[]> {
-  const result = await pool.query(`
+  const [resultRows] = await pool.query(`
     SELECT ww.*, u.username, u.avatar FROM weekly_winners ww
     JOIN users u ON ww.user_id = u.id
     ORDER BY ww.created_at DESC
     LIMIT 10
-  `);
-  return result.rows.map((r: any) => ({
+  `) as any;
+  return resultRows.map((r: any) => ({
     id: r.id,
     userId: r.user_id,
     username: r.username,
@@ -802,11 +810,11 @@ export async function getWeeklyWinners(): Promise<any[]> {
 export async function computeWeeklyWinners(): Promise<number> {
   const weekStart = getWeekStartUtc();
 
-  const existing = await pool.query(
-    `SELECT id FROM weekly_winners WHERE week_start = $1 AND type = 'global'`,
+  const [existingRows2] = await pool.query(
+    `SELECT id FROM weekly_winners WHERE week_start = ? AND type = 'global'`,
     [weekStart],
-  );
-  if (existing.rows.length > 0) return 0;
+  ) as any;
+  if (existingRows2.length > 0) return 0;
 
   const prevWeekStart = new Date();
   prevWeekStart.setDate(prevWeekStart.getDate() - 7);
@@ -817,28 +825,28 @@ export async function computeWeeklyWinners(): Promise<number> {
   const prevWeekEnd = new Date(prevWeekStart);
   prevWeekEnd.setDate(prevWeekEnd.getDate() + 7);
 
-  const topUsers = await pool.query(
+  const [topUsersRows] = await pool.query(
     `
-    SELECT u.id, SUM(p.points)::int as weekly_points
+    SELECT u.id, CAST(SUM(p.points) AS SIGNED) as weekly_points
     FROM users u
     JOIN predictions p ON p.user_id = u.id
-    WHERE p.timestamp >= $1 AND p.timestamp < $2
+    WHERE p.timestamp >= ? AND p.timestamp < ?
     AND u.username != 'scorepion_system'
     GROUP BY u.id
     ORDER BY weekly_points DESC
     LIMIT 3
   `,
     [prevWeekStart.getTime(), prevWeekEnd.getTime()],
-  );
+  ) as any;
 
   let inserted = 0;
-  for (let i = 0; i < topUsers.rows.length; i++) {
-    const row = topUsers.rows[i];
+  for (let i = 0; i < topUsersRows.length; i++) {
+    const row = topUsersRows[i];
     try {
       await pool.query(
         `
-        INSERT INTO weekly_winners (user_id, week_start, points, rank, type)
-        VALUES ($1, $2, $3, $4, 'global')
+        INSERT INTO weekly_winners (user_id, week_start, points, \`rank\`, type)
+        VALUES (?, ?, ?, ?, 'global')
       `,
         [row.id, prevWeek, row.weekly_points, i + 1],
       );
@@ -864,19 +872,20 @@ export async function computeWeeklyWinners(): Promise<number> {
 }
 
 export async function getGroupActivityEnhanced(groupId: string): Promise<any[]> {
-  const memberships = await pool.query(`SELECT user_id FROM group_members WHERE group_id = $1`, [
+  const [membershipRows] = await pool.query(`SELECT user_id FROM group_members WHERE group_id = ?`, [
     groupId,
-  ]);
-  if (memberships.rows.length === 0) return [];
+  ]) as any;
+  if (membershipRows.length === 0) return [];
 
-  const userIds = memberships.rows.map((r: any) => r.user_id);
+  const userIds = membershipRows.map((r: any) => r.user_id);
+  const userPlaceholders = userIds.map(() => '?').join(',');
 
-  const users = await pool.query(
-    `SELECT id, username, avatar, streak, total_points FROM users WHERE id = ANY($1)`,
-    [userIds],
-  );
+  const [usersRows] = await pool.query(
+    `SELECT id, username, avatar, streak, total_points FROM users WHERE id IN (${userPlaceholders})`,
+    userIds,
+  ) as any;
   const userMap = new Map(
-    users.rows.map((u: any, idx: number) => [
+    usersRows.map((u: any, idx: number) => [
       u.id,
       {
         username: u.username,
@@ -892,21 +901,21 @@ export async function getGroupActivityEnhanced(groupId: string): Promise<any[]> 
 
   const items: any[] = [];
 
-  const boosts = await pool.query(
+  const [boostsRows] = await pool.query(
     `
     SELECT bp.*, ht.name as home_name, at2.name as away_name
     FROM boost_picks bp
-    LEFT JOIN football_fixtures f ON bp.match_id = CAST(f.api_fixture_id AS TEXT)
+    LEFT JOIN football_fixtures f ON bp.match_id = CAST(f.api_fixture_id AS CHAR)
     LEFT JOIN football_teams ht ON f.home_team_id = ht.api_football_id
     LEFT JOIN football_teams at2 ON f.away_team_id = at2.api_football_id
-    WHERE bp.user_id = ANY($1)
+    WHERE bp.user_id IN (${userPlaceholders})
     ORDER BY bp.created_at DESC
     LIMIT 10
   `,
-    [userIds],
-  );
+    userIds,
+  ) as any;
 
-  for (const b of boosts.rows) {
+  for (const b of boostsRows) {
     const user = userMap.get(b.user_id);
     if (!user) continue;
     items.push({
@@ -923,14 +932,14 @@ export async function getGroupActivityEnhanced(groupId: string): Promise<any[]> 
     });
   }
 
-  const achievements = await pool.query(
+  const [achievementsRows] = await pool.query(
     `
-    SELECT * FROM achievements WHERE user_id = ANY($1) ORDER BY earned_at DESC LIMIT 10
+    SELECT * FROM achievements WHERE user_id IN (${userPlaceholders}) ORDER BY earned_at DESC LIMIT 10
   `,
-    [userIds],
-  );
+    userIds,
+  ) as any;
 
-  for (const a of achievements.rows) {
+  for (const a of achievementsRows) {
     const user = userMap.get(a.user_id);
     if (!user) continue;
     items.push({
@@ -965,18 +974,18 @@ export async function getGroupActivityEnhanced(groupId: string): Promise<any[]> 
     }
   }
 
-  const winners = await pool.query(
+  const [winnersRows] = await pool.query(
     `
     SELECT ww.*, u.username, u.avatar FROM weekly_winners ww
     JOIN users u ON ww.user_id = u.id
-    WHERE ww.user_id = ANY($1) AND ww.rank = 1
+    WHERE ww.user_id IN (${userPlaceholders}) AND ww.\`rank\` = 1
     ORDER BY ww.created_at DESC
     LIMIT 3
   `,
-    [userIds],
-  );
+    userIds,
+  ) as any;
 
-  for (const w of winners.rows) {
+  for (const w of winnersRows) {
     const user = userMap.get(w.user_id);
     if (!user) continue;
     items.push({
@@ -1004,7 +1013,7 @@ export async function logEvent(
 ): Promise<void> {
   try {
     await pool.query(
-      `INSERT INTO event_log (user_id, event_type, event_data) VALUES ($1, $2, $3)`,
+      `INSERT INTO event_log (user_id, event_type, event_data) VALUES (?, ?, ?)`,
       [userId, eventType, JSON.stringify(eventData)],
     );
   } catch (err) {
@@ -1017,86 +1026,91 @@ export async function getEventStats(): Promise<any> {
   const dayAgo = now - 86400000;
   const weekAgo = now - 604800000;
 
-  const [dailyPacks, dailyBoosts, dailyStreakBreaks, weeklyPacks] = await Promise.all([
+  const [dailyPacksResult, dailyBoostsResult, dailyStreakBreaksResult, weeklyPacksResult] = await Promise.all([
     pool.query(
-      `SELECT COUNT(*) as cnt FROM event_log WHERE event_type = 'daily_pack_complete' AND timestamp >= $1`,
+      `SELECT COUNT(*) as cnt FROM event_log WHERE event_type = 'daily_pack_complete' AND timestamp >= ?`,
       [dayAgo],
     ),
     pool.query(
-      `SELECT COUNT(*) as cnt FROM event_log WHERE event_type = 'boost_pick' AND timestamp >= $1`,
+      `SELECT COUNT(*) as cnt FROM event_log WHERE event_type = 'boost_pick' AND timestamp >= ?`,
       [dayAgo],
     ),
     pool.query(
-      `SELECT COUNT(*) as cnt FROM event_log WHERE event_type = 'streak_break' AND timestamp >= $1`,
+      `SELECT COUNT(*) as cnt FROM event_log WHERE event_type = 'streak_break' AND timestamp >= ?`,
       [dayAgo],
     ),
     pool.query(
-      `SELECT COUNT(*) as cnt FROM event_log WHERE event_type = 'daily_pack_complete' AND timestamp >= $1`,
+      `SELECT COUNT(*) as cnt FROM event_log WHERE event_type = 'daily_pack_complete' AND timestamp >= ?`,
       [weekAgo],
     ),
   ]);
 
+  const [dailyPacks] = dailyPacksResult as any;
+  const [dailyBoosts] = dailyBoostsResult as any;
+  const [dailyStreakBreaks] = dailyStreakBreaksResult as any;
+  const [weeklyPacks] = weeklyPacksResult as any;
+
   return {
     daily: {
-      packCompletions: Number(dailyPacks.rows[0]?.cnt || 0),
-      boostUsage: Number(dailyBoosts.rows[0]?.cnt || 0),
-      streakBreaks: Number(dailyStreakBreaks.rows[0]?.cnt || 0),
+      packCompletions: Number(dailyPacks[0]?.cnt || 0),
+      boostUsage: Number(dailyBoosts[0]?.cnt || 0),
+      streakBreaks: Number(dailyStreakBreaks[0]?.cnt || 0),
     },
     weekly: {
-      packCompletions: Number(weeklyPacks.rows[0]?.cnt || 0),
+      packCompletions: Number(weeklyPacks[0]?.cnt || 0),
     },
   };
 }
 
 export async function getUserPerformanceInsights(userId: string): Promise<any> {
-  const leaguePerf = await pool.query(
+  const [leaguePerfRows] = await pool.query(
     `
     SELECT l.name as league_name, l.id as league_id,
-           COUNT(p.id)::int as total,
-           COUNT(CASE WHEN p.points >= 5 THEN 1 END)::int as correct,
-           COALESCE(SUM(p.points), 0)::int as points
+           CAST(COUNT(p.id) AS SIGNED) as total,
+           CAST(COUNT(CASE WHEN p.points >= 5 THEN 1 END) AS SIGNED) as correct,
+           CAST(COALESCE(SUM(p.points), 0) AS SIGNED) as points
     FROM predictions p
-    JOIN football_fixtures f ON p.match_id = CAST(f.api_fixture_id AS TEXT)
+    JOIN football_fixtures f ON p.match_id = CAST(f.api_fixture_id AS CHAR)
     JOIN football_leagues l ON f.league_id = l.id
-    WHERE p.user_id = $1 AND p.settled = true
+    WHERE p.user_id = ? AND p.settled = true
     GROUP BY l.name, l.id
     ORDER BY points DESC
   `,
     [userId],
-  );
+  ) as any;
 
-  const bestLeague = leaguePerf.rows[0] || null;
-  const worstLeague = leaguePerf.rows[leaguePerf.rows.length - 1] || null;
+  const bestLeague = leaguePerfRows[0] || null;
+  const worstLeague = leaguePerfRows[leaguePerfRows.length - 1] || null;
 
-  const derbyPerf = await pool.query(
+  const [derbyPerfRows] = await pool.query(
     `
-    SELECT COUNT(p.id)::int as total,
-           COUNT(CASE WHEN p.points >= 5 THEN 1 END)::int as correct,
-           COALESCE(AVG(p.points), 0)::numeric(5,1) as avg_points
+    SELECT CAST(COUNT(p.id) AS SIGNED) as total,
+           CAST(COUNT(CASE WHEN p.points >= 5 THEN 1 END) AS SIGNED) as correct,
+           CAST(COALESCE(AVG(p.points), 0) AS DECIMAL(5,1)) as avg_points
     FROM predictions p
-    WHERE p.user_id = $1 AND p.settled = true
+    WHERE p.user_id = ? AND p.settled = true
   `,
     [userId],
-  );
+  ) as any;
 
-  const recentForm = await pool.query(
+  const [recentFormRows] = await pool.query(
     `
     SELECT p.points FROM predictions p
-    WHERE p.user_id = $1 AND p.settled = true
+    WHERE p.user_id = ? AND p.settled = true
     ORDER BY p.timestamp DESC
     LIMIT 10
   `,
     [userId],
-  );
+  ) as any;
 
-  const formPoints = recentForm.rows.map((r: any) => r.points || 0);
+  const formPoints = recentFormRows.map((r: any) => r.points || 0);
   const avgRecent =
     formPoints.length > 0
       ? (formPoints.reduce((a: number, b: number) => a + b, 0) / formPoints.length).toFixed(1)
       : "0";
 
   return {
-    leaguePerformance: leaguePerf.rows.map((r: any) => ({
+    leaguePerformance: leaguePerfRows.map((r: any) => ({
       leagueName: r.league_name,
       leagueId: r.league_id,
       total: r.total,
@@ -1121,7 +1135,7 @@ export async function getUserPerformanceInsights(userId: string): Promise<any> {
                 : 0,
           }
         : null,
-    overallAvgPoints: derbyPerf.rows[0]?.avg_points || 0,
+    overallAvgPoints: derbyPerfRows[0]?.avg_points || 0,
     recentFormAvg: avgRecent,
     recentForm: formPoints,
   };
