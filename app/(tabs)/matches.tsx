@@ -29,6 +29,7 @@ import { Match } from "@/lib/types";
 import { getCollapsedSections, saveCollapsedSections } from "@/lib/storage";
 import { getLocalDateKey, getUserTimezone } from "@/lib/datetime";
 import { useFilterPersistence } from "@/lib/hooks/useFilterPersistence";
+export { ErrorBoundary } from "@/components/ErrorBoundary";
 
 type FilterType = "all" | "live" | "upcoming" | "finished";
 

@@ -33,6 +33,7 @@ import { TierShareCard, ShareCardRenderer, type ShareCardRef } from "@/component
 import { WeeklyWrapCard } from "@/components/ui/share/WeeklyWrapCard";
 // Motion imports removed — no animations on tab screen
 import { computeLevel } from "@/lib/leveling";
+export { ErrorBoundary } from "@/components/ErrorBoundary";
 
 // ── Level system ────────────────────────────────────────────────────────────
 // `computeLevel` lives in `lib/leveling.ts` so the celebration watcher in the

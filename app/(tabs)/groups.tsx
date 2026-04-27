@@ -33,6 +33,7 @@ import { apiRequest, queryClient } from "@/lib/query-client";
 import { haptics } from "@/lib/motion";
 import { PressableScale, ScreenHeader, FilterSegmented, Button, EmptyState } from "@/components/ui";
 import { useApp } from "@/contexts/AppContext";
+export { ErrorBoundary } from "@/components/ErrorBoundary";
 
 interface ApiGroup {
   id: string;
