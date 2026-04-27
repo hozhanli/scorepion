@@ -13,7 +13,7 @@ CREATE TABLE IF NOT EXISTS event_log (
 -- daily_packs
 CREATE TABLE IF NOT EXISTS daily_packs (
   id VARCHAR PRIMARY KEY DEFAULT gen_random_uuid(),
-  user_id VARCHAR NOT NULL REFERENCES users(id),
+  user_id VARCHAR NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   date TEXT NOT NULL,
   match_ids JSONB NOT NULL DEFAULT '[]',
   completed_match_ids JSONB NOT NULL DEFAULT '[]',
@@ -30,7 +30,7 @@ CREATE UNIQUE INDEX IF NOT EXISTS daily_pack_user_date ON daily_packs(user_id, d
 -- boost_picks
 CREATE TABLE IF NOT EXISTS boost_picks (
   id VARCHAR PRIMARY KEY DEFAULT gen_random_uuid(),
-  user_id VARCHAR NOT NULL REFERENCES users(id),
+  user_id VARCHAR NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   match_id TEXT NOT NULL,
   date TEXT NOT NULL,
   multiplier INTEGER NOT NULL DEFAULT 2,
@@ -46,7 +46,7 @@ CREATE UNIQUE INDEX IF NOT EXISTS boost_user_date ON boost_picks(user_id, date);
 -- achievements
 CREATE TABLE IF NOT EXISTS achievements (
   id VARCHAR PRIMARY KEY DEFAULT gen_random_uuid(),
-  user_id VARCHAR NOT NULL REFERENCES users(id),
+  user_id VARCHAR NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   type TEXT NOT NULL,
   title TEXT NOT NULL,
   description TEXT NOT NULL DEFAULT '',
@@ -62,7 +62,7 @@ CREATE TABLE IF NOT EXISTS achievements (
 -- weekly_winners
 CREATE TABLE IF NOT EXISTS weekly_winners (
   id VARCHAR PRIMARY KEY DEFAULT gen_random_uuid(),
-  user_id VARCHAR NOT NULL REFERENCES users(id),
+  user_id VARCHAR NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   week_start TEXT NOT NULL,
   points INTEGER NOT NULL DEFAULT 0,
   rank INTEGER NOT NULL DEFAULT 1,

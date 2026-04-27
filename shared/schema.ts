@@ -47,7 +47,7 @@ export const predictions = pgTable(
       .default(sql`gen_random_uuid()`),
     userId: varchar("user_id")
       .notNull()
-      .references(() => users.id),
+      .references(() => users.id, { onDelete: "cascade" }),
     matchId: text("match_id").notNull(),
     homeScore: integer("home_score").notNull(),
     awayScore: integer("away_score").notNull(),
@@ -74,7 +74,7 @@ export const groups = pgTable("groups", {
   leagueIds: jsonb("league_ids").$type<string[]>().notNull().default([]),
   createdBy: varchar("created_by")
     .notNull()
-    .references(() => users.id),
+    .references(() => users.id, { onDelete: "cascade" }),
   createdAt: bigint("created_at", { mode: "number" })
     .notNull()
     .default(sql`extract(epoch from now()) * 1000`),
@@ -88,10 +88,10 @@ export const groupMembers = pgTable(
       .default(sql`gen_random_uuid()`),
     groupId: varchar("group_id")
       .notNull()
-      .references(() => groups.id),
+      .references(() => groups.id, { onDelete: "cascade" }),
     userId: varchar("user_id")
       .notNull()
-      .references(() => users.id),
+      .references(() => users.id, { onDelete: "cascade" }),
     joinedAt: bigint("joined_at", { mode: "number" })
       .notNull()
       .default(sql`extract(epoch from now()) * 1000`),
@@ -335,7 +335,7 @@ export const dailyPacks = pgTable(
       .default(sql`gen_random_uuid()`),
     userId: varchar("user_id")
       .notNull()
-      .references(() => users.id),
+      .references(() => users.id, { onDelete: "cascade" }),
     date: text("date").notNull(),
     matchIds: jsonb("match_ids").$type<string[]>().notNull().default([]),
     completedMatchIds: jsonb("completed_match_ids").$type<string[]>().notNull().default([]),
@@ -359,7 +359,7 @@ export const boostPicks = pgTable(
       .default(sql`gen_random_uuid()`),
     userId: varchar("user_id")
       .notNull()
-      .references(() => users.id),
+      .references(() => users.id, { onDelete: "cascade" }),
     matchId: text("match_id").notNull(),
     date: text("date").notNull(),
     multiplier: integer("multiplier").notNull().default(2),
@@ -380,7 +380,7 @@ export const achievements = pgTable("achievements", {
     .default(sql`gen_random_uuid()`),
   userId: varchar("user_id")
     .notNull()
-    .references(() => users.id),
+    .references(() => users.id, { onDelete: "cascade" }),
   type: text("type").notNull(),
   title: text("title").notNull(),
   description: text("description").notNull().default(""),
@@ -401,7 +401,7 @@ export const weeklyWinners = pgTable("weekly_winners", {
     .default(sql`gen_random_uuid()`),
   userId: varchar("user_id")
     .notNull()
-    .references(() => users.id),
+    .references(() => users.id, { onDelete: "cascade" }),
   weekStart: text("week_start").notNull(),
   points: integer("points").notNull().default(0),
   rank: integer("rank").notNull().default(1),
@@ -550,10 +550,10 @@ export const groupActivity = pgTable("group_activity", {
     .default(sql`gen_random_uuid()`),
   groupId: varchar("group_id")
     .notNull()
-    .references(() => groups.id),
+    .references(() => groups.id, { onDelete: "cascade" }),
   userId: varchar("user_id")
     .notNull()
-    .references(() => users.id),
+    .references(() => users.id, { onDelete: "cascade" }),
   type: text("type").notNull(), // 'prediction' | 'exact_score' | 'points_earned' | 'streak' | 'boost_pick' | 'achievement' | 'rank_change' | 'weekly_winner' | 'joined'
   matchId: text("match_id"),
   points: integer("points").default(0),
