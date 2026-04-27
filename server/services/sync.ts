@@ -837,32 +837,39 @@ export async function settlePredictions(): Promise<number> {
   const { checkAndAwardAchievements, getUserStats } = await import("./achievements.service");
   const { logGroupActivity } = await import("./group-activity.service");
 
-  const unsettled = await pool.query(`
-    SELECT p.id, p.match_id, p.home_score as pred_home, p.away_score as pred_away, p.user_id
-    FROM predictions p WHERE p.settled = false
-  `);
-  if (unsettled.rows.length === 0) return 0;
-
   let settled = 0;
   const client = await pool.connect();
   try {
     await client.query("BEGIN");
-    for (const row of unsettled.rows) {
-      const fixture = await client.query(
-        `
-      SELECT home_score, away_score, status, home_team_id, away_team_id
-      FROM football_fixtures
-      WHERE CAST(api_fixture_id AS TEXT) = $1
-        AND status = 'finished'
-        AND home_score IS NOT NULL
-        AND away_score IS NOT NULL
-    `,
-        [row.match_id],
-      );
-      if (fixture.rows.length === 0) continue;
 
-      const actHome = fixture.rows[0].home_score;
-      const actAway = fixture.rows[0].away_score;
+    // Advisory lock prevents concurrent settlement runs (lock id = 1 for settlement)
+    await client.query("SELECT pg_advisory_xact_lock(1)");
+
+    // Fetch ALL unsettled predictions joined with their finished fixture data
+    // in a single query at the start of the transaction, so we work with a
+    // consistent snapshot and avoid per-row queries inside the loop.
+    const unsettled = await client.query(`
+      SELECT
+        p.id, p.match_id, p.home_score AS pred_home, p.away_score AS pred_away, p.user_id,
+        f.home_score AS act_home, f.away_score AS act_away,
+        f.home_team_id, f.away_team_id
+      FROM predictions p
+      JOIN football_fixtures f
+        ON CAST(f.api_fixture_id AS TEXT) = p.match_id
+        AND f.status = 'finished'
+        AND f.home_score IS NOT NULL
+        AND f.away_score IS NOT NULL
+      WHERE p.settled = false
+    `);
+
+    if (unsettled.rows.length === 0) {
+      await client.query("COMMIT");
+      return 0;
+    }
+
+    for (const row of unsettled.rows) {
+      const actHome = row.act_home;
+      const actAway = row.act_away;
       const predHome = row.pred_home;
       const predAway = row.pred_away;
 
@@ -891,15 +898,15 @@ export async function settlePredictions(): Promise<number> {
         try {
           const stg = await client.query(
             `SELECT team_id, position FROM football_standings WHERE team_id IN ($1,$2) ORDER BY position ASC LIMIT 2`,
-            [fixture.rows[0].home_team_id, fixture.rows[0].away_team_id],
+            [row.home_team_id, row.away_team_id],
           );
           if (stg.rows.length === 2) {
             const fav = stg.rows[0].team_id;
             const aRes = actHome > actAway ? "home" : actHome < actAway ? "away" : "draw";
             const pRes = predHome > predAway ? "home" : predHome < predAway ? "away" : "draw";
             const udWon =
-              (aRes === "away" && fav === fixture.rows[0].home_team_id) ||
-              (aRes === "home" && fav === fixture.rows[0].away_team_id);
+              (aRes === "away" && fav === row.home_team_id) ||
+              (aRes === "home" && fav === row.away_team_id);
             if (udWon && pRes === aRes) upsetBonus = SCORING.UPSET_BONUS;
           }
         } catch (err) {
@@ -954,7 +961,7 @@ export async function settlePredictions(): Promise<number> {
             `SELECT ht.name as home_name, at.name as away_name FROM football_teams ht
            JOIN football_teams at ON true
            WHERE ht.api_football_id=$1 AND at.api_football_id=$2`,
-            [fixture.rows[0].home_team_id, fixture.rows[0].away_team_id],
+            [row.home_team_id, row.away_team_id],
           );
           const teamName = teamQuery.rows[0] || { home_name: "Home", away_name: "Away" };
           const matchSummary = `${teamName.home_name} ${actHome}-${actAway} ${teamName.away_name}`;
@@ -1037,26 +1044,63 @@ async function cronWeeklyReset(): Promise<void> {
   const now = new Date();
   if (now.getUTCDay() !== 1) return;
 
-  await pool.query(`UPDATE users SET rank_last_week=rank`);
-  const top = await pool.query(
-    `SELECT id, weekly_points FROM users ORDER BY weekly_points DESC LIMIT 3`,
-  );
-  const weekStart = now.toISOString().split("T")[0];
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
 
-  const { logGroupActivity } = await import("./group-activity.service");
-  for (let i = 0; i < top.rows.length; i++) {
-    const u = top.rows[i];
-    if (u.weekly_points > 0) {
-      await pool.query(
-        `INSERT INTO weekly_winners(user_id,week_start,points,rank,type) VALUES($1,$2,$3,$4,'global') ON CONFLICT DO NOTHING`,
-        [u.id, weekStart, u.weekly_points, i + 1],
-      );
-      await logGroupActivity(pool, u.id, "weekly_winner", { rank: i + 1, points: u.weekly_points });
+    // Advisory lock prevents concurrent weekly reset runs (lock id = 2 for weekly reset)
+    await client.query("SELECT pg_advisory_xact_lock(2)");
+
+    // Guard: check if we already ran the reset this week by looking for a
+    // weekly_winners row with this Monday's date. If it exists, skip.
+    const weekStart = now.toISOString().split("T")[0];
+    const alreadyRan = await client.query(
+      `SELECT 1 FROM weekly_winners WHERE week_start=$1 AND type='global' LIMIT 1`,
+      [weekStart],
+    );
+    if (alreadyRan.rows.length > 0) {
+      await client.query("COMMIT");
+      console.log(`[Cron] Weekly reset already ran for ${weekStart}, skipping`);
+      return;
     }
+
+    // Snapshot top 3 weekly performers BEFORE resetting points
+    const top = await client.query(
+      `SELECT id, weekly_points FROM users ORDER BY weekly_points DESC LIMIT 3`,
+    );
+
+    const { logGroupActivity } = await import("./group-activity.service");
+    for (let i = 0; i < top.rows.length; i++) {
+      const u = top.rows[i];
+      if (u.weekly_points > 0) {
+        await client.query(
+          `INSERT INTO weekly_winners(user_id,week_start,points,rank,type) VALUES($1,$2,$3,$4,'global') ON CONFLICT DO NOTHING`,
+          [u.id, weekStart, u.weekly_points, i + 1],
+        );
+        await logGroupActivity(client, u.id, "weekly_winner", {
+          rank: i + 1,
+          points: u.weekly_points,
+        });
+      }
+    }
+
+    // Atomically copy rank to rank_last_week AND reset weekly_points in a single UPDATE
+    await client.query(`UPDATE users SET rank_last_week = rank, weekly_points = 0`);
+
+    // Monthly reset on the 1st of the month
+    if (now.getUTCDate() === 1) {
+      await client.query(`UPDATE users SET monthly_points = 0`);
+    }
+
+    await client.query("COMMIT");
+    console.log(`[Cron] Weekly reset complete`);
+  } catch (err) {
+    await client.query("ROLLBACK").catch(() => {});
+    console.error("[Cron] Weekly reset transaction failed, rolled back:", err);
+    throw err;
+  } finally {
+    client.release();
   }
-  await pool.query(`UPDATE users SET weekly_points=0`);
-  if (now.getUTCDate() === 1) await pool.query(`UPDATE users SET monthly_points=0`);
-  console.log(`[Cron] Weekly reset complete`);
 }
 
 // ── Cron helpers ──────────────────────────────────────────────────────────────
