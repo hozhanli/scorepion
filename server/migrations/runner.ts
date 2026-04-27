@@ -27,15 +27,15 @@ export async function runMigrations(): Promise<void> {
   try {
     await pool.query(`
       CREATE TABLE IF NOT EXISTS _migrations (
-        id         SERIAL PRIMARY KEY,
-        name       TEXT NOT NULL UNIQUE,
-        applied_at BIGINT NOT NULL DEFAULT (EXTRACT(EPOCH FROM NOW()) * 1000)
+        id         INT AUTO_INCREMENT PRIMARY KEY,
+        name       VARCHAR(255) NOT NULL UNIQUE,
+        applied_at BIGINT NOT NULL DEFAULT (FLOOR(UNIX_TIMESTAMP() * 1000))
       )
     `);
 
     for (const file of MIGRATIONS) {
-      const already = await pool.query(`SELECT 1 FROM _migrations WHERE name = $1`, [file]);
-      if (already.rows.length > 0) {
+      const [rows] = await pool.query(`SELECT 1 FROM _migrations WHERE name = ?`, [file]);
+      if ((rows as any[]).length > 0) {
         console.log(`[Migration] Already applied: ${file}`);
         continue;
       }
@@ -43,20 +43,23 @@ export async function runMigrations(): Promise<void> {
       console.log(`[Migration] Applying ${file}...`);
       const sql = readFileSync(join(__dirname, file), "utf-8");
 
-      // Run migration in a transaction with a statement timeout to prevent hangs
-      await pool.query("BEGIN");
+      // Run migration in a transaction
+      await pool.query("START TRANSACTION");
       try {
-        await pool.query("SET statement_timeout TO '60s'");
-        await pool.query(sql);
-        await pool.query(`INSERT INTO _migrations (name) VALUES ($1)`, [file]);
+        // Execute each statement separately — MySQL doesn't support multi-statement by default
+        const statements = sql
+          .split(/;\s*$/m)
+          .map((s) => s.trim())
+          .filter((s) => s.length > 0 && !s.startsWith("--"));
+        for (const stmt of statements) {
+          await pool.query(stmt);
+        }
+        await pool.query(`INSERT INTO _migrations (name) VALUES (?)`, [file]);
         await pool.query("COMMIT");
-        console.log(`[Migration] ✓ ${file}`);
+        console.log(`[Migration] Done: ${file}`);
       } catch (err) {
         await pool.query("ROLLBACK");
         throw err;
-      } finally {
-        // Reset statement timeout so it doesn't leak to other queries on this connection
-        await pool.query("SET statement_timeout TO '0'").catch(() => {});
       }
     }
   } catch (err) {

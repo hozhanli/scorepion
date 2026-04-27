@@ -3,7 +3,7 @@
 -- venue captures the stadium/venue name from each fixture.
 
 ALTER TABLE football_h2h
-ADD COLUMN IF NOT EXISTS league_name TEXT NOT NULL DEFAULT '';
+ADD COLUMN league_name VARCHAR(255) NOT NULL DEFAULT '';
 
 ALTER TABLE football_h2h
-ADD COLUMN IF NOT EXISTS venue TEXT DEFAULT '';
+ADD COLUMN venue VARCHAR(255) DEFAULT ''

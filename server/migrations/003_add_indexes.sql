@@ -1,7 +1,7 @@
 -- ============================================================
 -- Scorepion Migration: Performance-Critical Indexes
 -- Adds indexes to frequently-queried columns for improved performance.
--- Safe to run multiple times (uses IF NOT EXISTS).
+-- MySQL version. Safe to run multiple times (uses IF NOT EXISTS).
 -- ============================================================
 
 -- Fixtures table indexes for filtering and sorting
@@ -25,4 +25,4 @@ CREATE INDEX IF NOT EXISTS idx_group_members_user_id ON group_members(user_id);
 CREATE INDEX IF NOT EXISTS idx_users_total_points ON users(total_points DESC);
 
 -- Sync log composite index for filtering syncs by type, status, and recent activity
-CREATE INDEX IF NOT EXISTS idx_sync_log_type_status ON sync_log(sync_type, status, synced_at DESC);
+CREATE INDEX IF NOT EXISTS idx_sync_log_type_status ON sync_log(sync_type, status, synced_at DESC)
