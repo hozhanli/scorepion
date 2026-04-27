@@ -1044,26 +1044,63 @@ async function cronWeeklyReset(): Promise<void> {
   const now = new Date();
   if (now.getUTCDay() !== 1) return;
 
-  await pool.query(`UPDATE users SET rank_last_week=rank`);
-  const top = await pool.query(
-    `SELECT id, weekly_points FROM users ORDER BY weekly_points DESC LIMIT 3`,
-  );
-  const weekStart = now.toISOString().split("T")[0];
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
 
-  const { logGroupActivity } = await import("./group-activity.service");
-  for (let i = 0; i < top.rows.length; i++) {
-    const u = top.rows[i];
-    if (u.weekly_points > 0) {
-      await pool.query(
-        `INSERT INTO weekly_winners(user_id,week_start,points,rank,type) VALUES($1,$2,$3,$4,'global') ON CONFLICT DO NOTHING`,
-        [u.id, weekStart, u.weekly_points, i + 1],
-      );
-      await logGroupActivity(pool, u.id, "weekly_winner", { rank: i + 1, points: u.weekly_points });
+    // Advisory lock prevents concurrent weekly reset runs (lock id = 2 for weekly reset)
+    await client.query("SELECT pg_advisory_xact_lock(2)");
+
+    // Guard: check if we already ran the reset this week by looking for a
+    // weekly_winners row with this Monday's date. If it exists, skip.
+    const weekStart = now.toISOString().split("T")[0];
+    const alreadyRan = await client.query(
+      `SELECT 1 FROM weekly_winners WHERE week_start=$1 AND type='global' LIMIT 1`,
+      [weekStart],
+    );
+    if (alreadyRan.rows.length > 0) {
+      await client.query("COMMIT");
+      console.log(`[Cron] Weekly reset already ran for ${weekStart}, skipping`);
+      return;
     }
+
+    // Snapshot top 3 weekly performers BEFORE resetting points
+    const top = await client.query(
+      `SELECT id, weekly_points FROM users ORDER BY weekly_points DESC LIMIT 3`,
+    );
+
+    const { logGroupActivity } = await import("./group-activity.service");
+    for (let i = 0; i < top.rows.length; i++) {
+      const u = top.rows[i];
+      if (u.weekly_points > 0) {
+        await client.query(
+          `INSERT INTO weekly_winners(user_id,week_start,points,rank,type) VALUES($1,$2,$3,$4,'global') ON CONFLICT DO NOTHING`,
+          [u.id, weekStart, u.weekly_points, i + 1],
+        );
+        await logGroupActivity(client, u.id, "weekly_winner", {
+          rank: i + 1,
+          points: u.weekly_points,
+        });
+      }
+    }
+
+    // Atomically copy rank to rank_last_week AND reset weekly_points in a single UPDATE
+    await client.query(`UPDATE users SET rank_last_week = rank, weekly_points = 0`);
+
+    // Monthly reset on the 1st of the month
+    if (now.getUTCDate() === 1) {
+      await client.query(`UPDATE users SET monthly_points = 0`);
+    }
+
+    await client.query("COMMIT");
+    console.log(`[Cron] Weekly reset complete`);
+  } catch (err) {
+    await client.query("ROLLBACK").catch(() => {});
+    console.error("[Cron] Weekly reset transaction failed, rolled back:", err);
+    throw err;
+  } finally {
+    client.release();
   }
-  await pool.query(`UPDATE users SET weekly_points=0`);
-  if (now.getUTCDate() === 1) await pool.query(`UPDATE users SET monthly_points=0`);
-  console.log(`[Cron] Weekly reset complete`);
 }
 
 // ── Cron helpers ──────────────────────────────────────────────────────────────
