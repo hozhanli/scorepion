@@ -2,7 +2,7 @@
 #
 # stack-down.sh — Stop the Scorepion dev stack cleanly.
 #
-# Stops Expo (13290), backend (13291), and Postgres container (13292).
+# Stops Expo (13290), backend (13291), and MySQL container (13292).
 # Keeps the Docker volume so your DB data survives restart.
 #
 set -euo pipefail
@@ -38,7 +38,7 @@ stop_pid_file() {
 stop_pid_file "Expo"    "$LOG_DIR/expo.pid"
 stop_pid_file "Backend" "$LOG_DIR/server.pid"
 
-log "Stopping PostgreSQL container..."
+log "Stopping MySQL container..."
 bash "$ROOT/scripts/start-db.sh" stop || true
 
 log "Stack is down."

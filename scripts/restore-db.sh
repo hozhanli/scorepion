@@ -23,7 +23,7 @@ fi
 if [ -z "$BACKUP_FILE" ]; then
   echo "✗ Error: no backup file specified." >&2
   echo "Usage: bash scripts/restore-db.sh <backup-file>" >&2
-  echo "Example: bash scripts/restore-db.sh backups/scorepion_2026-04-21_153000.dump" >&2
+  echo "Example: bash scripts/restore-db.sh backups/scorepion_2026-04-21_153000.sql.gz" >&2
   exit 1
 fi
 
@@ -31,6 +31,13 @@ if [ ! -f "$BACKUP_FILE" ]; then
   echo "✗ Error: backup file not found: $BACKUP_FILE" >&2
   exit 1
 fi
+
+# Parse MySQL URL: mysql://user:pass@host:port/dbname
+MYSQL_USER=$(echo "$DATABASE_URL" | sed -E 's|mysql://([^:]+):.*|\1|')
+MYSQL_PASS=$(echo "$DATABASE_URL" | sed -E 's|mysql://[^:]+:([^@]+)@.*|\1|')
+MYSQL_HOST=$(echo "$DATABASE_URL" | sed -E 's|mysql://[^@]+@([^:]+):.*|\1|')
+MYSQL_PORT=$(echo "$DATABASE_URL" | sed -E 's|mysql://[^@]+@[^:]+:([0-9]+)/.*|\1|')
+MYSQL_DB=$(echo "$DATABASE_URL" | sed -E 's|mysql://[^/]+/([^?]+).*|\1|')
 
 # Confirmation prompt
 echo "⚠  This will DESTROY the current database and replace it with the backup."
@@ -44,15 +51,28 @@ fi
 
 echo "→ Restoring database from $BACKUP_FILE..."
 
-if ! pg_restore "$DATABASE_URL" \
-  --clean \
-  --if-exists \
-  --verbose \
-  --no-owner \
-  --no-privileges \
-  "$BACKUP_FILE" 2>&1; then
-  echo "✗ Restore failed. Check DATABASE_URL, Postgres connectivity, and dump file integrity." >&2
-  exit 1
+if echo "$BACKUP_FILE" | grep -q '\.gz$'; then
+  # Gzipped SQL file
+  if ! gunzip -c "$BACKUP_FILE" | mysql \
+    -h "$MYSQL_HOST" \
+    -P "$MYSQL_PORT" \
+    -u "$MYSQL_USER" \
+    -p"$MYSQL_PASS" \
+    "$MYSQL_DB" 2>&1; then
+    echo "✗ Restore failed. Check DATABASE_URL, MySQL connectivity, and dump file integrity." >&2
+    exit 1
+  fi
+else
+  # Plain SQL file
+  if ! mysql \
+    -h "$MYSQL_HOST" \
+    -P "$MYSQL_PORT" \
+    -u "$MYSQL_USER" \
+    -p"$MYSQL_PASS" \
+    "$MYSQL_DB" < "$BACKUP_FILE" 2>&1; then
+    echo "✗ Restore failed. Check DATABASE_URL, MySQL connectivity, and dump file integrity." >&2
+    exit 1
+  fi
 fi
 
 echo "✓ database restored successfully"
