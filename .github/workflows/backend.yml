@@ -72,12 +72,7 @@ jobs:
         run: npm run lint
 
       - name: Setup test database
-        run: |
-          npx drizzle-kit push --force
-          for f in $(ls server/migrations/*.sql | sort); do
-            echo "Applying $f ..."
-            mysql -h 127.0.0.1 -u root -proot scorepion_test < "$f" || true
-          done
+        run: npx drizzle-kit push --force
 
       - name: Test
         run: npm test

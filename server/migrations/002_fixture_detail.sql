@@ -10,8 +10,8 @@
 -- Kept here for documentation parity; they will no-op if 001 already ran.
 
 -- 2. League logo / flag columns
-ALTER TABLE football_leagues ADD COLUMN flag  TEXT DEFAULT '';
-ALTER TABLE football_leagues ADD COLUMN logo  TEXT DEFAULT '';
+ALTER TABLE football_leagues ADD COLUMN flag  VARCHAR(500) DEFAULT '';
+ALTER TABLE football_leagues ADD COLUMN logo  VARCHAR(500) DEFAULT '';
 
 -- 3. Team color column
 ALTER TABLE football_teams ADD COLUMN color VARCHAR(20) NOT NULL DEFAULT '#333';
@@ -22,12 +22,12 @@ CREATE TABLE IF NOT EXISTS football_fixture_events (
   fixture_id    INTEGER NOT NULL,
   team_id       INTEGER NOT NULL,
   player_id     INTEGER,
-  player_name   TEXT DEFAULT '',
+  player_name   VARCHAR(255) DEFAULT '',
   assist_id     INTEGER,
-  assist_name   TEXT DEFAULT '',
+  assist_name   VARCHAR(255) DEFAULT '',
   type          VARCHAR(255) NOT NULL,
-  detail        TEXT DEFAULT '',
-  comments      TEXT DEFAULT '',
+  detail        VARCHAR(255) DEFAULT '',
+  comments      VARCHAR(255) DEFAULT '',
   elapsed       INTEGER NOT NULL,
   extra_time    INTEGER,
   updated_at    BIGINT NOT NULL DEFAULT (FLOOR(UNIX_TIMESTAMP() * 1000))
@@ -41,7 +41,7 @@ CREATE TABLE IF NOT EXISTS football_fixture_lineups (
   id             VARCHAR(36) PRIMARY KEY DEFAULT (UUID()),
   fixture_id     INTEGER NOT NULL,
   team_id        INTEGER NOT NULL,
-  formation      TEXT DEFAULT '',
+  formation      VARCHAR(50) DEFAULT '',
   player_id      INTEGER NOT NULL,
   player_name    VARCHAR(255) NOT NULL DEFAULT '',
   player_number  INTEGER,
@@ -134,8 +134,22 @@ CREATE TABLE IF NOT EXISTS group_activity (
   FOREIGN KEY (group_id) REFERENCES `groups`(id) ON DELETE CASCADE,
   FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 );
-CREATE INDEX IF NOT EXISTS idx_group_activity_group  ON group_activity(group_id);
-CREATE INDEX IF NOT EXISTS idx_group_activity_time   ON group_activity(created_at DESC);
+-- Conditionally create indexes (may already exist from 001)
+SET @idx = (SELECT COUNT(1) FROM information_schema.STATISTICS
+            WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'group_activity'
+              AND INDEX_NAME = 'idx_group_activity_group');
+SET @sql = IF(@idx = 0, 'CREATE INDEX idx_group_activity_group ON group_activity(group_id)', 'SELECT 1');
+PREPARE stmt FROM @sql;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
+
+SET @idx = (SELECT COUNT(1) FROM information_schema.STATISTICS
+            WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'group_activity'
+              AND INDEX_NAME = 'idx_group_activity_time');
+SET @sql = IF(@idx = 0, 'CREATE INDEX idx_group_activity_time ON group_activity(created_at DESC)', 'SELECT 1');
+PREPARE stmt FROM @sql;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
 
 -- 10. Recompute global ranks if not done
 UPDATE users u

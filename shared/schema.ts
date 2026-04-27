@@ -1,7 +1,6 @@
 import { sql } from "drizzle-orm";
 import {
   mysqlTable,
-  text,
   varchar,
   int,
   bigint,
@@ -17,9 +16,9 @@ export const users = mysqlTable("users", {
   id: varchar("id", { length: 36 })
     .primaryKey()
     .default(sql`(UUID())`),
-  username: text("username").notNull().unique(),
-  password: text("password").notNull(),
-  avatar: text("avatar").notNull().default(""),
+  username: varchar("username", { length: 255 }).notNull().unique(),
+  password: varchar("password", { length: 255 }).notNull(),
+  avatar: varchar("avatar", { length: 500 }).notNull().default(""),
   totalPoints: int("total_points").notNull().default(0),
   weeklyPoints: int("weekly_points").notNull().default(0),
   monthlyPoints: int("monthly_points").notNull().default(0),
@@ -33,8 +32,8 @@ export const users = mysqlTable("users", {
   joinedAt: bigint("joined_at", { mode: "number" })
     .notNull()
     .default(sql`(FLOOR(UNIX_TIMESTAMP() * 1000))`),
-  stripeCustomerId: text("stripe_customer_id"),
-  stripeSubscriptionId: text("stripe_subscription_id"),
+  stripeCustomerId: varchar("stripe_customer_id", { length: 255 }),
+  stripeSubscriptionId: varchar("stripe_subscription_id", { length: 255 }),
   isPremium: boolean("is_premium").notNull().default(false),
 });
 
@@ -47,7 +46,7 @@ export const predictions = mysqlTable(
     userId: varchar("user_id", { length: 36 })
       .notNull()
       .references(() => users.id, { onDelete: "cascade" }),
-    matchId: text("match_id").notNull(),
+    matchId: varchar("match_id", { length: 255 }).notNull(),
     homeScore: int("home_score").notNull(),
     awayScore: int("away_score").notNull(),
     points: int("points").default(0),
@@ -67,8 +66,8 @@ export const groups = mysqlTable("groups", {
   id: varchar("id", { length: 36 })
     .primaryKey()
     .default(sql`(UUID())`),
-  name: text("name").notNull(),
-  code: text("code").notNull().unique(),
+  name: varchar("name", { length: 255 }).notNull(),
+  code: varchar("code", { length: 255 }).notNull().unique(),
   isPublic: boolean("is_public").notNull().default(true),
   memberCount: int("member_count").notNull().default(1),
   leagueIds: json("league_ids").$type<string[]>().notNull().default([]),
@@ -106,14 +105,14 @@ export const groupMembers = mysqlTable(
 export const footballLeagues = mysqlTable("football_leagues", {
   id: varchar("id", { length: 255 }).primaryKey(),
   apiFootballId: int("api_football_id").notNull().unique(),
-  name: text("name").notNull(),
-  country: text("country").notNull(),
-  logo: text("logo").default(""),
-  flag: text("flag").default(""),
-  color: text("color").notNull().default("#333"),
-  icon: text("icon").notNull().default("football"),
+  name: varchar("name", { length: 255 }).notNull(),
+  country: varchar("country", { length: 255 }).notNull(),
+  logo: varchar("logo", { length: 500 }).default(""),
+  flag: varchar("flag", { length: 500 }).default(""),
+  color: varchar("color", { length: 50 }).notNull().default("#333"),
+  icon: varchar("icon", { length: 50 }).notNull().default("football"),
   season: int("season").notNull(),
-  type: text("type").notNull().default("League"),
+  type: varchar("type", { length: 50 }).notNull().default("League"),
 });
 
 export const footballTeams = mysqlTable("football_teams", {
@@ -121,10 +120,10 @@ export const footballTeams = mysqlTable("football_teams", {
     .primaryKey()
     .default(sql`(UUID())`),
   apiFootballId: int("api_football_id").notNull().unique(),
-  name: text("name").notNull(),
-  shortName: text("short_name").notNull().default(""),
-  logo: text("logo").default(""),
-  color: text("color").notNull().default("#333"),
+  name: varchar("name", { length: 255 }).notNull(),
+  shortName: varchar("short_name", { length: 255 }).notNull().default(""),
+  logo: varchar("logo", { length: 500 }).default(""),
+  color: varchar("color", { length: 50 }).notNull().default("#333"),
 });
 
 export const footballFixtures = mysqlTable("football_fixtures", {
@@ -137,13 +136,13 @@ export const footballFixtures = mysqlTable("football_fixtures", {
   awayTeamId: int("away_team_id").notNull(),
   homeScore: int("home_score"),
   awayScore: int("away_score"),
-  status: text("status").notNull().default("upcoming"),
-  statusShort: text("status_short").notNull().default("NS"),
+  status: varchar("status", { length: 50 }).notNull().default("upcoming"),
+  statusShort: varchar("status_short", { length: 50 }).notNull().default("NS"),
   minute: int("minute"),
-  kickoff: text("kickoff").notNull(),
-  venue: text("venue").default(""),
-  referee: text("referee").default(""),
-  round: text("round").default(""),
+  kickoff: varchar("kickoff", { length: 255 }).notNull(),
+  venue: varchar("venue", { length: 255 }).default(""),
+  referee: varchar("referee", { length: 255 }).default(""),
+  round: varchar("round", { length: 255 }).default(""),
   season: int("season").notNull(),
   updatedAt: bigint("updated_at", { mode: "number" })
     .notNull()
@@ -167,9 +166,9 @@ export const footballStandings = mysqlTable(
     goalsAgainst: int("goals_against").notNull().default(0),
     goalDifference: int("goal_difference").notNull().default(0),
     points: int("points").notNull().default(0),
-    form: text("form").default(""),
+    form: varchar("form", { length: 50 }).default(""),
     season: int("season").notNull(),
-    group: text("group_name"),
+    group: varchar("group_name", { length: 255 }),
     updatedAt: bigint("updated_at", { mode: "number" })
       .notNull()
       .default(sql`(FLOOR(UNIX_TIMESTAMP() * 1000))`),
@@ -187,8 +186,8 @@ export const footballTopScorers = mysqlTable(
       .default(sql`(UUID())`),
     leagueId: varchar("league_id", { length: 255 }).notNull(),
     playerId: int("player_id").notNull(),
-    playerName: text("player_name").notNull(),
-    playerPhoto: text("player_photo").default(""),
+    playerName: varchar("player_name", { length: 255 }).notNull(),
+    playerPhoto: varchar("player_photo", { length: 500 }).default(""),
     teamId: int("team_id").notNull(),
     goals: int("goals").notNull().default(0),
     assists: int("assists").notNull().default(0),
@@ -211,8 +210,8 @@ export const footballTopAssists = mysqlTable(
       .default(sql`(UUID())`),
     leagueId: varchar("league_id", { length: 255 }).notNull(),
     playerId: int("player_id").notNull(),
-    playerName: text("player_name").notNull(),
-    playerPhoto: text("player_photo").default(""),
+    playerName: varchar("player_name", { length: 255 }).notNull(),
+    playerPhoto: varchar("player_photo", { length: 500 }).default(""),
     teamId: int("team_id").notNull(),
     assists: int("assists").notNull().default(0),
     goals: int("goals").notNull().default(0),
@@ -235,8 +234,8 @@ export const footballTopYellowCards = mysqlTable(
       .default(sql`(UUID())`),
     leagueId: varchar("league_id", { length: 255 }).notNull(),
     playerId: int("player_id").notNull(),
-    playerName: text("player_name").notNull(),
-    playerPhoto: text("player_photo").default(""),
+    playerName: varchar("player_name", { length: 255 }).notNull(),
+    playerPhoto: varchar("player_photo", { length: 500 }).default(""),
     teamId: int("team_id").notNull(),
     yellowCards: int("yellow_cards").notNull().default(0),
     matches: int("matches").notNull().default(0),
@@ -258,8 +257,8 @@ export const footballTopRedCards = mysqlTable(
       .default(sql`(UUID())`),
     leagueId: varchar("league_id", { length: 255 }).notNull(),
     playerId: int("player_id").notNull(),
-    playerName: text("player_name").notNull(),
-    playerPhoto: text("player_photo").default(""),
+    playerName: varchar("player_name", { length: 255 }).notNull(),
+    playerPhoto: varchar("player_photo", { length: 500 }).default(""),
     teamId: int("team_id").notNull(),
     redCards: int("red_cards").notNull().default(0),
     matches: int("matches").notNull().default(0),
@@ -279,13 +278,13 @@ export const footballInjuries = mysqlTable("football_injuries", {
     .default(sql`(UUID())`),
   leagueId: varchar("league_id", { length: 255 }).notNull(),
   playerId: int("player_id").notNull(),
-  playerName: text("player_name").notNull(),
-  playerPhoto: text("player_photo").default(""),
+  playerName: varchar("player_name", { length: 255 }).notNull(),
+  playerPhoto: varchar("player_photo", { length: 500 }).default(""),
   teamId: int("team_id").notNull(),
-  type: text("type").notNull().default(""),
-  reason: text("reason").notNull().default(""),
+  type: varchar("type", { length: 50 }).notNull().default(""),
+  reason: varchar("reason", { length: 1000 }).notNull().default(""),
   fixtureId: int("fixture_id"),
-  fixtureDate: text("fixture_date").default(""),
+  fixtureDate: varchar("fixture_date", { length: 255 }).default(""),
   season: int("season").notNull(),
   updatedAt: bigint("updated_at", { mode: "number" })
     .notNull()
@@ -298,16 +297,16 @@ export const footballTransfers = mysqlTable("football_transfers", {
     .default(sql`(UUID())`),
   leagueId: varchar("league_id", { length: 255 }).notNull(),
   playerId: int("player_id").notNull(),
-  playerName: text("player_name").notNull(),
-  playerPhoto: text("player_photo").default(""),
+  playerName: varchar("player_name", { length: 255 }).notNull(),
+  playerPhoto: varchar("player_photo", { length: 500 }).default(""),
   teamInId: int("team_in_id"),
-  teamInName: text("team_in_name").default(""),
-  teamInLogo: text("team_in_logo").default(""),
+  teamInName: varchar("team_in_name", { length: 255 }).default(""),
+  teamInLogo: varchar("team_in_logo", { length: 500 }).default(""),
   teamOutId: int("team_out_id"),
-  teamOutName: text("team_out_name").default(""),
-  teamOutLogo: text("team_out_logo").default(""),
-  transferDate: text("transfer_date").default(""),
-  transferType: text("transfer_type").default(""),
+  teamOutName: varchar("team_out_name", { length: 255 }).default(""),
+  teamOutLogo: varchar("team_out_logo", { length: 500 }).default(""),
+  transferDate: varchar("transfer_date", { length: 255 }).default(""),
+  transferType: varchar("transfer_type", { length: 50 }).default(""),
   season: int("season").notNull(),
   updatedAt: bigint("updated_at", { mode: "number" })
     .notNull()
@@ -318,11 +317,11 @@ export const syncLog = mysqlTable("sync_log", {
   id: varchar("id", { length: 36 })
     .primaryKey()
     .default(sql`(UUID())`),
-  syncType: text("sync_type").notNull(),
+  syncType: varchar("sync_type", { length: 255 }).notNull(),
   leagueId: varchar("league_id", { length: 255 }),
   requestCount: int("request_count").notNull().default(0),
-  status: text("status").notNull().default("success"),
-  error: text("error"),
+  status: varchar("status", { length: 50 }).notNull().default("success"),
+  error: varchar("error", { length: 1000 }),
   syncedAt: bigint("synced_at", { mode: "number" })
     .notNull()
     .default(sql`(FLOOR(UNIX_TIMESTAMP() * 1000))`),
@@ -337,10 +336,10 @@ export const dailyPacks = mysqlTable(
     userId: varchar("user_id", { length: 36 })
       .notNull()
       .references(() => users.id, { onDelete: "cascade" }),
-    date: text("date").notNull(),
+    date: varchar("date", { length: 255 }).notNull(),
     matchIds: json("match_ids").$type<string[]>().notNull().default([]),
     completedMatchIds: json("completed_match_ids").$type<string[]>().notNull().default([]),
-    boostMatchId: text("boost_match_id"),
+    boostMatchId: varchar("boost_match_id", { length: 255 }),
     totalPicks: int("total_picks").notNull().default(0),
     completedPicks: int("completed_picks").notNull().default(0),
     isComplete: boolean("is_complete").notNull().default(false),
@@ -364,8 +363,8 @@ export const boostPicks = mysqlTable(
     userId: varchar("user_id", { length: 36 })
       .notNull()
       .references(() => users.id, { onDelete: "cascade" }),
-    matchId: text("match_id").notNull(),
-    date: text("date").notNull(),
+    matchId: varchar("match_id", { length: 255 }).notNull(),
+    date: varchar("date", { length: 255 }).notNull(),
     multiplier: int("multiplier").notNull().default(2),
     isUpset: boolean("is_upset").notNull().default(false),
     originalPoints: int("original_points").default(0),
@@ -388,14 +387,14 @@ export const achievements = mysqlTable("achievements", {
   userId: varchar("user_id", { length: 36 })
     .notNull()
     .references(() => users.id, { onDelete: "cascade" }),
-  type: text("type").notNull(),
-  title: text("title").notNull(),
-  description: text("description").notNull().default(""),
-  icon: text("icon").notNull().default("trophy"),
-  color: text("color").notNull().default("#FFD700"),
-  tier: text("tier").notNull().default("bronze"),
-  season: text("season").notNull().default("2024-25"),
-  period: text("period"),
+  type: varchar("type", { length: 50 }).notNull(),
+  title: varchar("title", { length: 255 }).notNull(),
+  description: varchar("description", { length: 1000 }).notNull().default(""),
+  icon: varchar("icon", { length: 50 }).notNull().default("trophy"),
+  color: varchar("color", { length: 50 }).notNull().default("#FFD700"),
+  tier: varchar("tier", { length: 50 }).notNull().default("bronze"),
+  season: varchar("season", { length: 50 }).notNull().default("2024-25"),
+  period: varchar("period", { length: 255 }),
   metadata: json("metadata").$type<Record<string, any>>().default({}),
   earnedAt: bigint("earned_at", { mode: "number" })
     .notNull()
@@ -409,10 +408,10 @@ export const weeklyWinners = mysqlTable("weekly_winners", {
   userId: varchar("user_id", { length: 36 })
     .notNull()
     .references(() => users.id, { onDelete: "cascade" }),
-  weekStart: text("week_start").notNull(),
+  weekStart: varchar("week_start", { length: 255 }).notNull(),
   points: int("points").notNull().default(0),
   rank: int("rank").notNull().default(1),
-  type: text("type").notNull().default("global"),
+  type: varchar("type", { length: 50 }).notNull().default("global"),
   groupId: varchar("group_id", { length: 36 }).references(() => groups.id, { onDelete: "cascade" }),
   createdAt: bigint("created_at", { mode: "number" })
     .notNull()
@@ -428,12 +427,12 @@ export const footballFixtureEvents = mysqlTable(
     fixtureId: int("fixture_id").notNull(),
     teamId: int("team_id").notNull(),
     playerId: int("player_id"),
-    playerName: text("player_name").default(""),
+    playerName: varchar("player_name", { length: 255 }).default(""),
     assistId: int("assist_id"),
-    assistName: text("assist_name").default(""),
-    type: text("type").notNull(), // "Goal" | "Card" | "subst" | "Var"
-    detail: text("detail").default(""), // "Normal Goal" | "Yellow Card" etc.
-    comments: text("comments").default(""),
+    assistName: varchar("assist_name", { length: 255 }).default(""),
+    type: varchar("type", { length: 50 }).notNull(), // "Goal" | "Card" | "subst" | "Var"
+    detail: varchar("detail", { length: 255 }).default(""), // "Normal Goal" | "Yellow Card" etc.
+    comments: varchar("comments", { length: 1000 }).default(""),
     elapsed: int("elapsed").notNull(),
     extraTime: int("extra_time"),
     updatedAt: bigint("updated_at", { mode: "number" })
@@ -453,12 +452,12 @@ export const footballFixtureLineups = mysqlTable(
       .default(sql`(UUID())`),
     fixtureId: int("fixture_id").notNull(),
     teamId: int("team_id").notNull(),
-    formation: text("formation").default(""),
+    formation: varchar("formation", { length: 50 }).default(""),
     playerId: int("player_id").notNull(),
-    playerName: text("player_name").notNull().default(""),
+    playerName: varchar("player_name", { length: 255 }).notNull().default(""),
     playerNumber: int("player_number"),
-    playerPos: text("player_pos").default(""), // "G" | "D" | "M" | "F"
-    grid: text("grid").default(""), // e.g. "1:1"
+    playerPos: varchar("player_pos", { length: 50 }).default(""), // "G" | "D" | "M" | "F"
+    grid: varchar("grid", { length: 50 }).default(""), // e.g. "1:1"
     isStarting: boolean("is_starting").notNull().default(true),
     updatedAt: bigint("updated_at", { mode: "number" })
       .notNull()
@@ -506,14 +505,14 @@ export const footballH2H = mysqlTable(
     team2Id: int("team2_id").notNull(),
     fixtureId: int("fixture_id").notNull(),
     leagueId: varchar("league_id", { length: 255 }).notNull().default(""),
-    leagueName: text("league_name").notNull().default(""),
+    leagueName: varchar("league_name", { length: 255 }).notNull().default(""),
     homeTeamId: int("home_team_id").notNull(),
     awayTeamId: int("away_team_id").notNull(),
     homeScore: int("home_score"),
     awayScore: int("away_score"),
-    status: text("status").notNull().default("finished"),
-    kickoff: text("kickoff").notNull(),
-    venue: text("venue").default(""),
+    status: varchar("status", { length: 50 }).notNull().default("finished"),
+    kickoff: varchar("kickoff", { length: 255 }).notNull(),
+    venue: varchar("venue", { length: 255 }).default(""),
     season: int("season").notNull(),
     updatedAt: bigint("updated_at", { mode: "number" })
       .notNull()
@@ -537,13 +536,13 @@ export const footballTeamStats = mysqlTable(
     losses: int("losses").default(0),
     goalsFor: int("goals_for").default(0),
     goalsAgainst: int("goals_against").default(0),
-    avgGoalsFor: text("avg_goals_for").default("0"),
-    avgGoalsAgainst: text("avg_goals_against").default("0"),
+    avgGoalsFor: varchar("avg_goals_for", { length: 255 }).default("0"),
+    avgGoalsAgainst: varchar("avg_goals_against", { length: 255 }).default("0"),
     cleanSheets: int("clean_sheets").default(0),
     failedToScore: int("failed_to_score").default(0),
     longestWinStreak: int("longest_win_streak").default(0),
     longestLoseStreak: int("longest_lose_streak").default(0),
-    form: text("form").default(""),
+    form: varchar("form", { length: 50 }).default(""),
     updatedAt: bigint("updated_at", { mode: "number" })
       .notNull()
       .default(sql`(FLOOR(UNIX_TIMESTAMP() * 1000))`),
@@ -563,8 +562,8 @@ export const groupActivity = mysqlTable(
     userId: varchar("user_id", { length: 36 })
       .notNull()
       .references(() => users.id, { onDelete: "cascade" }),
-    type: text("type").notNull(), // 'prediction' | 'exact_score' | 'points_earned' | 'streak' | 'boost_pick' | 'achievement' | 'rank_change' | 'weekly_winner' | 'joined'
-    matchId: text("match_id"),
+    type: varchar("type", { length: 50 }).notNull(), // 'prediction' | 'exact_score' | 'points_earned' | 'streak' | 'boost_pick' | 'achievement' | 'rank_change' | 'weekly_winner' | 'joined'
+    matchId: varchar("match_id", { length: 255 }),
     points: int("points").default(0),
     metadata: json("metadata").$type<Record<string, any>>().default({}),
     createdAt: bigint("created_at", { mode: "number" })
@@ -580,11 +579,11 @@ export const refreshTokens = mysqlTable(
     id: varchar("id", { length: 36 })
       .primaryKey()
       .default(sql`(UUID())`),
-    tokenHash: text("token_hash").notNull(),
+    tokenHash: varchar("token_hash", { length: 255 }).notNull(),
     userId: varchar("user_id", { length: 36 })
       .notNull()
       .references(() => users.id, { onDelete: "cascade" }),
-    familyId: text("family_id").notNull(),
+    familyId: varchar("family_id", { length: 255 }).notNull(),
     revoked: boolean("revoked").notNull().default(false),
     expiresAt: bigint("expires_at", { mode: "number" }).notNull(),
     createdAt: bigint("created_at", { mode: "number" })
@@ -605,7 +604,7 @@ export const eventLog = mysqlTable(
       .primaryKey()
       .default(sql`(UUID())`),
     userId: varchar("user_id", { length: 36 }).references(() => users.id, { onDelete: "set null" }),
-    eventType: text("event_type").notNull(),
+    eventType: varchar("event_type", { length: 255 }).notNull(),
     eventData: json("event_data").$type<Record<string, any>>().default({}),
     timestamp: bigint("timestamp", { mode: "number" })
       .notNull()
@@ -659,8 +658,8 @@ export const pushTokens = mysqlTable(
     userId: varchar("user_id", { length: 36 })
       .notNull()
       .references(() => users.id, { onDelete: "cascade" }),
-    token: text("token").notNull(),
-    platform: text("platform"), // "ios" | "android" | "web"
+    token: varchar("token", { length: 255 }).notNull(),
+    platform: varchar("platform", { length: 50 }), // "ios" | "android" | "web"
     createdAt: bigint("created_at", { mode: "number" })
       .notNull()
       .default(sql`(FLOOR(UNIX_TIMESTAMP() * 1000))`),
