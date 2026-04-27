@@ -10,7 +10,7 @@ import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { db } from "@server/db";
 import { footballFixtures, predictions, users } from "@shared/schema";
 import { submitPrediction, PredictionError } from "@server/services/prediction.service";
-import { eq, inArray } from "drizzle-orm";
+import { eq, inArray, sql } from "drizzle-orm";
 
 describe("Prediction Submission", () => {
   let userId: string;
@@ -20,20 +20,21 @@ describe("Prediction Submission", () => {
 
   beforeEach(async () => {
     // Create test user
-    const [testUser] = await db
+    const testUsername = `pu_${Date.now().toString(36)}`;
+    await db
       .insert(users)
       .values({
-        username: `pu_${Date.now().toString(36)}`,
+        username: testUsername,
         password: "hashed_pw",
         avatar: "PU",
-      })
-      .returning();
+      });
+    const [testUser] = await db.select().from(users).where(eq(users.username, testUsername));
     userId = testUser.id;
 
     // Upcoming fixture (can predict)
     const now = new Date();
     const future = new Date(now.getTime() + 2 * 60 * 60 * 1000); // 2 hours from now
-    const [upcoming] = await db
+    await db
       .insert(footballFixtures)
       .values({
         apiFixtureId: 1001,
@@ -51,12 +52,11 @@ describe("Prediction Submission", () => {
         round: "1",
         season: 2025,
         updatedAt: Date.now(),
-      })
-      .returning();
-    upcomingFixtureId = String(upcoming.apiFixtureId);
+      });
+    upcomingFixtureId = "1001";
 
     // Live fixture (cannot predict)
-    const [live] = await db
+    await db
       .insert(footballFixtures)
       .values({
         apiFixtureId: 1002,
@@ -74,12 +74,11 @@ describe("Prediction Submission", () => {
         round: "1",
         season: 2025,
         updatedAt: Date.now(),
-      })
-      .returning();
-    liveFixtureId = String(live.apiFixtureId);
+      });
+    liveFixtureId = "1002";
 
     // Finished fixture (cannot predict)
-    const [finished] = await db
+    await db
       .insert(footballFixtures)
       .values({
         apiFixtureId: 1003,
@@ -97,9 +96,8 @@ describe("Prediction Submission", () => {
         round: "1",
         season: 2025,
         updatedAt: Date.now(),
-      })
-      .returning();
-    finishedFixtureId = String(finished.apiFixtureId);
+      });
+    finishedFixtureId = "1003";
   });
 
   afterEach(async () => {

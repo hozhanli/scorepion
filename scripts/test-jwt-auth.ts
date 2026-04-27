@@ -10,12 +10,12 @@
  * - Replay detection
  * - Logout and token revocation
  *
- * REQUIREMENTS: PostgreSQL database must be running on localhost:13292
- * DATABASE_URL=postgresql://postgres:postgres@localhost:13292/scorepion
+ * REQUIREMENTS: MySQL database must be running on localhost:13292
+ * DATABASE_URL=mysql://root:root@localhost:13292/scorepion
  *
  * To start database locally:
- *   docker run -d --name scorepion-db -e POSTGRES_PASSWORD=postgres \
- *     -e POSTGRES_DB=scorepion -p 13292:5432 postgres:16-alpine
+ *   docker run -d --name scorepion-mysql -e MYSQL_ROOT_PASSWORD=root \
+ *     -e MYSQL_DATABASE=scorepion -p 13292:3306 mysql:8.0
  */
 
 import { ChildProcess, spawn } from "child_process";
@@ -297,7 +297,7 @@ async function main() {
   log("JWT Authentication Flow Test Suite");
   log("=".repeat(70));
   log(`Testing: ${BASE_URL}`);
-  log(`Database: postgresql://postgres:postgres@localhost:13292/scorepion`);
+  log(`Database: mysql://root:root@localhost:13292/scorepion`);
   log("=".repeat(70));
   log("");
 
@@ -310,11 +310,11 @@ async function main() {
     error(`Make sure the server is running:`);
     error(`  cd /sessions/lucid-elegant-heisenberg/mnt/scorepion`);
     error(`  npm run server:dev`);
-    error(`\nAnd a PostgreSQL database is available at localhost:13292:`);
-    error(`  docker run -d --name scorepion-db \\`);
-    error(`    -e POSTGRES_PASSWORD=postgres \\`);
-    error(`    -e POSTGRES_DB=scorepion \\`);
-    error(`    -p 13292:5432 postgres:16-alpine`);
+    error(`\nAnd a MySQL database is available at localhost:13292:`);
+    error(`  docker run -d --name scorepion-mysql \\`);
+    error(`    -e MYSQL_ROOT_PASSWORD=root \\`);
+    error(`    -e MYSQL_DATABASE=scorepion \\`);
+    error(`    -p 13292:3306 mysql:8.0`);
     process.exit(1);
   }
 

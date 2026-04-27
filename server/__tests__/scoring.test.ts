@@ -17,7 +17,7 @@ import {
 } from "@shared/schema";
 import { SCORING } from "@server/config";
 import { settlePredictions } from "@server/services/sync";
-import { eq, and } from "drizzle-orm";
+import { eq, and, sql } from "drizzle-orm";
 
 describe("Scoring Engine", () => {
   let userId: string;
@@ -25,21 +25,23 @@ describe("Scoring Engine", () => {
 
   beforeEach(async () => {
     // Create a test user
-    const [testUser] = await db
+    const testUsername = `tu_${Date.now().toString(36)}`;
+    await db
       .insert(users)
       .values({
-        username: `tu_${Date.now().toString(36)}`,
+        username: testUsername,
         password: "hashed_pw",
         avatar: "TU",
-      })
-      .returning();
+      });
+    const [testUser] = await db.select().from(users).where(eq(users.username, testUsername));
     userId = testUser.id;
 
     // Create a test fixture (not live, not finished initially)
-    const [fixture] = await db
+    const testApiFixtureId = 999000 + Math.floor(Math.random() * 1000);
+    await db
       .insert(footballFixtures)
       .values({
-        apiFixtureId: 999000 + Math.floor(Math.random() * 1000),
+        apiFixtureId: testApiFixtureId,
         leagueId: "pl",
         homeTeamId: 1,
         awayTeamId: 2,
@@ -54,9 +56,8 @@ describe("Scoring Engine", () => {
         round: "1",
         season: 2025,
         updatedAt: Date.now(),
-      })
-      .returning();
-    fixtureId = String(fixture.apiFixtureId);
+      });
+    fixtureId = String(testApiFixtureId);
 
     // Add standings for upset bonus tests
     await db
@@ -78,7 +79,7 @@ describe("Scoring Engine", () => {
         group: null,
         updatedAt: Date.now(),
       })
-      .onConflictDoNothing();
+      .onDuplicateKeyUpdate({ set: { leagueId: sql`league_id` } });
 
     await db
       .insert(footballStandings)
@@ -99,7 +100,7 @@ describe("Scoring Engine", () => {
         group: null,
         updatedAt: Date.now(),
       })
-      .onConflictDoNothing();
+      .onDuplicateKeyUpdate({ set: { leagueId: sql`league_id` } });
   });
 
   afterEach(async () => {

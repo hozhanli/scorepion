@@ -6,16 +6,14 @@
  */
 
 import "dotenv/config";
-import pg from "pg";
+import mysql from "mysql2/promise";
 
 if (!process.env.DATABASE_URL) {
   console.error("DATABASE_URL is not set. Make sure your .env file exists.");
   process.exit(1);
 }
 
-const pool = new pg.Pool({
-  connectionString: process.env.DATABASE_URL,
-});
+const pool = mysql.createPool(process.env.DATABASE_URL);
 
 const now = Date.now();
 const DAY = 86400000;
@@ -237,9 +235,8 @@ async function seed() {
 
   for (const l of leagues) {
     await pool.query(`
-      INSERT INTO football_leagues (id, api_football_id, name, country, logo, flag, color, icon, season, type)
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 2024, $9)
-      ON CONFLICT (id) DO NOTHING
+      INSERT IGNORE INTO football_leagues (id, api_football_id, name, country, logo, flag, color, icon, season, type)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, 2024, ?)
     `, [l.id, l.apiId, l.name, l.country,
         `https://media.api-sports.io/football/leagues/${l.apiId}.png`,
         `https://media.api-sports.io/flags/${l.country.toLowerCase()}.svg`,
@@ -251,9 +248,8 @@ async function seed() {
   const allTeams = [...PL_TEAMS, ...LA_TEAMS, ...SA_TEAMS];
   for (const t of allTeams) {
     await pool.query(`
-      INSERT INTO football_teams (api_football_id, name, short_name, logo, color)
-      VALUES ($1, $2, $3, $4, '#333')
-      ON CONFLICT (api_football_id) DO NOTHING
+      INSERT IGNORE INTO football_teams (api_football_id, name, short_name, logo, color)
+      VALUES (?, ?, ?, ?, '#333')
     `, [t.id, t.name, t.short, t.logo]);
   }
   console.log(`✓ ${allTeams.length} teams seeded`);
@@ -269,7 +265,7 @@ async function seed() {
   for (const s of [...plStandings, ...laStandings, ...saStandings]) {
     await pool.query(`
       INSERT INTO football_standings (league_id, team_id, position, played, won, drawn, lost, goals_for, goals_against, goal_difference, points, form, season, updated_at)
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `, [s.leagueId, s.teamId, s.position, s.played, s.won, s.drawn, s.lost, s.goalsFor, s.goalsAgainst, s.goalDifference, s.points, s.form, s.season, now]);
   }
   console.log("✓ Standings seeded");
@@ -281,33 +277,32 @@ async function seed() {
 
   for (const f of [...plFixtures, ...laFixtures, ...saFixtures]) {
     await pool.query(`
-      INSERT INTO football_fixtures (api_fixture_id, league_id, home_team_id, away_team_id, home_score, away_score, status, status_short, minute, kickoff, venue, referee, round, season, updated_at)
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
-      ON CONFLICT (api_fixture_id) DO NOTHING
+      INSERT IGNORE INTO football_fixtures (api_fixture_id, league_id, home_team_id, away_team_id, home_score, away_score, status, status_short, minute, kickoff, venue, referee, round, season, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `, [f.apiFixtureId, f.leagueId, f.homeTeamId, f.awayTeamId, f.homeScore, f.awayScore, f.status, f.statusShort, f.minute, f.kickoff, f.venue, f.referee, f.round, f.season, now]);
   }
   console.log(`✓ ${plFixtures.length + laFixtures.length + saFixtures.length} fixtures seeded`);
 
   // Seed top scorers
   for (const [leagueId, scorers] of Object.entries(TOP_SCORERS)) {
-    await pool.query(`DELETE FROM football_top_scorers WHERE league_id = $1`, [leagueId]);
+    await pool.query(`DELETE FROM football_top_scorers WHERE league_id = ?`, [leagueId]);
     for (const s of scorers) {
       await pool.query(`
         INSERT INTO football_top_scorers (league_id, player_id, player_name, player_photo, team_id, goals, assists, matches, season, updated_at)
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 2024, $9)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, 2024, ?)
       `, [leagueId, s.playerId, s.name, s.photo, s.teamId, s.goals, s.assists, s.matches, now]);
     }
   }
   console.log("✓ Top scorers seeded");
 
   // Create system user + league groups
-  const sysResult = await pool.query(`
+  await pool.query(`
     INSERT INTO users (username, password, avatar)
     VALUES ('scorepion_system', 'SYSTEM_NO_LOGIN', '')
-    ON CONFLICT (username) DO UPDATE SET username = 'scorepion_system'
-    RETURNING id
+    ON DUPLICATE KEY UPDATE username = 'scorepion_system'
   `);
-  const systemUserId = sysResult.rows[0].id;
+  const [sysRows] = await pool.query(`SELECT id FROM users WHERE username = 'scorepion_system'`);
+  const systemUserId = (sysRows as any[])[0].id;
 
   const groupInfos = [
     { name: "Premier League Fans", code: "PLFC01", leagueIds: ["pl"] },
@@ -317,9 +312,8 @@ async function seed() {
 
   for (const g of groupInfos) {
     await pool.query(`
-      INSERT INTO groups (name, code, is_public, member_count, league_ids, created_by, created_at)
-      VALUES ($1, $2, true, 0, $3, $4, $5)
-      ON CONFLICT (code) DO NOTHING
+      INSERT IGNORE INTO \`groups\` (name, code, is_public, member_count, league_ids, created_by, created_at)
+      VALUES (?, ?, true, 0, ?, ?, ?)
     `, [g.name, g.code, JSON.stringify(g.leagueIds), systemUserId, now]);
   }
   console.log("✓ Groups seeded");
@@ -336,9 +330,9 @@ async function seed() {
   for (let i = 0; i < fakeUsers.length; i++) {
     const u = fakeUsers[i];
     await pool.query(`
-      INSERT INTO users (username, password, avatar, total_points, weekly_points, monthly_points, correct_predictions, total_predictions, streak, best_streak, rank, favorite_leagues)
-      VALUES ($1, 'FAKE_NO_LOGIN', '', $2, $3, $4, $5, $6, $7, $8, $9, '["pl","la"]')
-      ON CONFLICT (username) DO UPDATE SET total_points = $2, rank = $9
+      INSERT INTO users (username, password, avatar, total_points, weekly_points, monthly_points, correct_predictions, total_predictions, streak, best_streak, \`rank\`, favorite_leagues)
+      VALUES (?, 'FAKE_NO_LOGIN', '', ?, ?, ?, ?, ?, ?, ?, ?, '["pl","la"]')
+      ON DUPLICATE KEY UPDATE total_points = VALUES(total_points), \`rank\` = VALUES(\`rank\`)
     `, [u.username, u.points, Math.floor(u.points / 4), Math.floor(u.points / 2), u.correct, u.total, u.streak, u.bestStreak, i + 1]);
   }
   console.log("✓ Leaderboard users seeded");
@@ -348,7 +342,7 @@ async function seed() {
     for (const syncType of ["fixtures", "standings", "top_scorers"]) {
       await pool.query(`
         INSERT INTO sync_log (sync_type, league_id, request_count, status, synced_at)
-        VALUES ($1, $2, 1, 'success', $3)
+        VALUES (?, ?, 1, 'success', ?)
       `, [syncType, leagueId, now]);
     }
   }
