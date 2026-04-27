@@ -86,7 +86,9 @@ groupsRouter.post(
                  VALUES ($1, $2, 'joined', '{}', $3)`,
           [groupId, req.userId, Date.now()],
         );
-      } catch {
+      } catch (err: unknown) {
+        const msg = err instanceof Error ? err.message : "";
+        if (!msg.includes("relation") || !msg.includes("group_activity")) throw err;
         /* table may not exist yet — will be created on next migration run */
       }
       return res.json({ message: "Joined" });

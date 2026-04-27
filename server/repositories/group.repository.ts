@@ -44,24 +44,18 @@ export async function createGroup(
 }
 
 export async function joinGroup(groupId: string, userId: string): Promise<boolean> {
-  const existing = await db
-    .select()
-    .from(groupMembers)
-    .where(and(eq(groupMembers.groupId, groupId), eq(groupMembers.userId, userId)));
+  const result = await db
+    .insert(groupMembers)
+    .values({ groupId, userId, joinedAt: Date.now() })
+    .onConflictDoNothing()
+    .returning();
 
-  if (existing.length > 0) return false;
-
-  await db.insert(groupMembers).values({
-    groupId,
-    userId,
-    joinedAt: Date.now(),
-  });
+  if (result.length === 0) return false;
 
   await db
     .update(groups)
     .set({ memberCount: sql`member_count + 1` })
     .where(eq(groups.id, groupId));
-
   return true;
 }
 
@@ -94,10 +88,6 @@ export async function getGroupByCode(code: string): Promise<Group | undefined> {
   return group;
 }
 
-/**
- * Check whether a user can access a group's data.
- * Returns true if the group is public OR the user is a member.
- */
 export async function canAccessGroup(groupId: string, userId: string): Promise<boolean> {
   const [group] = await db.select().from(groups).where(eq(groups.id, groupId));
   if (!group) return false;

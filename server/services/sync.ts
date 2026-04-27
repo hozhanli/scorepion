@@ -958,9 +958,9 @@ export async function settlePredictions(): Promise<number> {
       try {
         if (!hasSentNotification("settlement", row.user_id, row.match_id)) {
           const teamQuery = await client.query(
-            `SELECT ht.name as home_name, at.name as away_name FROM football_teams ht
-           JOIN football_teams at ON true
-           WHERE ht.api_football_id=$1 AND at.api_football_id=$2`,
+            `SELECT ht.name as home_name, at.name as away_name
+             FROM football_teams ht, football_teams at
+             WHERE ht.api_football_id=$1 AND at.api_football_id=$2`,
             [row.home_team_id, row.away_team_id],
           );
           const teamName = teamQuery.rows[0] || { home_name: "Home", away_name: "Away" };
@@ -1185,66 +1185,39 @@ async function runForAllLeagues(
  */
 async function sendKickoffReminders(): Promise<void> {
   try {
+    const { pool } = await import("../db");
     const now = Date.now();
-    const minTime = now + 25 * 60 * 1000; // 25 minutes from now
-    const maxTime = now + 35 * 60 * 1000; // 35 minutes from now
+    const minTime = new Date(now + 25 * 60 * 1000).toISOString();
+    const maxTime = new Date(now + 35 * 60 * 1000).toISOString();
 
-    const fixtures = await db
-      .select({
-        apiFixtureId: footballFixtures.apiFixtureId,
-        homeTeamId: footballFixtures.homeTeamId,
-        awayTeamId: footballFixtures.awayTeamId,
-      })
-      .from(footballFixtures)
-      .where(
-        and(
-          eq(footballFixtures.status, "upcoming"),
-          gte(
-            sql`EXTRACT(EPOCH FROM ${footballFixtures.kickoff}::timestamp) * 1000`,
-            minTime / 1000,
-          ),
-          lte(
-            sql`EXTRACT(EPOCH FROM ${footballFixtures.kickoff}::timestamp) * 1000`,
-            maxTime / 1000,
-          ),
-        ),
-      );
+    // Single batch query: fixtures + team names + user IDs with predictions
+    const result = await pool.query(
+      `SELECT f.api_fixture_id,
+              ht.name AS home_name,
+              at.name AS away_name,
+              array_agg(DISTINCT p.user_id) AS user_ids
+       FROM football_fixtures f
+       JOIN football_teams ht ON ht.api_football_id = f.home_team_id
+       JOIN football_teams at ON at.api_football_id = f.away_team_id
+       JOIN predictions p ON p.match_id = CAST(f.api_fixture_id AS TEXT)
+            AND p.settled = false
+       WHERE f.kickoff >= $1
+         AND f.kickoff <= $2
+         AND f.status = 'upcoming'
+       GROUP BY f.api_fixture_id, ht.name, at.name`,
+      [minTime, maxTime],
+    );
 
-    for (const fixture of fixtures) {
-      // Find all users with predictions on this fixture (use Set to deduplicate)
-      const predResults = await db
-        .select({ userId: predictions.userId })
-        .from(predictions)
-        .where(eq(predictions.matchId, fixture.apiFixtureId.toString()));
+    for (const row of result.rows) {
+      const fixtureId = String(row.api_fixture_id);
+      const homeName: string = row.home_name || "Home";
+      const awayName: string = row.away_name || "Away";
+      const userIds: string[] = row.user_ids || [];
 
-      const uniqueUserIds = Array.from(new Set(predResults.map((p) => p.userId))).map((userId) => ({
-        userId,
-      }));
-      const preds = uniqueUserIds;
-
-      // Fetch team names
-      const homeTeams = await db
-        .select({ name: footballTeams.name })
-        .from(footballTeams)
-        .where(eq(footballTeams.apiFootballId, fixture.homeTeamId));
-
-      const awayTeams = await db
-        .select({ name: footballTeams.name })
-        .from(footballTeams)
-        .where(eq(footballTeams.apiFootballId, fixture.awayTeamId));
-
-      const homeTeam = homeTeams[0]?.name || "Home";
-      const awayTeam = awayTeams[0]?.name || "Away";
-
-      for (const pred of preds) {
-        if (!hasSentNotification("kickoff", pred.userId, fixture.apiFixtureId.toString())) {
-          await sendKickoffReminder(
-            pred.userId,
-            homeTeam,
-            awayTeam,
-            fixture.apiFixtureId.toString(),
-          );
-          markNotificationSent("kickoff", pred.userId, fixture.apiFixtureId.toString());
+      for (const userId of userIds) {
+        if (!hasSentNotification("kickoff", userId, fixtureId)) {
+          await sendKickoffReminder(userId, homeName, awayName, fixtureId);
+          markNotificationSent("kickoff", userId, fixtureId);
         }
       }
     }

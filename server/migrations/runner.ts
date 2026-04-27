@@ -42,9 +42,10 @@ export async function runMigrations(): Promise<void> {
       console.log(`[Migration] Applying ${file}...`);
       const sql = readFileSync(join(__dirname, file), "utf-8");
 
-      // Run migration in a transaction
+      // Run migration in a transaction with a statement timeout to prevent hangs
       await pool.query("BEGIN");
       try {
+        await pool.query("SET statement_timeout TO '60s'");
         await pool.query(sql);
         await pool.query(`INSERT INTO _migrations (name) VALUES ($1)`, [file]);
         await pool.query("COMMIT");
@@ -52,6 +53,9 @@ export async function runMigrations(): Promise<void> {
       } catch (err) {
         await pool.query("ROLLBACK");
         throw err;
+      } finally {
+        // Reset statement timeout so it doesn't leak to other queries on this connection
+        await pool.query("SET statement_timeout TO '0'").catch(() => {});
       }
     }
   } catch (err) {
