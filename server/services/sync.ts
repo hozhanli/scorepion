@@ -466,23 +466,41 @@ export async function syncStandingsForLeague(localId: string): Promise<number> {
         .values(upsertTeamValues(row.team))
         .onDuplicateKeyUpdate({ set: { id: sql`id` } });
 
-      await db.insert(footballStandings).values({
-        leagueId: localId,
-        teamId: row.team.id,
-        position: row.rank,
-        played: row.all.played,
-        won: row.all.win,
-        drawn: row.all.draw,
-        lost: row.all.lose,
-        goalsFor: row.all.goals.for,
-        goalsAgainst: row.all.goals.against,
-        goalDifference: row.goalsDiff,
-        points: row.points,
-        form: row.form ?? "",
-        season: cfg.season,
-        group: row.group ?? null,
-        updatedAt: Date.now(),
-      });
+      await db
+        .insert(footballStandings)
+        .values({
+          leagueId: localId,
+          teamId: row.team.id,
+          position: row.rank,
+          played: row.all.played,
+          won: row.all.win,
+          drawn: row.all.draw,
+          lost: row.all.lose,
+          goalsFor: row.all.goals.for,
+          goalsAgainst: row.all.goals.against,
+          goalDifference: row.goalsDiff,
+          points: row.points,
+          form: row.form ?? "",
+          season: cfg.season,
+          group: row.group ?? null,
+          updatedAt: Date.now(),
+        })
+        .onDuplicateKeyUpdate({
+          set: {
+            position: row.rank,
+            played: row.all.played,
+            won: row.all.win,
+            drawn: row.all.draw,
+            lost: row.all.lose,
+            goalsFor: row.all.goals.for,
+            goalsAgainst: row.all.goals.against,
+            goalDifference: row.goalsDiff,
+            points: row.points,
+            form: row.form ?? "",
+            group: row.group ?? null,
+            updatedAt: Date.now(),
+          },
+        });
       count++;
     }
   }
@@ -666,6 +684,7 @@ export async function syncInjuriesForLeague(localId: string): Promise<number> {
       .insert(footballTeams)
       .values(upsertTeamValues(team))
       .onDuplicateKeyUpdate({ set: { id: sql`id` } });
+    if (!pl.name) continue;
     await db.insert(footballInjuries).values({
       leagueId: localId,
       playerId: pl.id,
@@ -815,6 +834,29 @@ export async function syncTeamStatistics(teamId: number, localId: string): Promi
     });
 }
 
+export async function syncTeamStatsForLeague(localId: string): Promise<number> {
+  const cfg = api.LEAGUE_MAP[localId];
+  if (!cfg) return 0;
+
+  const standings = await db
+    .selectDistinct({ teamId: footballStandings.teamId })
+    .from(footballStandings)
+    .where(eq(footballStandings.leagueId, localId));
+
+  if (!standings || standings.length === 0) return 0;
+
+  let count = 0;
+  for (const { teamId } of standings) {
+    if (!api.canMakeRequest()) break;
+    await syncTeamStatistics(teamId, localId);
+    count++;
+  }
+
+  await logSync("team_stats", localId, standings.length, "success");
+  console.log(`[Sync] team_stats ${localId}: ${count} teams`);
+  return count;
+}
+
 // ── Post-match detail enrichment ─────────────────────────────────────────────
 // Called 4h after a fixture reaches "finished" status.
 
@@ -852,6 +894,38 @@ export async function enrichFinishedFixtures(): Promise<number> {
   }
 
   if (enriched > 0) console.log(`[Sync] Enriched ${enriched} finished fixtures`);
+  return enriched;
+}
+
+export async function enrichHistoricFixtures(batchSize = 30): Promise<number> {
+  const { pool } = await import("../db");
+
+  const [pending] = (await pool.query(
+    `
+    SELECT DISTINCT f.api_fixture_id
+    FROM football_fixtures f
+    WHERE f.status = 'finished'
+      AND NOT EXISTS (
+        SELECT 1 FROM football_fixture_events e WHERE e.fixture_id = f.api_fixture_id
+      )
+    ORDER BY f.kickoff DESC
+    LIMIT ?
+  `,
+    [batchSize],
+  )) as any;
+
+  let enriched = 0;
+  for (const row of pending) {
+    if (!api.canMakeRequest() || api.getRemainingRequests() <= 100) break;
+
+    const id = row.api_fixture_id;
+    await syncFixtureEventsById(id);
+    await syncFixtureLineupsById(id);
+    await syncFixtureStatsById(id);
+    enriched++;
+  }
+
+  console.log(`[Sync] Historic enrichment: ${enriched}/${pending.length} fixtures`);
   return enriched;
 }
 
@@ -1504,6 +1578,18 @@ export function startCronScheduler(): void {
       }, DAY_H),
     );
 
+    // Team stats: every 24h (offset 60min from transfers)
+    cronIntervals.push(
+      setInterval(async () => {
+        try {
+          await new Promise((r) => setTimeout(r, 60 * 60 * 1000));
+          await runForAllLeagues(syncTeamStatsForLeague, "team_stats", 2);
+        } catch (err) {
+          console.error("[Cron] Team stats error:", err);
+        }
+      }, DAY_H),
+    );
+
     // Post-match enrichment (events, lineups, stats): every hour
     cronIntervals.push(
       setInterval(async () => {
@@ -1609,6 +1695,7 @@ export async function syncAllData() {
   const redCards = await runForAllLeagues(syncTopRedCardsForLeague, "red_cards", 2);
   const injuries = await runForAllLeagues(syncInjuriesForLeague, "injuries", 2);
   const transfers = await runForAllLeagues(syncTransfersForLeague, "transfers", 2);
+  const teamStats = await runForAllLeagues(syncTeamStatsForLeague, "team_stats", 2);
   return {
     fixtures,
     standings,
@@ -1618,6 +1705,7 @@ export async function syncAllData() {
     redCards,
     injuries,
     transfers,
+    teamStats,
     requests: api.getRequestCount() - start,
   };
 }
