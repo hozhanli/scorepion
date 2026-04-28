@@ -53,22 +53,25 @@ function isNetworkError(msg: string): boolean {
   return NETWORK_PATTERNS.some((p) => msg.includes(p));
 }
 
-function toFriendlyError(error: unknown, action: "login" | "register"): Error {
+export type AuthErrorKey =
+  | "networkError"
+  | "wrongCredentials"
+  | "usernameTaken"
+  | "tooManyAttempts"
+  | "loginFailed"
+  | "registerFailed"
+  | "generic";
+
+function toErrorKey(error: unknown, action: "login" | "register"): AuthErrorKey {
   const raw = error instanceof Error ? error.message : String(error);
 
-  if (isNetworkError(raw)) return new Error("Can't reach the server. Check your connection.");
+  if (isNetworkError(raw)) return "networkError";
+  if (raw.includes("401")) return "wrongCredentials";
+  if (raw.includes("409")) return "usernameTaken";
+  if (raw.includes("429")) return "tooManyAttempts";
+  if (raw.includes("422") || raw.includes("validation")) return "generic";
 
-  if (raw.includes("401")) return new Error("Username or password incorrect");
-  if (raw.includes("409")) return new Error("That username is already taken");
-  if (raw.includes("429")) return new Error("Too many attempts. Try again in a minute.");
-  if (raw.includes("422") || raw.includes("validation"))
-    return new Error("Check your username and password");
-
-  return new Error(
-    action === "login"
-      ? "Login failed. Please try again."
-      : "Registration failed. Please try again.",
-  );
+  return action === "login" ? "loginFailed" : "registerFailed";
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null);
@@ -162,7 +165,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setSentryUser({ id: data.user.id, username: data.user.username });
       await AsyncStorage.setItem(CACHED_USER_KEY, JSON.stringify(data.user));
     } catch (error) {
-      throw toFriendlyError(error, "login");
+      const key = toErrorKey(error, "login");
+      const err = new Error(key);
+      (err as any).errorKey = key;
+      throw err;
     }
   }, []);
 
@@ -178,7 +184,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setSentryUser({ id: data.user.id, username: data.user.username });
       await AsyncStorage.setItem(CACHED_USER_KEY, JSON.stringify(data.user));
     } catch (error) {
-      throw toFriendlyError(error, "register");
+      const key = toErrorKey(error, "register");
+      const err = new Error(key);
+      (err as any).errorKey = key;
+      throw err;
     }
   }, []);
 

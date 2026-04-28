@@ -14,8 +14,9 @@ import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
 import Animated, { FadeInDown, FadeInUp, ZoomIn } from "react-native-reanimated";
 import Colors, { accent, radii, type, spacing } from "@/constants/colors";
-import { useAuth } from "@/contexts/AuthContext";
+import { useAuth, type AuthErrorKey } from "@/contexts/AuthContext";
 import { useTheme } from "@/contexts/ThemeContext";
+import { useLanguage } from "@/contexts/LanguageContext";
 import { PressableScale, Button, ScorpionCrest } from "@/components/ui";
 import { haptics } from "@/lib/motion";
 
@@ -30,6 +31,7 @@ export default function AuthScreen() {
   const insets = useSafeAreaInsets();
   const { login, register } = useAuth();
   const { surface, border, textRole } = useTheme();
+  const { t } = useLanguage();
   const topPad = Platform.OS === "web" ? 48 : insets.top + 12;
   const botPad = Platform.OS === "web" ? 24 : insets.bottom + 16;
 
@@ -45,8 +47,9 @@ export default function AuthScreen() {
     password: false,
   });
 
-  // Validation regex for username
-  const usernameRegex = /^[a-zA-Z0-9_]{2,24}$/;
+  const usernameRegex = /^[a-zA-Z0-9_]{2,20}$/;
+  const passwordLetterRegex = /[a-zA-Z]/;
+  const passwordNumberRegex = /[0-9]/;
 
   // Compute validation state in real-time
   const validation = useMemo(() => {
@@ -57,19 +60,28 @@ export default function AuthScreen() {
 
     if (!usernameEmpty && !usernameValid) {
       if (usernameTrimmed.length < 2) {
-        usernameError = "Username must be at least 2 characters";
-      } else if (usernameTrimmed.length > 24) {
-        usernameError = "Username must be max 24 characters";
+        usernameError = t.errors.usernameTooShort;
+      } else if (usernameTrimmed.length > 20) {
+        usernameError = t.errors.usernameTooLong;
       } else {
-        usernameError = "Username can only contain letters, numbers, and underscores";
+        usernameError = t.errors.usernameInvalidChars;
       }
     }
 
-    const passwordValid = password.length >= 4;
+    const passwordLongEnough = password.length >= 8;
+    const hasLetter = passwordLetterRegex.test(password);
+    const hasNumber = passwordNumberRegex.test(password);
+    const passwordValid = passwordLongEnough && hasLetter && hasNumber;
     let passwordError: string | null = null;
 
     if (password.length > 0 && !passwordValid) {
-      passwordError = "Password must be at least 4 characters";
+      if (!passwordLongEnough) {
+        passwordError = t.errors.passwordTooShort;
+      } else if (!hasLetter) {
+        passwordError = t.errors.passwordNeedsLetter;
+      } else {
+        passwordError = t.errors.passwordNeedsNumber;
+      }
     }
 
     const canSubmit = usernameValid && passwordValid;
@@ -98,7 +110,8 @@ export default function AuthScreen() {
         router.replace("/onboarding");
       }
     } catch (err: any) {
-      setError(err?.message || "Something went wrong");
+      const key: AuthErrorKey = err?.errorKey || "generic";
+      setError(t.errors[key] || t.errors.generic);
       haptics.warning();
     } finally {
       setLoading(false);
@@ -130,9 +143,7 @@ export default function AuthScreen() {
 
           <Animated.View entering={FadeInDown.delay(120).duration(380).springify().damping(16)}>
             <Text style={[styles.wordmark, { color: textRole.primary }]}>Scorepion</Text>
-            <Text style={[styles.tagline, { color: textRole.secondary }]}>
-              Predict. Compete. Climb.
-            </Text>
+            <Text style={[styles.tagline, { color: textRole.secondary }]}>{t.auth.tagline}</Text>
           </Animated.View>
 
           {/* Mode segmented control */}
@@ -141,7 +152,7 @@ export default function AuthScreen() {
             style={[styles.modeRow, { backgroundColor: surface[2] }]}
           >
             <ModeTab
-              label="Sign In"
+              label={t.auth.signIn}
               active={mode === "login"}
               onPress={() => {
                 setMode("login");
@@ -151,7 +162,7 @@ export default function AuthScreen() {
               textRole={textRole}
             />
             <ModeTab
-              label="Create Account"
+              label={t.auth.createAccount}
               active={mode === "register"}
               onPress={() => {
                 setMode("register");
@@ -167,7 +178,7 @@ export default function AuthScreen() {
             entering={FadeInUp.delay(260).duration(380).springify().damping(16)}
             style={styles.form}
           >
-            <FieldLabel textRole={textRole}>Username</FieldLabel>
+            <FieldLabel textRole={textRole}>{t.auth.username}</FieldLabel>
             <View
               style={[
                 styles.inputGroup,
@@ -194,13 +205,13 @@ export default function AuthScreen() {
               <TextInput
                 style={[styles.input, { color: textRole.primary }]}
                 value={username}
-                onChangeText={(t) => {
-                  setUsername(t);
+                onChangeText={(v) => {
+                  setUsername(v);
                   setError("");
                 }}
-                placeholder="your_handle"
+                placeholder={t.auth.usernamePlaceholder}
                 placeholderTextColor={textRole.tertiary}
-                maxLength={24}
+                maxLength={20}
                 autoCapitalize="none"
                 autoCorrect={false}
                 onFocus={() => setFocused("username")}
@@ -232,7 +243,7 @@ export default function AuthScreen() {
 
             <View style={{ height: 14 }} />
 
-            <FieldLabel textRole={textRole}>Password</FieldLabel>
+            <FieldLabel textRole={textRole}>{t.auth.password}</FieldLabel>
             <View
               style={[
                 styles.inputGroup,
@@ -259,11 +270,15 @@ export default function AuthScreen() {
               <TextInput
                 style={[styles.input, { flex: 1, color: textRole.primary }]}
                 value={password}
-                onChangeText={(t) => {
-                  setPassword(t);
+                onChangeText={(v) => {
+                  setPassword(v);
                   setError("");
                 }}
-                placeholder={mode === "register" ? "At least 4 characters" : "Password"}
+                placeholder={
+                  mode === "register"
+                    ? t.auth.passwordPlaceholderRegister
+                    : t.auth.passwordPlaceholder
+                }
                 placeholderTextColor={textRole.tertiary}
                 secureTextEntry={!showPassword}
                 maxLength={100}
@@ -317,7 +332,7 @@ export default function AuthScreen() {
 
             <View style={{ height: 20 }} />
             <Button
-              title={loading ? "" : mode === "login" ? "Sign In" : "Create Account"}
+              title={loading ? "" : mode === "login" ? t.auth.signIn : t.auth.createAccount}
               onPress={handleSubmit}
               disabled={!validation.canSubmit}
               loading={loading}
@@ -329,7 +344,7 @@ export default function AuthScreen() {
 
             {mode === "register" ? (
               <Text style={[styles.hint, { color: textRole.tertiary }]}>
-                Username min. 2 characters · Password min. 4 characters
+                {t.auth.usernameHint} · {t.auth.passwordHint}
               </Text>
             ) : null}
           </Animated.View>
