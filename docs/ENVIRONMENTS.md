@@ -43,8 +43,8 @@ The server env has many variables. The client env in practice has two:
 | Profile       | Distribution | `EXPO_PUBLIC_DOMAIN`          | When to use                                    |
 | ------------- | ------------ | ----------------------------- | ---------------------------------------------- |
 | `development` | internal APK | `localhost:13291` (tunnelled) | Local dev on a real device with `--dev-client` |
-| `preview`     | internal APK | `staging-api.scorepion.com`   | Internal beta testing against staging          |
-| `production`  | store AAB    | `api.scorepion.com`           | Play Store releases                            |
+| `preview`     | internal APK | `staging-api.scorepion.fans`  | Internal beta testing against staging          |
+| `production`  | store AAB    | `api.scorepion.fans`          | Play Store releases                            |
 
 The URL is intentionally a **bare host** (no `https://` prefix). The client's
 `getApiUrl()` infers the scheme: `http://` for localhost/IP addresses, `https://`

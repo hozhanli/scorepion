@@ -1,0 +1,41 @@
+services:
+  scorepion:
+    image: scorepion:latest
+    container_name: scorepion-api
+    restart: unless-stopped
+    ports:
+      - "5847:5847"
+    environment:
+      NODE_ENV: production
+      PORT: "5847"
+      DATABASE_URL: "mysql://scorepion:${SCOREPION_DB_PASSWORD}@edu-mysql:3306/scorepion"
+      APP_URL: "https://api.scorepion.fans"
+      JWT_SECRET: "${JWT_SECRET}"
+      ADMIN_SECRET: "${ADMIN_SECRET}"
+      FOOTBALL_API_KEY: "${FOOTBALL_API_KEY}"
+      FOOTBALL_API_PLAN: "pro"
+      FOOTBALL_API_DAILY_LIMIT: "7500"
+      EXPO_ACCESS_TOKEN: "${EXPO_ACCESS_TOKEN}"
+    networks:
+      - eduqube-network
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "fetch('http://127.0.0.1:5847/api/health').then(r=>{if(!r.ok)throw r.status}).catch(()=>process.exit(1))",
+        ]
+      interval: 30s
+      timeout: 5s
+      start_period: 15s
+      retries: 3
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+networks:
+  eduqube-network:
+    external: true

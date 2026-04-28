@@ -235,6 +235,11 @@ export default function MatchScreen() {
   const homeMinusIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const awayPlusIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const awayMinusIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const homePlusDelayRef = useRef<NodeJS.Timeout | null>(null);
+  const homeMinusDelayRef = useRef<NodeJS.Timeout | null>(null);
+  const awayPlusDelayRef = useRef<NodeJS.Timeout | null>(null);
+  const awayMinusDelayRef = useRef<NodeJS.Timeout | null>(null);
+  const LONG_PRESS_DELAY = 300;
   const LONG_PRESS_INTERVAL = 140;
 
   // Feature A: Community picks histogram
@@ -997,14 +1002,20 @@ export default function MatchScreen() {
                       </Text>
                       <View style={styles.predictStepperRow}>
                         <PressableScale
-                          onPress={() => homeScore > 0 && setHomeScore((s) => Math.max(s - 1, 0))}
                           onPressIn={() => {
                             if (homeScore <= 0) return;
-                            homeMinusIntervalRef.current = setInterval(() => {
-                              setHomeScore((s) => Math.max(s - 1, 0));
-                            }, LONG_PRESS_INTERVAL);
+                            setHomeScore((s) => Math.max(s - 1, 0));
+                            homeMinusDelayRef.current = setTimeout(() => {
+                              homeMinusIntervalRef.current = setInterval(() => {
+                                setHomeScore((s) => Math.max(s - 1, 0));
+                              }, LONG_PRESS_INTERVAL);
+                            }, LONG_PRESS_DELAY);
                           }}
                           onPressOut={() => {
+                            if (homeMinusDelayRef.current) {
+                              clearTimeout(homeMinusDelayRef.current);
+                              homeMinusDelayRef.current = null;
+                            }
                             if (homeMinusIntervalRef.current) {
                               clearInterval(homeMinusIntervalRef.current);
                               homeMinusIntervalRef.current = null;
@@ -1024,14 +1035,20 @@ export default function MatchScreen() {
                           <Ionicons name="remove" size={20} color={themeAccent.primary} />
                         </PressableScale>
                         <PressableScale
-                          onPress={() => homeScore < 15 && setHomeScore((s) => Math.min(s + 1, 15))}
                           onPressIn={() => {
                             if (homeScore >= 15) return;
-                            homePlusIntervalRef.current = setInterval(() => {
-                              setHomeScore((s) => Math.min(s + 1, 15));
-                            }, LONG_PRESS_INTERVAL);
+                            setHomeScore((s) => Math.min(s + 1, 15));
+                            homePlusDelayRef.current = setTimeout(() => {
+                              homePlusIntervalRef.current = setInterval(() => {
+                                setHomeScore((s) => Math.min(s + 1, 15));
+                              }, LONG_PRESS_INTERVAL);
+                            }, LONG_PRESS_DELAY);
                           }}
                           onPressOut={() => {
+                            if (homePlusDelayRef.current) {
+                              clearTimeout(homePlusDelayRef.current);
+                              homePlusDelayRef.current = null;
+                            }
                             if (homePlusIntervalRef.current) {
                               clearInterval(homePlusIntervalRef.current);
                               homePlusIntervalRef.current = null;
@@ -1065,14 +1082,20 @@ export default function MatchScreen() {
                       </Text>
                       <View style={styles.predictStepperRow}>
                         <PressableScale
-                          onPress={() => awayScore > 0 && setAwayScore((s) => Math.max(s - 1, 0))}
                           onPressIn={() => {
                             if (awayScore <= 0) return;
-                            awayMinusIntervalRef.current = setInterval(() => {
-                              setAwayScore((s) => Math.max(s - 1, 0));
-                            }, LONG_PRESS_INTERVAL);
+                            setAwayScore((s) => Math.max(s - 1, 0));
+                            awayMinusDelayRef.current = setTimeout(() => {
+                              awayMinusIntervalRef.current = setInterval(() => {
+                                setAwayScore((s) => Math.max(s - 1, 0));
+                              }, LONG_PRESS_INTERVAL);
+                            }, LONG_PRESS_DELAY);
                           }}
                           onPressOut={() => {
+                            if (awayMinusDelayRef.current) {
+                              clearTimeout(awayMinusDelayRef.current);
+                              awayMinusDelayRef.current = null;
+                            }
                             if (awayMinusIntervalRef.current) {
                               clearInterval(awayMinusIntervalRef.current);
                               awayMinusIntervalRef.current = null;
@@ -1092,14 +1115,20 @@ export default function MatchScreen() {
                           <Ionicons name="remove" size={20} color={themeAccent.primary} />
                         </PressableScale>
                         <PressableScale
-                          onPress={() => awayScore < 15 && setAwayScore((s) => Math.min(s + 1, 15))}
                           onPressIn={() => {
                             if (awayScore >= 15) return;
-                            awayPlusIntervalRef.current = setInterval(() => {
-                              setAwayScore((s) => Math.min(s + 1, 15));
-                            }, LONG_PRESS_INTERVAL);
+                            setAwayScore((s) => Math.min(s + 1, 15));
+                            awayPlusDelayRef.current = setTimeout(() => {
+                              awayPlusIntervalRef.current = setInterval(() => {
+                                setAwayScore((s) => Math.min(s + 1, 15));
+                              }, LONG_PRESS_INTERVAL);
+                            }, LONG_PRESS_DELAY);
                           }}
                           onPressOut={() => {
+                            if (awayPlusDelayRef.current) {
+                              clearTimeout(awayPlusDelayRef.current);
+                              awayPlusDelayRef.current = null;
+                            }
                             if (awayPlusIntervalRef.current) {
                               clearInterval(awayPlusIntervalRef.current);
                               awayPlusIntervalRef.current = null;

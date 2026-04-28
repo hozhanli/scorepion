@@ -91,7 +91,7 @@ Everything else is either optional for v1 or already done.
 
 **After it's live:**
 
-- Update `eas.json` → `build.production.env.EXPO_PUBLIC_DOMAIN` to your bare host (e.g. `api.scorepion.com`)
+- Update `eas.json` → `build.production.env.EXPO_PUBLIC_DOMAIN` to your bare host (e.g. `api.scorepion.fans`)
 - Update `eas.json` → `build.preview.env.EXPO_PUBLIC_DOMAIN` too if you're running a staging environment
 - Commit `eas.json`
 
@@ -101,7 +101,7 @@ Everything else is either optional for v1 or already done.
 
 **What's needed:**
 
-- Host both as plain HTML or markdown on a public URL (GitHub Pages, Vercel, docs.scorepion.com, etc.)
+- Host both as plain HTML or markdown on a public URL (GitHub Pages, Vercel, docs.scorepion.fans, etc.)
 - URLs must be reachable without login
 - Cite them in:
   - Play Console → App content → Privacy policy

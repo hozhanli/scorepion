@@ -113,7 +113,7 @@ pm2 restart scorepion  # or equivalent process manager
 After deploy completes, check health:
 
 ```bash
-curl https://api.scorepion.com/api/health
+curl https://api.scorepion.fans/api/health
 # Expected: { "status": "ok" }
 ```
 
@@ -207,7 +207,7 @@ Confirm with typing `restore` at the prompt.
 
 ### 1. Smoke Tests (10 min)
 
-- [ ] Server health check returns 200: `curl https://api.scorepion.com/api/health`
+- [ ] Server health check returns 200: `curl https://api.scorepion.fans/api/health`
 - [ ] Database is accessible: `mysql -h $DB_HOST -u $DB_USER -p$DB_PASS $DB_NAME -e "SELECT count(*) FROM users"`
 - [ ] Migrations applied: `mysql -h $DB_HOST -u $DB_USER -p$DB_PASS $DB_NAME -e "SELECT * FROM _migrations"`
 - [ ] Latest fixture sync is recent (within 1 hour): check logs or admin endpoint

@@ -19,9 +19,9 @@ Configure these in your `.env` file or via your platform's secrets management (F
 | `SENTRY_DSN`             | Yes      | Error tracking DSN from [sentry.io](https://sentry.io). Create two projects: `scorepion-server`, `scorepion-client`.       |
 | `STRIPE_SECRET_KEY`      | No       | Production Stripe secret key (if using premium features).                                                                  |
 | `STRIPE_WEBHOOK_SECRET`  | No       | Stripe webhook signing key.                                                                                                |
-| `ALLOWED_ORIGINS`        | No       | Comma-separated CORS origins (e.g., `https://scorepion.com,https://www.scorepion.com`). Localhost always allowed in dev.   |
+| `ALLOWED_ORIGINS`        | No       | Comma-separated CORS origins (e.g., `https://scorepion.fans,https://www.scorepion.fans`). Localhost always allowed in dev. |
 | `NODE_ENV`               | Yes      | Set to `production` in prod.                                                                                               |
-| `APP_URL`                | Yes      | Public-facing server URL for Stripe/Expo redirects (e.g., `https://api.scorepion.com`).                                    |
+| `APP_URL`                | Yes      | Public-facing server URL for Stripe/Expo redirects (e.g., `https://api.scorepion.fans`).                                   |
 | `EXPO_PUBLIC_SENTRY_DSN` | Yes      | Client-side Sentry DSN (React Native). Different from server DSN.                                                          |
 
 ### Recommended Infrastructure

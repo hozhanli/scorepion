@@ -18,6 +18,7 @@ RUN npx esbuild server/index.ts \
     --packages=external \
     --bundle \
     --format=esm \
+    --out-extension:.js=.mjs \
     --outdir=server_dist
 
 # ---- Production deps ----
@@ -44,6 +45,6 @@ COPY --chown=scorepion:nodejs server/migrations ./server/migrations
 ENV PORT=5000
 EXPOSE ${PORT}
 HEALTHCHECK --interval=30s --timeout=5s --start-period=15s --retries=3 \
-  CMD node -e "fetch('http://127.0.0.1:'+(process.env.PORT||5000)+'/health').then(r=>{if(!r.ok)throw r.status}).catch(()=>process.exit(1))"
+  CMD node -e "fetch('http://127.0.0.1:'+(process.env.PORT||5000)+'/api/health').then(r=>{if(!r.ok)throw r.status}).catch(()=>process.exit(1))"
 
-CMD ["node", "server_dist/index.js"]
+CMD ["node", "server_dist/index.mjs"]

@@ -3,11 +3,14 @@
  * Safe to re-run: tracks applied migrations in _migrations table.
  */
 import { pool } from "../db";
-import { readFileSync } from "fs";
+import { readFileSync, existsSync } from "fs";
 import { join, dirname } from "path";
 import { fileURLToPath } from "url";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
+const migrationsDir = existsSync(join(__dirname, "001_social_engine.sql"))
+  ? __dirname
+  : join(process.cwd(), "server", "migrations");
 
 const MIGRATIONS = [
   "001_social_engine.sql",
@@ -41,7 +44,7 @@ export async function runMigrations(): Promise<void> {
       }
 
       console.log(`[Migration] Applying ${file}...`);
-      const sql = readFileSync(join(__dirname, file), "utf-8");
+      const sql = readFileSync(join(migrationsDir, file), "utf-8");
 
       // Run migration in a transaction
       await pool.query("START TRANSACTION");

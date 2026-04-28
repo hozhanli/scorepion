@@ -26,7 +26,6 @@ const REQUIRED_IN_PROD: [string, string][] = [
   ["ADMIN_SECRET", "admin endpoint token"],
   ["APP_URL", "public-facing server URL, e.g. https://api.yourdomain.com"],
   ["FOOTBALL_API_KEY", "API-Football key from api-sports.io"],
-  ["EXPO_ACCESS_TOKEN", "Expo access token for push delivery"],
 ];
 
 // ─────────────────────────────────────────────────────────────────────────────

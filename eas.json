@@ -23,7 +23,7 @@
       "distribution": "internal",
       "channel": "preview",
       "env": {
-        "EXPO_PUBLIC_DOMAIN": "staging-api.scorepion.com"
+        "EXPO_PUBLIC_DOMAIN": "staging-api.scorepion.fans"
       },
       "ios": { "simulator": false },
       "android": { "buildType": "apk" }
@@ -33,7 +33,7 @@
       "autoIncrement": true,
       "channel": "production",
       "env": {
-        "EXPO_PUBLIC_DOMAIN": "api.scorepion.com"
+        "EXPO_PUBLIC_DOMAIN": "api.scorepion.fans"
       }
     }
   },

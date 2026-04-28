@@ -19,8 +19,8 @@ export const DEFAULT_REQUEST_TIMEOUT_MS = 30000;
  * Gets the base URL for the Express API server.
  *
  * Accepts EXPO_PUBLIC_DOMAIN in either form:
- *   - bare host:           "localhost:13291"  or  "api.scorepion.com"
- *   - full URL with scheme: "https://api.scorepion.com"
+ *   - bare host:           "localhost:13291"  or  "api.scorepion.fans"
+ *   - full URL with scheme: "https://api.scorepion.fans"
  *
  * For bare hosts, `http://` is used when the host is `localhost` or an IP,
  * otherwise `https://`.
