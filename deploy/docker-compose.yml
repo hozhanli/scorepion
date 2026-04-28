@@ -3,6 +3,8 @@ services:
     image: scorepion:latest
     container_name: scorepion-api
     restart: unless-stopped
+    mem_limit: 512m
+    cpus: "1.0"
     ports:
       - "5847:5847"
     environment:

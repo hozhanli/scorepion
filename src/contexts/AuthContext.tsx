@@ -10,7 +10,6 @@ import React, {
 } from "react";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { apiRequest, setOnAuthExpired } from "@/lib/query-client";
-import { showErrorToast } from "@/lib/error-toast";
 import { setUser as setSentryUser, clearUser as clearSentryUser } from "@/lib/sentry";
 import { setAccessToken, setRefreshToken, getRefreshToken, clearTokens } from "@/lib/token-store";
 
@@ -38,6 +37,38 @@ interface AuthContextValue {
   register: (username: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
   refreshUser: () => Promise<void>;
+}
+
+const NETWORK_PATTERNS = [
+  "ConnectException",
+  "Failed to connect",
+  "Network request failed",
+  "timeout",
+  "Can't reach",
+  "ECONNREFUSED",
+  "ERR_CONNECTION",
+];
+
+function isNetworkError(msg: string): boolean {
+  return NETWORK_PATTERNS.some((p) => msg.includes(p));
+}
+
+function toFriendlyError(error: unknown, action: "login" | "register"): Error {
+  const raw = error instanceof Error ? error.message : String(error);
+
+  if (isNetworkError(raw)) return new Error("Can't reach the server. Check your connection.");
+
+  if (raw.includes("401")) return new Error("Username or password incorrect");
+  if (raw.includes("409")) return new Error("That username is already taken");
+  if (raw.includes("429")) return new Error("Too many attempts. Try again in a minute.");
+  if (raw.includes("422") || raw.includes("validation"))
+    return new Error("Check your username and password");
+
+  return new Error(
+    action === "login"
+      ? "Login failed. Please try again."
+      : "Registration failed. Please try again.",
+  );
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null);
@@ -131,22 +162,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setSentryUser({ id: data.user.id, username: data.user.username });
       await AsyncStorage.setItem(CACHED_USER_KEY, JSON.stringify(data.user));
     } catch (error) {
-      // Parse error for user-friendly message
-      let errorMessage = "Login failed, please try again";
-      if (error instanceof Error) {
-        if (error.message.includes("401")) {
-          errorMessage = "Username or password incorrect";
-        } else if (error.message.includes("429")) {
-          errorMessage = "Too many attempts, try again in a minute";
-        } else if (error.message.includes("timeout") || error.message.includes("Can't reach")) {
-          errorMessage = "Can't reach the server";
-        }
-      }
-      showErrorToast({
-        title: "Login failed",
-        message: errorMessage,
-      });
-      throw error;
+      throw toFriendlyError(error, "login");
     }
   }, []);
 
@@ -162,22 +178,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setSentryUser({ id: data.user.id, username: data.user.username });
       await AsyncStorage.setItem(CACHED_USER_KEY, JSON.stringify(data.user));
     } catch (error) {
-      // Parse error for user-friendly message
-      let errorMessage = "Registration failed, please try again";
-      if (error instanceof Error) {
-        if (error.message.includes("409")) {
-          errorMessage = "That username is taken";
-        } else if (error.message.includes("422") || error.message.includes("validation")) {
-          errorMessage = "Check your username and password";
-        } else if (error.message.includes("timeout") || error.message.includes("Can't reach")) {
-          errorMessage = "Can't reach the server";
-        }
-      }
-      showErrorToast({
-        title: "Registration failed",
-        message: errorMessage,
-      });
-      throw error;
+      throw toFriendlyError(error, "register");
     }
   }, []);
 
