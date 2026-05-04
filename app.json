@@ -39,7 +39,9 @@
           "color": "#00A651"
         }
       ],
-      "@sentry/react-native"
+      "@sentry/react-native",
+      "@react-native-firebase/app",
+      "@react-native-firebase/auth"
     ],
     "experiments": {
       "typedRoutes": true,

@@ -3,20 +3,11 @@ import rateLimit from "express-rate-limit";
 const skipInDev = () =>
   process.env.NODE_ENV !== "production" && process.env.FORCE_RATE_LIMIT !== "true";
 
-// Tier A: Auth routes (strict) - 10 requests per minute per IP
-export const authLimiter = rateLimit({
-  windowMs: 1 * 60 * 1000,
-  max: 10,
-  standardHeaders: false,
-  legacyHeaders: false,
-  skipSuccessfulRequests: true,
-  skip: skipInDev,
-  handler: (_req, res) => {
-    res.status(429).json({ message: "Too many attempts, try again in a minute" });
-  },
-});
+// Note: there's no "auth" tier anymore — credential checking is handled by
+// Firebase, which has its own rate limiting upstream. The remaining /api/auth
+// surface (/sync, /me) falls under the catch-all read tier.
 
-// Tier B: Admin routes (very strict) - 30 requests per minute per IP
+// Tier A: Admin routes (very strict) - 30 requests per minute per IP
 export const adminLimiter = rateLimit({
   windowMs: 1 * 60 * 1000,
   max: 30,

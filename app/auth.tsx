@@ -36,23 +36,35 @@ export default function AuthScreen() {
   const botPad = Platform.OS === "web" ? 24 : insets.bottom + 16;
 
   const [mode, setMode] = useState<"login" | "register">("login");
+  const [email, setEmail] = useState("");
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
-  const [focused, setFocused] = useState<"username" | "password" | null>(null);
-  const [touched, setTouched] = useState<{ username: boolean; password: boolean }>({
+  const [focused, setFocused] = useState<"email" | "username" | "password" | null>(null);
+  const [touched, setTouched] = useState<{
+    email: boolean;
+    username: boolean;
+    password: boolean;
+  }>({
+    email: false,
     username: false,
     password: false,
   });
 
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
   const usernameRegex = /^[a-zA-Z0-9_]{2,20}$/;
   const passwordLetterRegex = /[a-zA-Z]/;
   const passwordNumberRegex = /[0-9]/;
 
   // Compute validation state in real-time
   const validation = useMemo(() => {
+    const emailTrimmed = email.trim();
+    const emailEmpty = emailTrimmed.length === 0;
+    const emailValid = emailEmpty ? false : emailRegex.test(emailTrimmed);
+    const emailError = !emailEmpty && !emailValid ? t.errors.emailInvalid : null;
+
     const usernameTrimmed = username.trim();
     const usernameEmpty = usernameTrimmed.length === 0;
     const usernameValid = usernameEmpty ? false : usernameRegex.test(usernameTrimmed);
@@ -68,13 +80,16 @@ export default function AuthScreen() {
       }
     }
 
+    // For login, password just needs to be non-empty — Firebase enforces
+    // server-side. Only register requires the full strength rules.
     const passwordLongEnough = password.length >= 8;
     const hasLetter = passwordLetterRegex.test(password);
     const hasNumber = passwordNumberRegex.test(password);
-    const passwordValid = passwordLongEnough && hasLetter && hasNumber;
-    let passwordError: string | null = null;
+    const passwordRegisterValid = passwordLongEnough && hasLetter && hasNumber;
+    const passwordValid = mode === "register" ? passwordRegisterValid : password.length > 0;
 
-    if (password.length > 0 && !passwordValid) {
+    let passwordError: string | null = null;
+    if (mode === "register" && password.length > 0 && !passwordRegisterValid) {
       if (!passwordLongEnough) {
         passwordError = t.errors.passwordTooShort;
       } else if (!hasLetter) {
@@ -84,16 +99,21 @@ export default function AuthScreen() {
       }
     }
 
-    const canSubmit = usernameValid && passwordValid;
+    const canSubmit =
+      mode === "register"
+        ? emailValid && usernameValid && passwordValid
+        : emailValid && passwordValid;
 
     return {
+      emailValid,
+      emailError,
       usernameValid,
       usernameError,
       passwordValid,
       passwordError,
       canSubmit,
     };
-  }, [username, password, mode]);
+  }, [email, username, password, mode, t]);
 
   const handleSubmit = async () => {
     if (!validation.canSubmit) return;
@@ -103,10 +123,10 @@ export default function AuthScreen() {
 
     try {
       if (mode === "login") {
-        await login(username.trim(), password);
+        await login(email.trim(), password);
         router.replace("/(tabs)");
       } else {
-        await register(username.trim(), password);
+        await register(email.trim(), username.trim(), password);
         router.replace("/onboarding");
       }
     } catch (err: any) {
@@ -178,25 +198,24 @@ export default function AuthScreen() {
             entering={FadeInUp.delay(260).duration(380).springify().damping(16)}
             style={styles.form}
           >
-            <FieldLabel textRole={textRole}>{t.auth.username}</FieldLabel>
+            {/* Email — always shown */}
+            <FieldLabel textRole={textRole}>{t.auth.email}</FieldLabel>
             <View
               style={[
                 styles.inputGroup,
                 { backgroundColor: surface[0], borderColor: border.subtle },
-                focused === "username" && { borderColor: accent.primary },
-                !error &&
-                  touched.username &&
-                  validation.usernameValid && { borderColor: accent.primary },
-                touched.username && !validation.usernameValid && { borderColor: accent.alert },
+                focused === "email" && { borderColor: accent.primary },
+                !error && touched.email && validation.emailValid && { borderColor: accent.primary },
+                touched.email && !validation.emailValid && { borderColor: accent.alert },
               ]}
             >
               <Ionicons
-                name="person-outline"
+                name="mail-outline"
                 size={18}
                 color={
-                  !error && touched.username && validation.usernameValid
+                  !error && touched.email && validation.emailValid
                     ? accent.primary
-                    : focused === "username"
+                    : focused === "email"
                       ? accent.primary
                       : textRole.tertiary
                 }
@@ -204,41 +223,112 @@ export default function AuthScreen() {
               />
               <TextInput
                 style={[styles.input, { color: textRole.primary }]}
-                value={username}
+                value={email}
                 onChangeText={(v) => {
-                  setUsername(v);
+                  setEmail(v);
                   setError("");
                 }}
-                placeholder={t.auth.usernamePlaceholder}
+                placeholder={t.auth.emailPlaceholder}
                 placeholderTextColor={textRole.tertiary}
-                maxLength={20}
+                maxLength={255}
                 autoCapitalize="none"
                 autoCorrect={false}
-                onFocus={() => setFocused("username")}
+                keyboardType="email-address"
+                textContentType="emailAddress"
+                onFocus={() => setFocused("email")}
                 onBlur={() => {
-                  setTouched((prev) => ({ ...prev, username: true }));
-                  setFocused((f) => (f === "username" ? null : f));
+                  setTouched((prev) => ({ ...prev, email: true }));
+                  setFocused((f) => (f === "email" ? null : f));
                 }}
                 selectionColor={accent.primary}
-                accessibilityLabel={`Username${touched.username && !validation.usernameValid ? ` - ${validation.usernameError}` : ""}`}
+                accessibilityLabel={`Email${touched.email && !validation.emailValid ? ` - ${validation.emailError}` : ""}`}
               />
-              {!error && touched.username && validation.usernameValid && (
+              {!error && touched.email && validation.emailValid && (
                 <Ionicons
                   name="checkmark-circle"
                   size={20}
                   color={accent.primary}
                   style={{ marginLeft: 8 }}
-                  accessibilityLabel="Username is valid"
+                  accessibilityLabel="Email is valid"
                 />
               )}
             </View>
 
-            {touched.username && !validation.usernameValid && (
+            {touched.email && !validation.emailValid && (
               <Animated.View entering={FadeInDown.duration(240)} style={[styles.inlineError]}>
                 <Text style={[styles.inlineErrorText, { color: accent.alert }]}>
-                  {validation.usernameError}
+                  {validation.emailError}
                 </Text>
               </Animated.View>
+            )}
+
+            {/* Username — register mode only */}
+            {mode === "register" && (
+              <>
+                <View style={{ height: 14 }} />
+                <FieldLabel textRole={textRole}>{t.auth.username}</FieldLabel>
+                <View
+                  style={[
+                    styles.inputGroup,
+                    { backgroundColor: surface[0], borderColor: border.subtle },
+                    focused === "username" && { borderColor: accent.primary },
+                    !error &&
+                      touched.username &&
+                      validation.usernameValid && { borderColor: accent.primary },
+                    touched.username && !validation.usernameValid && { borderColor: accent.alert },
+                  ]}
+                >
+                  <Ionicons
+                    name="person-outline"
+                    size={18}
+                    color={
+                      !error && touched.username && validation.usernameValid
+                        ? accent.primary
+                        : focused === "username"
+                          ? accent.primary
+                          : textRole.tertiary
+                    }
+                    style={styles.inputIcon}
+                  />
+                  <TextInput
+                    style={[styles.input, { color: textRole.primary }]}
+                    value={username}
+                    onChangeText={(v) => {
+                      setUsername(v);
+                      setError("");
+                    }}
+                    placeholder={t.auth.usernamePlaceholder}
+                    placeholderTextColor={textRole.tertiary}
+                    maxLength={20}
+                    autoCapitalize="none"
+                    autoCorrect={false}
+                    onFocus={() => setFocused("username")}
+                    onBlur={() => {
+                      setTouched((prev) => ({ ...prev, username: true }));
+                      setFocused((f) => (f === "username" ? null : f));
+                    }}
+                    selectionColor={accent.primary}
+                    accessibilityLabel={`Username${touched.username && !validation.usernameValid ? ` - ${validation.usernameError}` : ""}`}
+                  />
+                  {!error && touched.username && validation.usernameValid && (
+                    <Ionicons
+                      name="checkmark-circle"
+                      size={20}
+                      color={accent.primary}
+                      style={{ marginLeft: 8 }}
+                      accessibilityLabel="Username is valid"
+                    />
+                  )}
+                </View>
+
+                {touched.username && !validation.usernameValid && (
+                  <Animated.View entering={FadeInDown.duration(240)} style={[styles.inlineError]}>
+                    <Text style={[styles.inlineErrorText, { color: accent.alert }]}>
+                      {validation.usernameError}
+                    </Text>
+                  </Animated.View>
+                )}
+              </>
             )}
 
             <View style={{ height: 14 }} />
@@ -322,6 +412,20 @@ export default function AuthScreen() {
                 </Text>
               </Animated.View>
             )}
+
+            {mode === "login" ? (
+              <PressableScale
+                onPress={() => router.push("/forgot-password")}
+                haptic="selection"
+                pressedScale={0.97}
+                style={styles.forgotLink}
+                accessibilityLabel={t.auth.forgotPassword}
+              >
+                <Text style={[styles.forgotLinkText, { color: accent.primary }]}>
+                  {t.auth.forgotPassword}
+                </Text>
+              </PressableScale>
+            ) : null}
 
             {error ? (
               <Animated.View entering={FadeInDown.duration(240)} style={styles.errorBox}>
@@ -499,6 +603,17 @@ const styles = StyleSheet.create({
   inlineErrorText: {
     fontSize: type.caption.size,
     fontFamily: "Inter_500Medium",
+  },
+
+  forgotLink: {
+    alignSelf: "flex-end",
+    marginTop: 10,
+    paddingVertical: 4,
+    paddingHorizontal: 4,
+  },
+  forgotLinkText: {
+    fontSize: type.caption.size,
+    fontFamily: "Inter_600SemiBold",
   },
 
   hint: {

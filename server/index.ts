@@ -3,7 +3,7 @@ import type { Request, Response, NextFunction } from "express";
 import helmet from "helmet";
 import { registerRoutes } from "./routes";
 import { registerHealthRoutes } from "./routes/health.routes";
-import { authLimiter, adminLimiter, writeLimiter, readLimiter } from "./middleware/rate-limit";
+import { adminLimiter, writeLimiter, readLimiter } from "./middleware/rate-limit";
 import { requestLog } from "./middleware/request-log";
 import * as fs from "fs";
 import * as path from "path";
@@ -110,16 +110,15 @@ function setupSecurity(app: express.Application) {
 }
 
 function setupRateLimiting(app: express.Application) {
-  // Tier A: Auth routes (strict) — 10 req/min
-  app.use("/api/auth", authLimiter);
-
-  // Tier B: Admin routes (very strict) — 30 req/min
+  // Tier A: Admin routes (very strict) — 30 req/min
   app.use("/api/football/sync", adminLimiter);
 
-  // Tier C: Write routes (moderate) — 60 req/min
+  // Tier B: Write routes (moderate) — 60 req/min
   app.use(["/api/predictions", "/api/groups", "/api/account"], writeLimiter);
 
-  // Tier D: Read routes (loose) — 300 req/min (catch-all, applied last)
+  // Tier C: Read routes (loose) — 300 req/min (catch-all, applied last).
+  // /api/auth/* (sync, me) intentionally falls into this tier — Firebase
+  // handles credential-stuffing protection upstream of this server.
   app.use(readLimiter);
 }
 

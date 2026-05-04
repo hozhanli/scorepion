@@ -11,7 +11,8 @@ Final pre-launch verification before App Store and Play Store submission.
 - [ ] SENTRY_DSN configured for both client and server (error tracking active)
 - [ ] FOOTBALL_API_PLAN=pro in production env (live match data active)
 - [ ] FOOTBALL_API_KEY rotated from development value
-- [ ] JWT_SECRET is production value (not default/development)
+- [ ] FIREBASE_PROJECT_ID set to the production Firebase project
+- [ ] Firebase Admin credentials provided (`GOOGLE_APPLICATION_CREDENTIALS` path or `FIREBASE_SERVICE_ACCOUNT_JSON` inline) — NOT the dev service account
 - [ ] ADMIN_SECRET is production value (not default/development)
 - [ ] NODE_ENV=production enforced in production (rate limiting active)
 - [ ] Health check endpoints responding (`GET /api/health` returns 200)
@@ -44,8 +45,8 @@ Final pre-launch verification before App Store and Play Store submission.
 - [ ] CSRF protection enabled on state-changing endpoints
 - [ ] SQL injection protection verified (using parameterized queries)
 - [ ] XSS protection verified (React escapes by default; confirm no dangerouslySetInnerHTML)
-- [ ] Password hashing confirmed (bcrypt or similar, not plaintext)
-- [ ] Session/token expiry enforced (JWT expiration, refresh token rotation)
+- [ ] Authentication delegated to Firebase (no plaintext password handling on this server)
+- [ ] Firebase Email/Password provider enabled; password reset email template reviewed
 - [ ] Webhook signature verification in place (Stripe webhook, if enabled)
 
 ---

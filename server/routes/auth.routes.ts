@@ -1,127 +1,74 @@
+/**
+ * Auth routes — Firebase-backed.
+ *
+ * Login, registration (credential check + token issuance), refresh, and
+ * logout are all handled client-side by the Firebase SDK. The server only:
+ *
+ *   - POST /api/auth/sync  → creates the local user profile row immediately
+ *                            after Firebase signup. Idempotent.
+ *   - GET  /api/auth/me    → returns the current user's profile.
+ *
+ * Account deletion lives in routes/account.routes.ts and uses the Admin SDK
+ * to revoke the Firebase identity alongside the local rows.
+ */
 import { Router, Request, Response } from "express";
-import { authSchema } from "@shared/schema";
+import { syncUserSchema } from "@shared/schema";
 import * as authRepo from "../repositories/user-auth.repository";
-import * as authService from "../services/auth.service";
-import * as tokenService from "../services/token.service";
 import { requireAuth } from "../middleware/auth";
 import { asyncHandler } from "../middleware/asyncHandler";
 
 export const authRouter = Router();
 
 /**
- * POST /api/auth/register
- * Creates a new user and issues JWT token pair.
+ * POST /api/auth/sync
+ *
+ * Called by the client right after a successful Firebase
+ * createUserWithEmailAndPassword. Verifies the ID token, ensures username
+ * uniqueness, and inserts the local profile row.
+ *
+ * Idempotent: if a row already exists for this UID, returns it. On username
+ * conflict (409), the client deletes the just-created Firebase account and
+ * prompts for a different username — see AuthContext.register.
  */
 authRouter.post(
-  "/register",
+  "/sync",
+  requireAuth,
   asyncHandler(async (req: Request, res: Response) => {
-    const parsed = authSchema.safeParse(req.body);
+    const parsed = syncUserSchema.safeParse(req.body);
     if (!parsed.success) {
       const firstIssue = parsed.error.issues[0];
       return res.status(400).json({ message: firstIssue?.message || "Invalid input" });
     }
 
-    const { username, password } = parsed.data;
-    const rawLeagues = req.body.favoriteLeagues;
+    const { username, favoriteLeagues = [] } = parsed.data;
+    const uid = req.userId!;
+    const email = req.userEmail;
 
-    // Validate favoriteLeagues: must be an array of strings, max 20 items, each max 20 chars
-    let favoriteLeagues: string[] = [];
-    if (rawLeagues !== undefined && rawLeagues !== null) {
-      if (
-        !Array.isArray(rawLeagues) ||
-        rawLeagues.length > 20 ||
-        !rawLeagues.every((item: unknown) => typeof item === "string" && item.length <= 20)
-      ) {
-        return res
-          .status(400)
-          .json({
-            message: "favoriteLeagues must be an array of up to 20 strings (each max 20 chars)",
-          });
-      }
-      favoriteLeagues = rawLeagues;
+    if (!email) {
+      // The Firebase project is configured for email/password only — a
+      // missing email on the verified token is anomalous.
+      return res.status(400).json({ message: "Email not present on Firebase account" });
+    }
+
+    const existing = await authRepo.getUserById(uid);
+    if (existing) {
+      return res.status(200).json({ user: existing });
+    }
+
+    const usernameTaken = await authRepo.getUserByUsername(username);
+    if (usernameTaken) {
+      return res.status(409).json({ message: "Username already taken" });
     }
 
     try {
-      const { user, safeUser } = await authService.registerUser(
-        username,
-        password,
-        favoriteLeagues,
-      );
-
-      const accessToken = await tokenService.signAccessToken(user.id, user.username);
-      const refreshToken = await tokenService.createRefreshToken(user.id);
-
-      return res.status(201).json({
-        user: safeUser,
-        accessToken,
-        refreshToken,
-      });
+      const user = await authRepo.createUser(uid, username, email, favoriteLeagues);
+      return res.status(201).json({ user });
     } catch (err: any) {
-      if (err.name === "AuthError") {
-        return res.status(err.status || 400).json({ message: err.message });
-      }
-      throw err;
-    }
-  }),
-);
-
-/**
- * POST /api/auth/login
- * Authenticates and issues JWT token pair.
- */
-authRouter.post(
-  "/login",
-  asyncHandler(async (req: Request, res: Response) => {
-    const parsed = authSchema.safeParse(req.body);
-    if (!parsed.success) {
-      return res.status(400).json({ message: "Invalid credentials" });
-    }
-
-    const { username, password } = parsed.data;
-
-    try {
-      const { user, safeUser } = await authService.authenticateUser(username, password);
-
-      const accessToken = await tokenService.signAccessToken(user.id, user.username);
-      const refreshToken = await tokenService.createRefreshToken(user.id);
-
-      return res.status(200).json({
-        user: safeUser,
-        accessToken,
-        refreshToken,
-      });
-    } catch (err: any) {
-      if (err.name === "AuthError") {
-        return res.status(err.status || 401).json({ message: err.message });
-      }
-      throw err;
-    }
-  }),
-);
-
-/**
- * POST /api/auth/refresh
- * Rotates refresh token and issues new token pair.
- * This is the only endpoint that accepts a refresh token.
- */
-authRouter.post(
-  "/refresh",
-  asyncHandler(async (req: Request, res: Response) => {
-    const { refreshToken } = req.body;
-    if (!refreshToken || typeof refreshToken !== "string") {
-      return res.status(400).json({ message: "Refresh token required" });
-    }
-
-    try {
-      const result = await tokenService.rotateRefreshToken(refreshToken);
-
-      return res.json({
-        accessToken: result.accessToken,
-        refreshToken: result.refreshToken,
-      });
-    } catch (err: any) {
-      if (err.name === "TokenError") {
-        return res.status(err.status || 401).json({ message: err.message });
+      // Race: another request inserted the same username between our check
+      // and our insert. Surface as 409 so the client can prompt for a
+      // different username.
+      if (err?.code === "ER_DUP_ENTRY") {
+        return res.status(409).json({ message: "Username already taken" });
       }
       throw err;
     }
@@ -130,7 +77,7 @@ authRouter.post(
 
 /**
  * GET /api/auth/me
- * Returns the current user's profile (requires valid access token).
+ * Returns the current user's profile.
  */
 authRouter.get(
   "/me",
@@ -138,23 +85,10 @@ authRouter.get(
   asyncHandler(async (req: Request, res: Response) => {
     const user = await authRepo.getUserById(req.userId!);
     if (!user) {
-      return res.status(401).json({ message: "User not found" });
+      // Firebase user exists but no local profile — onboarding incomplete.
+      // The client signs out and prompts the user to register again.
+      return res.status(404).json({ message: "Profile not found", needsSync: true });
     }
-
-    const { password: _, ...safeUser } = user;
-    return res.json({ user: safeUser });
-  }),
-);
-
-/**
- * POST /api/auth/logout
- * Revokes all refresh tokens for the user.
- */
-authRouter.post(
-  "/logout",
-  requireAuth,
-  asyncHandler(async (req: Request, res: Response) => {
-    await tokenService.revokeAllUserTokens(req.userId!);
-    return res.json({ message: "Logged out" });
+    return res.json({ user });
   }),
 );

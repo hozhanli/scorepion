@@ -1,30 +1,28 @@
 /**
  * Express authentication & authorization middleware.
  *
- * JWT-based: extracts Bearer token from Authorization header,
- * verifies it, and attaches userId to the request.
+ * Verifies Firebase ID tokens from the Authorization: Bearer header and
+ * attaches the resolved user identity to the request. The Admin SDK is
+ * lazily initialized on first verify call (see ../lib/firebase.ts).
  *
- * Single Responsibility Principle: middleware concerns are isolated from
- * route handler business logic.
- *
- * Open/Closed Principle: add new guards (e.g. requirePremium) here without
- * touching routes.ts.
+ * Single Responsibility: middleware concerns are isolated from route handlers.
  */
 import type { Request, Response, NextFunction } from "express";
 import * as crypto from "crypto";
-import { verifyAccessToken } from "../services/token.service";
+import { firebaseAuth } from "../lib/firebase";
 
-// Extend Express Request to carry userId from JWT
+// Extend Express Request to carry the verified Firebase identity.
 declare global {
   namespace Express {
     interface Request {
-      userId?: string;
+      userId?: string; // Firebase UID
+      userEmail?: string; // Verified email from the ID token
     }
   }
 }
 
 // ---------------------------------------------------------------------------
-// JWT-based auth
+// Firebase ID-token auth
 // ---------------------------------------------------------------------------
 
 export async function requireAuth(req: Request, res: Response, next: NextFunction): Promise<void> {
@@ -38,8 +36,13 @@ export async function requireAuth(req: Request, res: Response, next: NextFunctio
   const token = authHeader.slice(7); // Strip "Bearer "
 
   try {
-    const payload = await verifyAccessToken(token);
-    req.userId = payload.sub;
+    // Offline verification using cached Firebase public keys — no per-request
+    // RPC. Revoked sessions / disabled accounts continue to work until their
+    // ID token expires (max 1 hour). For sensitive operations that need
+    // immediate revocation, pass `true` as the second arg at that call site.
+    const decoded = await firebaseAuth().verifyIdToken(token);
+    req.userId = decoded.uid;
+    req.userEmail = decoded.email;
     next();
   } catch {
     res.status(401).json({ message: "Invalid or expired token" });
@@ -51,10 +54,9 @@ export async function requireAuth(req: Request, res: Response, next: NextFunctio
 // ---------------------------------------------------------------------------
 
 const adminAttempts = new Map<string, { count: number; resetAt: number }>();
-const ADMIN_RATE_LIMIT = parseInt(process.env.ADMIN_RATE_LIMIT ?? "10", 10); // max attempts per window
-const ADMIN_RATE_WINDOW_MS = parseInt(process.env.ADMIN_RATE_WINDOW_MS ?? "60000", 10); // 1 minute
+const ADMIN_RATE_LIMIT = parseInt(process.env.ADMIN_RATE_LIMIT ?? "10", 10);
+const ADMIN_RATE_WINDOW_MS = parseInt(process.env.ADMIN_RATE_WINDOW_MS ?? "60000", 10);
 
-// Periodic cleanup of expired rate-limit entries to prevent memory leaks
 setInterval(() => {
   const now = Date.now();
   for (const [ip, entry] of adminAttempts) {
@@ -71,7 +73,6 @@ export function requireAdmin(req: Request, res: Response, next: NextFunction): v
     return;
   }
 
-  // Rate-limit by IP
   const ip =
     (req.headers["x-forwarded-for"] as string)?.split(",")[0]?.trim() ||
     req.socket.remoteAddress ||
@@ -96,7 +97,6 @@ export function requireAdmin(req: Request, res: Response, next: NextFunction): v
     return;
   }
 
-  // Timing-safe comparison to prevent timing attacks
   const secretBuf = Buffer.from(adminSecret, "utf8");
   const providedBuf = Buffer.from(provided, "utf8");
 
