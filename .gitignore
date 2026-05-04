@@ -30,6 +30,9 @@ coverage/
 .expo/
 dist/
 
+# Drizzle Kit generated snapshots — runtime uses server/migrations/*.sql instead
+/migrations/
+
 # IDE
 .vscode/
 .idea/
