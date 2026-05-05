@@ -2,6 +2,9 @@
 
 Final pre-launch verification before App Store and Play Store submission.
 
+> **Auth-specific items live in [FIREBASE_AUTH_PRODUCTION_CHECKLIST.md](./FIREBASE_AUTH_PRODUCTION_CHECKLIST.md)** —
+> service-account upload, email template, Play Data Safety, deliverability tests, etc.
+
 ---
 
 ## Pre-Launch Infrastructure (Critical)
