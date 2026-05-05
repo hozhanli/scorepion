@@ -9,15 +9,13 @@ import {
   uniqueIndex,
   index,
 } from "drizzle-orm/mysql-core";
-import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
 export const users = mysqlTable("users", {
-  id: varchar("id", { length: 36 })
-    .primaryKey()
-    .default(sql`(UUID())`),
+  // Firebase UID — supplied by Auth, not generated server-side. Up to 128 chars per Firebase spec.
+  id: varchar("id", { length: 128 }).primaryKey(),
   username: varchar("username", { length: 255 }).notNull().unique(),
-  password: varchar("password", { length: 255 }).notNull(),
+  email: varchar("email", { length: 255 }).notNull().unique(),
   avatar: varchar("avatar", { length: 500 }).notNull().default(""),
   totalPoints: int("total_points").notNull().default(0),
   weeklyPoints: int("weekly_points").notNull().default(0),
@@ -43,7 +41,7 @@ export const predictions = mysqlTable(
     id: varchar("id", { length: 36 })
       .primaryKey()
       .default(sql`(UUID())`),
-    userId: varchar("user_id", { length: 36 })
+    userId: varchar("user_id", { length: 128 })
       .notNull()
       .references(() => users.id, { onDelete: "cascade" }),
     matchId: varchar("match_id", { length: 255 }).notNull(),
@@ -72,7 +70,7 @@ export const groups = mysqlTable("groups", {
   isPublic: boolean("is_public").notNull().default(true),
   memberCount: int("member_count").notNull().default(1),
   leagueIds: json("league_ids").$type<string[]>().notNull().default([]),
-  createdBy: varchar("created_by", { length: 36 })
+  createdBy: varchar("created_by", { length: 128 })
     .notNull()
     .references(() => users.id, { onDelete: "cascade" }),
   createdAt: bigint("created_at", { mode: "number" })
@@ -89,7 +87,7 @@ export const groupMembers = mysqlTable(
     groupId: varchar("group_id", { length: 36 })
       .notNull()
       .references(() => groups.id, { onDelete: "cascade" }),
-    userId: varchar("user_id", { length: 36 })
+    userId: varchar("user_id", { length: 128 })
       .notNull()
       .references(() => users.id, { onDelete: "cascade" }),
     joinedAt: bigint("joined_at", { mode: "number" })
@@ -338,7 +336,7 @@ export const dailyPacks = mysqlTable(
     id: varchar("id", { length: 36 })
       .primaryKey()
       .default(sql`(UUID())`),
-    userId: varchar("user_id", { length: 36 })
+    userId: varchar("user_id", { length: 128 })
       .notNull()
       .references(() => users.id, { onDelete: "cascade" }),
     date: varchar("date", { length: 255 }).notNull(),
@@ -365,7 +363,7 @@ export const boostPicks = mysqlTable(
     id: varchar("id", { length: 36 })
       .primaryKey()
       .default(sql`(UUID())`),
-    userId: varchar("user_id", { length: 36 })
+    userId: varchar("user_id", { length: 128 })
       .notNull()
       .references(() => users.id, { onDelete: "cascade" }),
     matchId: varchar("match_id", { length: 255 }).notNull(),
@@ -389,7 +387,7 @@ export const achievements = mysqlTable("achievements", {
   id: varchar("id", { length: 36 })
     .primaryKey()
     .default(sql`(UUID())`),
-  userId: varchar("user_id", { length: 36 })
+  userId: varchar("user_id", { length: 128 })
     .notNull()
     .references(() => users.id, { onDelete: "cascade" }),
   type: varchar("type", { length: 50 }).notNull(),
@@ -410,7 +408,7 @@ export const weeklyWinners = mysqlTable("weekly_winners", {
   id: varchar("id", { length: 36 })
     .primaryKey()
     .default(sql`(UUID())`),
-  userId: varchar("user_id", { length: 36 })
+  userId: varchar("user_id", { length: 128 })
     .notNull()
     .references(() => users.id, { onDelete: "cascade" }),
   weekStart: varchar("week_start", { length: 255 }).notNull(),
@@ -564,7 +562,7 @@ export const groupActivity = mysqlTable(
     groupId: varchar("group_id", { length: 36 })
       .notNull()
       .references(() => groups.id, { onDelete: "cascade" }),
-    userId: varchar("user_id", { length: 36 })
+    userId: varchar("user_id", { length: 128 })
       .notNull()
       .references(() => users.id, { onDelete: "cascade" }),
     type: varchar("type", { length: 50 }).notNull(), // 'prediction' | 'exact_score' | 'points_earned' | 'streak' | 'boost_pick' | 'achievement' | 'rank_change' | 'weekly_winner' | 'joined'
@@ -578,37 +576,15 @@ export const groupActivity = mysqlTable(
   (table) => [index("group_activity_group_created_idx").on(table.groupId, table.createdAt)],
 );
 
-export const refreshTokens = mysqlTable(
-  "refresh_tokens",
-  {
-    id: varchar("id", { length: 36 })
-      .primaryKey()
-      .default(sql`(UUID())`),
-    tokenHash: varchar("token_hash", { length: 255 }).notNull(),
-    userId: varchar("user_id", { length: 36 })
-      .notNull()
-      .references(() => users.id, { onDelete: "cascade" }),
-    familyId: varchar("family_id", { length: 255 }).notNull(),
-    revoked: boolean("revoked").notNull().default(false),
-    expiresAt: bigint("expires_at", { mode: "number" }).notNull(),
-    createdAt: bigint("created_at", { mode: "number" })
-      .notNull()
-      .default(sql`(FLOOR(UNIX_TIMESTAMP() * 1000))`),
-  },
-  (t) => [
-    uniqueIndex("refresh_tokens_hash_idx").on(t.tokenHash),
-    index("refresh_tokens_user_idx").on(t.userId),
-    index("refresh_tokens_family_idx").on(t.familyId),
-  ],
-);
-
 export const eventLog = mysqlTable(
   "event_log",
   {
     id: varchar("id", { length: 36 })
       .primaryKey()
       .default(sql`(UUID())`),
-    userId: varchar("user_id", { length: 36 }).references(() => users.id, { onDelete: "set null" }),
+    userId: varchar("user_id", { length: 128 }).references(() => users.id, {
+      onDelete: "set null",
+    }),
     eventType: varchar("event_type", { length: 255 }).notNull(),
     eventData: json("event_data").$type<Record<string, any>>().default({}),
     timestamp: bigint("timestamp", { mode: "number" })
@@ -621,26 +597,18 @@ export const eventLog = mysqlTable(
   ],
 );
 
-export const insertUserSchema = createInsertSchema(users).pick({
-  username: true,
-  password: true,
-});
-
-export const authSchema = z.object({
+// Body schema for POST /api/auth/sync — called by the client immediately after
+// Firebase signup to create the local profile row. Email arrives via the verified
+// ID token; client posts username + optional favoriteLeagues.
+export const syncUserSchema = z.object({
   username: z
     .string()
     .min(2)
     .max(20)
     .regex(/^[a-zA-Z0-9_]+$/, "Username can only contain letters, numbers, and underscores"),
-  password: z
-    .string()
-    .min(8)
-    .max(100)
-    .regex(/[a-zA-Z]/, "Password must contain at least one letter")
-    .regex(/[0-9]/, "Password must contain at least one number"),
+  favoriteLeagues: z.array(z.string().max(20)).max(20).optional(),
 });
 
-export type InsertUser = z.infer<typeof insertUserSchema>;
 export type User = typeof users.$inferSelect;
 export type Prediction = typeof predictions.$inferSelect;
 export type Group = typeof groups.$inferSelect;
@@ -660,7 +628,7 @@ export const pushTokens = mysqlTable(
     id: varchar("id", { length: 36 })
       .primaryKey()
       .default(sql`(UUID())`),
-    userId: varchar("user_id", { length: 36 })
+    userId: varchar("user_id", { length: 128 })
       .notNull()
       .references(() => users.id, { onDelete: "cascade" }),
     token: varchar("token", { length: 255 }).notNull(),
@@ -680,7 +648,6 @@ export type Achievement = typeof achievements.$inferSelect;
 export type WeeklyWinner = typeof weeklyWinners.$inferSelect;
 export type GroupActivity = typeof groupActivity.$inferSelect;
 export type EventLogEntry = typeof eventLog.$inferSelect;
-export type RefreshToken = typeof refreshTokens.$inferSelect;
 export type FootballFixtureEvent = typeof footballFixtureEvents.$inferSelect;
 export type FootballFixtureLineup = typeof footballFixtureLineups.$inferSelect;
 export type FootballFixtureStat = typeof footballFixtureStats.$inferSelect;

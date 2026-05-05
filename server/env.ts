@@ -19,13 +19,10 @@ const isProd = process.env.NODE_ENV === "production";
 // ─────────────────────────────────────────────────────────────────────────────
 const REQUIRED_IN_PROD: [string, string][] = [
   ["DATABASE_URL", "MySQL connection string"],
-  [
-    "JWT_SECRET",
-    "JWT signing key (generate with node -e \"console.log(require('crypto').randomBytes(64).toString('hex'))\")",
-  ],
   ["ADMIN_SECRET", "admin endpoint token"],
   ["APP_URL", "public-facing server URL, e.g. https://api.yourdomain.com"],
   ["FOOTBALL_API_KEY", "API-Football key from api-sports.io"],
+  ["FIREBASE_PROJECT_ID", "Firebase project ID, e.g. scorepion-7b110"],
 ];
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -41,6 +38,20 @@ const CONDITIONAL: { when: () => boolean; vars: [string, string][]; label: strin
       ["STRIPE_WEBHOOK_SECRET", "Stripe webhook signing secret"],
       ["STRIPE_PRICE_PREMIUM_MONTHLY", "Stripe price ID for monthly tier"],
       ["STRIPE_PRICE_PREMIUM_YEARLY", "Stripe price ID for yearly tier"],
+    ],
+  },
+  {
+    // Firebase Admin needs credentials. Either GOOGLE_APPLICATION_CREDENTIALS
+    // (path to a service account JSON) or FIREBASE_SERVICE_ACCOUNT_JSON
+    // (the JSON inlined as a string). Validated together.
+    when: () =>
+      !process.env.GOOGLE_APPLICATION_CREDENTIALS && !process.env.FIREBASE_SERVICE_ACCOUNT_JSON,
+    label: "Firebase Admin credentials",
+    vars: [
+      [
+        "GOOGLE_APPLICATION_CREDENTIALS",
+        "absolute path to Firebase service account JSON (or set FIREBASE_SERVICE_ACCOUNT_JSON inline)",
+      ],
     ],
   },
 ];

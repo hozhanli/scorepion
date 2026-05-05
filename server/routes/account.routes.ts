@@ -14,7 +14,7 @@ import {
   eventLog,
 } from "@shared/schema";
 import { eq } from "drizzle-orm";
-import { revokeAllUserTokens } from "../services/token.service";
+import { firebaseAuth } from "../lib/firebase";
 
 export const accountRouter = Router();
 
@@ -30,8 +30,15 @@ accountRouter.delete(
     const userId = req.userId!;
 
     try {
-      // Revoke all refresh tokens first to prevent leaked tokens from generating new access tokens
-      await revokeAllUserTokens(userId);
+      // Delete the Firebase identity first — this revokes all sessions and
+      // prevents any in-flight ID tokens from authenticating against this UID.
+      try {
+        await firebaseAuth().deleteUser(userId);
+      } catch (err: any) {
+        // If the Firebase user is already gone (e.g., deleted out-of-band),
+        // continue with local cleanup rather than failing the whole request.
+        if (err?.code !== "auth/user-not-found") throw err;
+      }
 
       await db.delete(predictions).where(eq(predictions.userId, userId));
       await db.delete(groupMembers).where(eq(groupMembers.userId, userId));

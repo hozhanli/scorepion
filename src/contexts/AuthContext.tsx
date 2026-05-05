@@ -9,15 +9,26 @@ import React, {
   ReactNode,
 } from "react";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import {
+  createUserWithEmailAndPassword,
+  signInWithEmailAndPassword,
+  signOut,
+  sendPasswordResetEmail,
+  onAuthStateChanged,
+  deleteUser,
+} from "@react-native-firebase/auth";
 import { apiRequest, setOnAuthExpired } from "@/lib/query-client";
 import { setUser as setSentryUser, clearUser as clearSentryUser } from "@/lib/sentry";
-import { setAccessToken, setRefreshToken, getRefreshToken, clearTokens } from "@/lib/token-store";
+import { auth, firebaseErrorToKey, type AuthErrorKey } from "@/lib/firebase";
 
 const CACHED_USER_KEY = "auth:cachedUser";
+
+export type { AuthErrorKey };
 
 interface AuthUser {
   id: string;
   username: string;
+  email: string;
   avatar: string;
   totalPoints: number;
   correctPredictions: number;
@@ -33,238 +44,216 @@ interface AuthContextValue {
   user: AuthUser | null;
   isLoading: boolean;
   isAuthenticated: boolean;
-  login: (username: string, password: string) => Promise<void>;
-  register: (username: string, password: string) => Promise<void>;
+  login: (email: string, password: string) => Promise<void>;
+  register: (
+    email: string,
+    username: string,
+    password: string,
+    favoriteLeagues?: string[],
+  ) => Promise<void>;
+  sendPasswordReset: (email: string) => Promise<void>;
   logout: () => Promise<void>;
   refreshUser: () => Promise<void>;
 }
 
-const NETWORK_PATTERNS = [
-  "ConnectException",
-  "Failed to connect",
-  "Network request failed",
-  "timeout",
-  "Can't reach",
-  "ECONNREFUSED",
-  "ERR_CONNECTION",
-];
+const AuthContext = createContext<AuthContextValue | null>(null);
 
-function isNetworkError(msg: string): boolean {
-  return NETWORK_PATTERNS.some((p) => msg.includes(p));
+function attachAuthErrorKey(err: unknown, key: AuthErrorKey): Error {
+  const out = err instanceof Error ? err : new Error(String(err));
+  (out as any).errorKey = key;
+  return out;
 }
 
-export type AuthErrorKey =
-  | "networkError"
-  | "wrongCredentials"
-  | "usernameTaken"
-  | "tooManyAttempts"
-  | "loginFailed"
-  | "registerFailed"
-  | "generic";
-
-function toErrorKey(error: unknown, action: "login" | "register"): AuthErrorKey {
-  const raw = error instanceof Error ? error.message : String(error);
-
-  if (isNetworkError(raw)) return "networkError";
-  if (raw.includes("401")) return "wrongCredentials";
+/**
+ * Translate an HTTP-shaped error from the API client into an AuthErrorKey.
+ * Used for /sync failures (the only auth-adjacent server call left after
+ * Firebase took over login/register/refresh).
+ */
+function syncErrorToKey(err: unknown): AuthErrorKey {
+  const raw = err instanceof Error ? err.message : String(err);
+  if (raw.includes("Network request failed") || raw.includes("timeout")) return "networkError";
   if (raw.includes("409")) return "usernameTaken";
   if (raw.includes("429")) return "tooManyAttempts";
-  if (raw.includes("422") || raw.includes("validation")) return "generic";
-
-  return action === "login" ? "loginFailed" : "registerFailed";
+  return "registerFailed";
 }
-
-const AuthContext = createContext<AuthContextValue | null>(null);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(null);
   const [isLoading, setIsLoading] = useState(true);
-  const abortControllerRef = useRef<AbortController | null>(null);
+  // While `register` is mid-flight (Firebase signup → server sync), the
+  // onAuthStateChanged listener should NOT race us by fetching /api/auth/me
+  // — the profile row doesn't exist yet, and the listener would 404.
+  const registrationInFlight = useRef(false);
 
-  // Register auth-expiry callback so the API client can force logout
+  // Register auth-expiry callback so the API client can force logout when
+  // the server reports a permanently invalid token.
   useEffect(() => {
     setOnAuthExpired(() => {
-      setUser(null);
-      AsyncStorage.removeItem(CACHED_USER_KEY).catch(() => {});
-      clearTokens().catch(() => {});
+      // Force Firebase to drop its session — onAuthStateChanged then clears local state.
+      signOut(auth).catch(() => {});
     });
     return () => setOnAuthExpired(null);
   }, []);
 
+  // Source of truth: Firebase auth state. Fires once on mount with the
+  // restored user (or null), and again on every sign-in/sign-out.
   useEffect(() => {
     let cancelled = false;
-    const controller = new AbortController();
-    abortControllerRef.current = controller;
 
-    (async () => {
+    const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
+      if (cancelled) return;
+      if (registrationInFlight.current) return;
+
+      if (!firebaseUser) {
+        setUser(null);
+        clearSentryUser();
+        await AsyncStorage.removeItem(CACHED_USER_KEY).catch(() => {});
+        setIsLoading(false);
+        return;
+      }
+
+      // Show cached profile for instant UI while we revalidate.
       try {
-        // 1. Check if we have a refresh token — no token means no valid session
-        const hasRefreshToken = await getRefreshToken();
-        if (!hasRefreshToken) {
-          // No JWT tokens — clear any stale cache from session-based era
-          if (!cancelled) {
-            setUser(null);
-            await AsyncStorage.removeItem(CACHED_USER_KEY);
-            setIsLoading(false);
-          }
-          return;
-        }
-
-        // 2. We have tokens — show cached user for instant UI while we validate
         const cached = await AsyncStorage.getItem(CACHED_USER_KEY);
-        if (cached && !cancelled) {
+        if (cached) {
           const cachedUser = JSON.parse(cached) as AuthUser;
-          setUser(cachedUser);
-          setIsLoading(false);
-        }
-
-        // 3. Validate with server in background (auto-refresh handles token rotation)
-        try {
-          const res = await apiRequest("GET", "/api/auth/me");
-          if (controller.signal.aborted) return;
-          const data = await res.json();
-          if (!cancelled) {
-            setUser(data.user);
-            await AsyncStorage.setItem(CACHED_USER_KEY, JSON.stringify(data.user));
-          }
-        } catch (err) {
-          if ((err as Error).name === "AbortError") return;
-          // Server says unauthorized or error — clear everything
-          if (!cancelled) {
-            setUser(null);
-            await AsyncStorage.removeItem(CACHED_USER_KEY);
-            await clearTokens();
+          if (cachedUser.id === firebaseUser.uid) {
+            setUser(cachedUser);
+            setIsLoading(false);
           }
         }
       } catch {
-        // Cache/token read failed — non-fatal
+        // Cache read failed — non-fatal
       }
 
-      if (!cancelled) {
-        setIsLoading(false);
+      try {
+        const res = await apiRequest("GET", "/api/auth/me");
+        const data = await res.json();
+        if (cancelled) return;
+        setUser(data.user);
+        setSentryUser({ id: data.user.id, username: data.user.username });
+        await AsyncStorage.setItem(CACHED_USER_KEY, JSON.stringify(data.user));
+      } catch (err) {
+        // 404 means Firebase user exists but server profile doesn't — this is
+        // an orphaned signup (e.g. register sync failed mid-flight). Sign out
+        // so the user can try again.
+        const msg = err instanceof Error ? err.message : String(err);
+        if (msg.includes("404")) {
+          await signOut(auth).catch(() => {});
+        } else {
+          // Network or transient — leave cached user visible.
+          console.error("auth:me", err);
+        }
+      } finally {
+        if (!cancelled) setIsLoading(false);
       }
-    })();
+    });
 
     return () => {
       cancelled = true;
-      controller.abort();
+      unsubscribe();
     };
   }, []);
 
-  const login = useCallback(async (username: string, password: string) => {
+  const login = useCallback(async (email: string, password: string) => {
     try {
-      const res = await apiRequest("POST", "/api/auth/login", { username, password });
-      const data = await res.json();
-
-      // Store tokens securely
-      await setAccessToken(data.accessToken);
-      await setRefreshToken(data.refreshToken);
-
-      // Cache user for instant startup
-      setUser(data.user);
-      setSentryUser({ id: data.user.id, username: data.user.username });
-      await AsyncStorage.setItem(CACHED_USER_KEY, JSON.stringify(data.user));
+      await signInWithEmailAndPassword(auth, email.trim(), password);
+      // onAuthStateChanged will populate the user state from /api/auth/me.
     } catch (error) {
-      const key = toErrorKey(error, "login");
-      const err = new Error(key);
-      (err as any).errorKey = key;
-      throw err;
+      throw attachAuthErrorKey(error, firebaseErrorToKey(error, "login"));
     }
   }, []);
 
-  const register = useCallback(async (username: string, password: string) => {
+  const register = useCallback(
+    async (email: string, username: string, password: string, favoriteLeagues: string[] = []) => {
+      registrationInFlight.current = true;
+      try {
+        await createUserWithEmailAndPassword(auth, email.trim(), password);
+      } catch (error) {
+        registrationInFlight.current = false;
+        throw attachAuthErrorKey(error, firebaseErrorToKey(error, "register"));
+      }
+
+      // Firebase signup succeeded → create the server-side profile row.
+      try {
+        const res = await apiRequest("POST", "/api/auth/sync", { username, favoriteLeagues });
+        const data = await res.json();
+        setUser(data.user);
+        setSentryUser({ id: data.user.id, username: data.user.username });
+        await AsyncStorage.setItem(CACHED_USER_KEY, JSON.stringify(data.user));
+      } catch (error) {
+        // Sync failed — most commonly username conflict (409). Roll back the
+        // Firebase identity so the user can retry with a different username
+        // (or different email entirely) without leaving an orphan account.
+        const fbUser = auth.currentUser;
+        if (fbUser) {
+          try {
+            await deleteUser(fbUser);
+          } catch {
+            // If deletion fails (rare — needs recent login), the orphan will
+            // be cleaned up on next failed /me fetch via signOut.
+            await signOut(auth).catch(() => {});
+          }
+        }
+        throw attachAuthErrorKey(error, syncErrorToKey(error));
+      } finally {
+        registrationInFlight.current = false;
+      }
+    },
+    [],
+  );
+
+  const sendPasswordReset = useCallback(async (email: string) => {
     try {
-      const res = await apiRequest("POST", "/api/auth/register", { username, password });
-      const data = await res.json();
-
-      await setAccessToken(data.accessToken);
-      await setRefreshToken(data.refreshToken);
-
-      setUser(data.user);
-      setSentryUser({ id: data.user.id, username: data.user.username });
-      await AsyncStorage.setItem(CACHED_USER_KEY, JSON.stringify(data.user));
+      await sendPasswordResetEmail(auth, email.trim());
     } catch (error) {
-      const key = toErrorKey(error, "register");
-      const err = new Error(key);
-      (err as any).errorKey = key;
-      throw err;
+      throw attachAuthErrorKey(error, firebaseErrorToKey(error, "reset"));
     }
   }, []);
 
   const logout = useCallback(async () => {
-    abortControllerRef.current?.abort();
-
     try {
-      await apiRequest("POST", "/api/auth/logout");
+      await signOut(auth);
     } catch (err) {
       console.error("auth:logout", err);
     }
-
-    // Clear all stored auth state
-    setUser(null);
-    clearSentryUser();
-    await clearTokens();
-    await AsyncStorage.removeItem(CACHED_USER_KEY);
+    // onAuthStateChanged listener clears local state.
   }, []);
 
   const refreshUser = useCallback(async () => {
+    if (!auth.currentUser) {
+      setUser(null);
+      return;
+    }
     try {
       const res = await apiRequest("GET", "/api/auth/me");
       const data = await res.json();
       setUser(data.user);
       await AsyncStorage.setItem(CACHED_USER_KEY, JSON.stringify(data.user));
-    } catch {
-      setUser(null);
-      await clearTokens();
-      await AsyncStorage.removeItem(CACHED_USER_KEY);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      if (msg.includes("401") || msg.includes("404")) {
+        await signOut(auth).catch(() => {});
+      }
     }
   }, []);
 
-  // Stable ref wrappers: prevent cascading re-renders through the context
-  // value when callback identities change. Even though the current callbacks
-  // have only stable deps (imports + state setters), wrapping through refs
-  // guarantees that adding a non-stable dep later won't cascade into every
-  // consumer.
-  const loginRef = useRef(login);
-  const registerRef = useRef(register);
-  const logoutRef = useRef(logout);
-  const refreshUserRef = useRef(refreshUser);
-
-  useEffect(() => {
-    loginRef.current = login;
-  }, [login]);
-  useEffect(() => {
-    registerRef.current = register;
-  }, [register]);
-  useEffect(() => {
-    logoutRef.current = logout;
-  }, [logout]);
-  useEffect(() => {
-    refreshUserRef.current = refreshUser;
-  }, [refreshUser]);
-
-  const stableLogin = useCallback(
-    (username: string, password: string) => loginRef.current(username, password),
-    [],
-  );
-  const stableRegister = useCallback(
-    (username: string, password: string) => registerRef.current(username, password),
-    [],
-  );
-  const stableLogout = useCallback(() => logoutRef.current(), []);
-  const stableRefreshUser = useCallback(() => refreshUserRef.current(), []);
-
+  // The five callbacks above all use `useCallback` with an empty dep array,
+  // so their identity is stable for the lifetime of the provider — no extra
+  // ref indirection needed. Memoize the value so context consumers don't
+  // re-render on unrelated state changes.
   const value = useMemo(
     () => ({
       user,
       isLoading,
       isAuthenticated: !!user,
-      login: stableLogin,
-      register: stableRegister,
-      logout: stableLogout,
-      refreshUser: stableRefreshUser,
+      login,
+      register,
+      sendPasswordReset,
+      logout,
+      refreshUser,
     }),
-    [user, isLoading, stableLogin, stableRegister, stableLogout, stableRefreshUser],
+    [user, isLoading, login, register, sendPasswordReset, logout, refreshUser],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

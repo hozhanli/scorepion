@@ -10,19 +10,20 @@ A guide to running and maintaining the Scorepion football prediction app in prod
 
 Configure these in your `.env` file or via your platform's secrets management (Fly.io, Heroku, AWS Systems Manager, etc.):
 
-| Variable                 | Required | Notes                                                                                                                      |
-| ------------------------ | -------- | -------------------------------------------------------------------------------------------------------------------------- |
-| `DATABASE_URL`           | Yes      | MySQL 8.0+ connection string; managed MySQL (PlanetScale, AWS RDS, DigitalOcean) recommended. 2GB RAM minimum for 10k MAU. |
-| `FOOTBALL_API_KEY`       | Yes      | RapidAPI API-Football key (Pro plan recommended for live polling; free tier is batch-only).                                |
-| `JWT_SECRET`             | Yes      | 64+ random hex chars. Generate: `node -e "console.log(require('crypto').randomBytes(64).toString('hex'))"`                 |
-| `ADMIN_SECRET`           | Yes      | Secret for admin-only endpoints (e.g., `/api/football/sync/full`). Rotate quarterly.                                       |
-| `SENTRY_DSN`             | Yes      | Error tracking DSN from [sentry.io](https://sentry.io). Create two projects: `scorepion-server`, `scorepion-client`.       |
-| `STRIPE_SECRET_KEY`      | No       | Production Stripe secret key (if using premium features).                                                                  |
-| `STRIPE_WEBHOOK_SECRET`  | No       | Stripe webhook signing key.                                                                                                |
-| `ALLOWED_ORIGINS`        | No       | Comma-separated CORS origins (e.g., `https://scorepion.fans,https://www.scorepion.fans`). Localhost always allowed in dev. |
-| `NODE_ENV`               | Yes      | Set to `production` in prod.                                                                                               |
-| `APP_URL`                | Yes      | Public-facing server URL for Stripe/Expo redirects (e.g., `https://api.scorepion.fans`).                                   |
-| `EXPO_PUBLIC_SENTRY_DSN` | Yes      | Client-side Sentry DSN (React Native). Different from server DSN.                                                          |
+| Variable                                                              | Required | Notes                                                                                                                                        |
+| --------------------------------------------------------------------- | -------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
+| `DATABASE_URL`                                                        | Yes      | MySQL 8.0+ connection string; managed MySQL (PlanetScale, AWS RDS, DigitalOcean) recommended. 2GB RAM minimum for 10k MAU.                   |
+| `FOOTBALL_API_KEY`                                                    | Yes      | RapidAPI API-Football key (Pro plan recommended for live polling; free tier is batch-only).                                                  |
+| `FIREBASE_PROJECT_ID`                                                 | Yes      | Firebase project ID (e.g. `scorepion-7b110`). Authentication is handled by Firebase.                                                         |
+| `GOOGLE_APPLICATION_CREDENTIALS` _or_ `FIREBASE_SERVICE_ACCOUNT_JSON` | Yes      | Admin SDK credentials. Path to a service account JSON file, OR the JSON inlined as a single env var. The latter is preferred for containers. |
+| `ADMIN_SECRET`                                                        | Yes      | Secret for admin-only endpoints (e.g., `/api/football/sync/full`). Rotate quarterly.                                                         |
+| `SENTRY_DSN`                                                          | Yes      | Error tracking DSN from [sentry.io](https://sentry.io). Create two projects: `scorepion-server`, `scorepion-client`.                         |
+| `STRIPE_SECRET_KEY`                                                   | No       | Production Stripe secret key (if using premium features).                                                                                    |
+| `STRIPE_WEBHOOK_SECRET`                                               | No       | Stripe webhook signing key.                                                                                                                  |
+| `ALLOWED_ORIGINS`                                                     | No       | Comma-separated CORS origins (e.g., `https://scorepion.fans,https://www.scorepion.fans`). Localhost always allowed in dev.                   |
+| `NODE_ENV`                                                            | Yes      | Set to `production` in prod.                                                                                                                 |
+| `APP_URL`                                                             | Yes      | Public-facing server URL for Stripe/Expo redirects (e.g., `https://api.scorepion.fans`).                                                     |
+| `EXPO_PUBLIC_SENTRY_DSN`                                              | Yes      | Client-side Sentry DSN (React Native). Different from server DSN.                                                                            |
 
 ### Recommended Infrastructure
 
@@ -31,7 +32,7 @@ Configure these in your `.env` file or via your platform's secrets management (F
   - Daily automated backups via managed provider
   - Single region acceptable up to 100k MAU
 - **Node Server**: Single box (1-2GB RAM) for <100k MAU, load-balanced for larger
-  - Stateless (sessions via JWT + refresh tokens)
+  - Stateless (auth via Firebase ID tokens — verified offline against cached public keys)
   - Runs health checks at `/api/health`, `/api/health/live`, `/api/health/ready`
 - **Client**: Expo EAS (managed build + OTA)
 - **Monitoring**: Sentry for errors + perf; DataDog, CloudWatch, or Papertrail for logs
@@ -134,29 +135,29 @@ If `used >= limit`, quota is exhausted. Wait until `resetAt` or upgrade plan.
 3. Sync via `/api/football/sync/full` to populate fixtures
 4. Client picks up leagues from `/api/football/leagues` automatically
 
-### Refresh User Token (Admin)
+### Force-revoke a single user's session
 
-If a user reports locked-out auth:
+If a user reports a compromised account:
 
-```bash
-mysql -h $DB_HOST -u $DB_USER -p$DB_PASS $DB_NAME -e "
-  DELETE FROM refresh_tokens WHERE user_id = 'user_id_here';
-  SELECT 'Token invalidated. User will re-auth on next app open.';
-"
-```
+1. Firebase Console → Authentication → find the user → "Reset password" _or_
+   click "..." → "Revoke refresh tokens".
+2. The user's existing ID tokens stay valid until they expire (max 1 hour);
+   after that they'll be forced to re-authenticate.
 
-### Force Logout All Users
+For immediate revocation that ignores the 1-hour ID-token TTL, change
+`requireAuth` to call `verifyIdToken(token, true)` — but expect added Firebase
+RPC latency on every authenticated request.
 
-If JWT_SECRET is suspected compromised:
+### Force-logout all users
 
-```bash
-mysql -h $DB_HOST -u $DB_USER -p$DB_PASS $DB_NAME -e "
-  TRUNCATE TABLE refresh_tokens;
-  SELECT 'All refresh tokens invalidated.';
-"
-```
+If the Firebase service account is compromised:
 
-Then rotate `JWT_SECRET` in production and restart.
+1. Firebase Console → Project Settings → Service accounts → revoke the leaked key.
+2. Generate a new key, update `GOOGLE_APPLICATION_CREDENTIALS` /
+   `FIREBASE_SERVICE_ACCOUNT_JSON` on the server, restart.
+3. To force every user to re-auth (rather than wait for token expiry):
+   Firebase Console → Authentication → bulk-revoke refresh tokens via the
+   Admin SDK or the gcloud CLI.
 
 ### Check Database Size
 
@@ -224,7 +225,9 @@ See [`INCIDENT_RESPONSE.md`](./INCIDENT_RESPONSE.md) for playbooks covering:
 **Quarterly rotation recommended**:
 
 - `ADMIN_SECRET` — regenerate and update production config
-- `JWT_SECRET` — rotate carefully (invalidates all active tokens; warn users)
+- Firebase service account — generate a new key and revoke the old one in
+  Firebase Console → Project Settings → Service accounts. Existing user
+  sessions are unaffected (the key signs nothing user-facing).
 - `STRIPE_SECRET_KEY` — rotate via Stripe dashboard
 - Database password — managed by cloud provider (no action needed)
 

@@ -315,7 +315,7 @@ mysql -h $DB_HOST -u $DB_USER -p$DB_PASS $DB_NAME -e "ANALYZE TABLE predictions"
 2. Upgrade disk size (takes 10–30 min downtime usually)
 3. Meanwhile, identify bloat:
    ```bash
-   mysql -h $DB_HOST -u $DB_USER -p$DB_PASS $DB_NAME -e "OPTIMIZE TABLE predictions, refresh_tokens, users"  # ~10 min, blocks reads
+   mysql -h $DB_HOST -u $DB_USER -p$DB_PASS $DB_NAME -e "OPTIMIZE TABLE predictions, users"  # ~10 min, blocks reads
    ```
 
 ---
@@ -329,68 +329,48 @@ mysql -h $DB_HOST -u $DB_USER -p$DB_PASS $DB_NAME -e "ANALYZE TABLE predictions"
 ### Diagnosis (2 min)
 
 ```bash
-# Check JWT_SECRET hasn't changed
-echo "Current JWT_SECRET: $(echo $JWT_SECRET | cut -c1-8)..."
+# Confirm the Admin SDK can reach Firebase from the server
+curl -s -o /dev/null -w "%{http_code}\n" https://firebaseauth.googleapis.com/
 
-# Check refresh_tokens table size (shouldn't grow unboundedly)
-mysql -h $DB_HOST -u $DB_USER -p$DB_PASS $DB_NAME -e "
-  SELECT
-    (SELECT count(*) FROM refresh_tokens) AS token_count,
-    (SELECT COUNT(DISTINCT user_id) FROM refresh_tokens) AS unique_users,
-    ROUND((data_length + index_length) / 1024 / 1024, 2) AS size_mb
-  FROM information_schema.tables
-  WHERE table_schema = DATABASE() AND table_name = 'refresh_tokens';
-"
+# Check the running process picked up the right Firebase project
+echo "FIREBASE_PROJECT_ID=$FIREBASE_PROJECT_ID"
 
-# Check Sentry for JWT/Stripe errors
+# Confirm credentials are visible to the process
+[ -n "$FIREBASE_SERVICE_ACCOUNT_JSON" ] && echo "Inline JSON present" \
+  || ls -l "$GOOGLE_APPLICATION_CREDENTIALS"
+
+# Check Sentry for "Invalid or expired token" / Stripe errors
 # → Look for patterns: all users or specific user IDs?
 ```
 
 ### Common Causes & Fixes
 
-#### JWT_SECRET Rotated or Compromised
+#### Firebase Service Account Revoked or Compromised
 
-**Symptom**: All users suddenly get `invalid token`.
-
-**Fix**:
-
-1. **If rotated accidentally**: revert to old secret
-
-   ```bash
-   # In production config, restore previous JWT_SECRET
-   export JWT_SECRET="old_value"
-   pm2 restart scorepion
-   ```
-
-2. **If compromised**: invalidate all tokens immediately
-   ```bash
-   mysql -h $DB_HOST -u $DB_USER -p$DB_PASS $DB_NAME -e "TRUNCATE TABLE refresh_tokens"
-   # Users will be logged out; warn them to re-authenticate
-   ```
-   Then rotate JWT_SECRET:
-   ```bash
-   export JWT_SECRET="$(node -e "console.log(require('crypto').randomBytes(64).toString('hex'))")"
-   pm2 restart scorepion
-   ```
-
-#### Refresh Token Table Bloat
-
-**Symptom**: `refresh_tokens` >100MB, queries slow.
-
-**Cause**: Old tokens not being deleted (normal, but can accumulate).
+**Symptom**: All users suddenly get `Invalid or expired token` from the server,
+even though Firebase clients still work.
 
 **Fix**:
 
-```bash
-# Delete expired refresh tokens (safe)
-mysql -h $DB_HOST -u $DB_USER -p$DB_PASS $DB_NAME -e "
-  DELETE FROM refresh_tokens
-  WHERE created_at < NOW() - INTERVAL 30 DAY
-"
+1. **If revoked accidentally**: regenerate the key in Firebase Console →
+   Project Settings → Service accounts and update the env var on the server.
+2. **If compromised**: revoke the leaked key in Firebase Console, generate a
+   new one, update the server env var, and restart. Existing user sessions
+   are unaffected — the service account signs nothing user-facing.
+3. To force every user to re-authenticate (rare — usually unnecessary), use
+   the Admin SDK's `revokeRefreshTokens(uid)` per user, or contact Firebase
+   support for project-wide revocation.
 
-# Optimize to reclaim space
-mysql -h $DB_HOST -u $DB_USER -p$DB_PASS $DB_NAME -e "OPTIMIZE TABLE refresh_tokens"
-```
+#### Firebase Outage
+
+**Symptom**: All authenticated requests fail with 401, server logs show
+network errors against `firebaseauth.googleapis.com`.
+
+**Check**: [Firebase Status Dashboard](https://status.firebase.google.com/).
+
+**Mitigation**: ride it out — there's no on-prem fallback. Public read
+endpoints (fixtures, leaderboards, leagues) remain accessible since they
+don't require auth.
 
 #### Stripe Webhook Not Signing Correctly
 
@@ -415,13 +395,16 @@ grep "Stripe" logs/* | grep -i "signature\|invalid"
 
 ### If users are locked out:
 
-```bash
-# Immediate mitigation: clear all sessions (WARN USERS)
-mysql -h $DB_HOST -u $DB_USER -p$DB_PASS $DB_NAME -e "TRUNCATE TABLE refresh_tokens"
-# → Users will be forced to re-auth on next app open
+The default ID-token TTL is 1 hour. After that, clients automatically
+re-authenticate against Firebase. If you need to force re-auth sooner:
 
-# Then investigate root cause in Sentry / logs
 ```
+# Per user, via the Admin SDK (e.g. in a Node REPL on the server):
+> import { firebaseAuth } from "./server/lib/firebase";
+> await firebaseAuth().revokeRefreshTokens("<UID>");
+```
+
+Then investigate root cause in Sentry / logs.
 
 ---
 

@@ -24,39 +24,38 @@ describe("Scoring Engine", () => {
   let fixtureId: string;
 
   beforeEach(async () => {
-    // Create a test user
-    const testUsername = `tu_${Date.now().toString(36)}`;
-    await db
-      .insert(users)
-      .values({
-        username: testUsername,
-        password: "hashed_pw",
-        avatar: "TU",
-      });
-    const [testUser] = await db.select().from(users).where(eq(users.username, testUsername));
-    userId = testUser.id;
+    // Create a test user. The new auth schema is keyed by Firebase UID + email;
+    // these tests don't exercise auth so synthetic values are fine.
+    const stamp = Date.now().toString(36);
+    const testUsername = `tu_${stamp}`;
+    const testUserId = `test_${stamp}`;
+    await db.insert(users).values({
+      id: testUserId,
+      username: testUsername,
+      email: `${testUsername}@test.local`,
+      avatar: "TU",
+    });
+    userId = testUserId;
 
     // Create a test fixture (not live, not finished initially)
     const testApiFixtureId = 999000 + Math.floor(Math.random() * 1000);
-    await db
-      .insert(footballFixtures)
-      .values({
-        apiFixtureId: testApiFixtureId,
-        leagueId: "pl",
-        homeTeamId: 1,
-        awayTeamId: 2,
-        homeScore: null,
-        awayScore: null,
-        status: "upcoming",
-        statusShort: "NS",
-        minute: 0,
-        kickoff: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
-        venue: "Test Stadium",
-        referee: "Test Ref",
-        round: "1",
-        season: 2025,
-        updatedAt: Date.now(),
-      });
+    await db.insert(footballFixtures).values({
+      apiFixtureId: testApiFixtureId,
+      leagueId: "pl",
+      homeTeamId: 1,
+      awayTeamId: 2,
+      homeScore: null,
+      awayScore: null,
+      status: "upcoming",
+      statusShort: "NS",
+      minute: 0,
+      kickoff: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
+      venue: "Test Stadium",
+      referee: "Test Ref",
+      round: "1",
+      season: 2025,
+      updatedAt: Date.now(),
+    });
     fixtureId = String(testApiFixtureId);
 
     // Add standings for upset bonus tests

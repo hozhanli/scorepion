@@ -112,7 +112,7 @@ export async function registerForPushNotifications(): Promise<string | null> {
     // Cache the token
     await AsyncStorage.setItem(PUSH_TOKEN_STORAGE_KEY, token);
 
-    // Register with server (apiRequest attaches JWT + uses EXPO_PUBLIC_DOMAIN)
+    // Register with server (apiRequest attaches Firebase ID token + uses EXPO_PUBLIC_DOMAIN)
     try {
       await apiRequest("POST", "/api/push/token", {
         token,

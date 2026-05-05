@@ -19,84 +19,79 @@ describe("Prediction Submission", () => {
   let finishedFixtureId: string;
 
   beforeEach(async () => {
-    // Create test user
-    const testUsername = `pu_${Date.now().toString(36)}`;
-    await db
-      .insert(users)
-      .values({
-        username: testUsername,
-        password: "hashed_pw",
-        avatar: "PU",
-      });
-    const [testUser] = await db.select().from(users).where(eq(users.username, testUsername));
-    userId = testUser.id;
+    // Create test user. The new auth schema is keyed by Firebase UID + email;
+    // these tests don't exercise auth so synthetic values are fine.
+    const stamp = Date.now().toString(36);
+    const testUsername = `pu_${stamp}`;
+    const testUserId = `test_${stamp}`;
+    await db.insert(users).values({
+      id: testUserId,
+      username: testUsername,
+      email: `${testUsername}@test.local`,
+      avatar: "PU",
+    });
+    userId = testUserId;
 
     // Upcoming fixture (can predict)
     const now = new Date();
     const future = new Date(now.getTime() + 2 * 60 * 60 * 1000); // 2 hours from now
-    await db
-      .insert(footballFixtures)
-      .values({
-        apiFixtureId: 1001,
-        leagueId: "pl",
-        homeTeamId: 10,
-        awayTeamId: 20,
-        homeScore: null,
-        awayScore: null,
-        status: "upcoming",
-        statusShort: "NS",
-        minute: 0,
-        kickoff: future.toISOString(),
-        venue: "Stadium A",
-        referee: "Ref A",
-        round: "1",
-        season: 2025,
-        updatedAt: Date.now(),
-      });
+    await db.insert(footballFixtures).values({
+      apiFixtureId: 1001,
+      leagueId: "pl",
+      homeTeamId: 10,
+      awayTeamId: 20,
+      homeScore: null,
+      awayScore: null,
+      status: "upcoming",
+      statusShort: "NS",
+      minute: 0,
+      kickoff: future.toISOString(),
+      venue: "Stadium A",
+      referee: "Ref A",
+      round: "1",
+      season: 2025,
+      updatedAt: Date.now(),
+    });
     upcomingFixtureId = "1001";
 
     // Live fixture (cannot predict)
-    await db
-      .insert(footballFixtures)
-      .values({
-        apiFixtureId: 1002,
-        leagueId: "pl",
-        homeTeamId: 30,
-        awayTeamId: 40,
-        homeScore: 1,
-        awayScore: 0,
-        status: "live",
-        statusShort: "1H",
-        minute: 35,
-        kickoff: now.toISOString(),
-        venue: "Stadium B",
-        referee: "Ref B",
-        round: "1",
-        season: 2025,
-        updatedAt: Date.now(),
-      });
+    await db.insert(footballFixtures).values({
+      apiFixtureId: 1002,
+      leagueId: "pl",
+      homeTeamId: 30,
+      awayTeamId: 40,
+      homeScore: 1,
+      awayScore: 0,
+      status: "live",
+      statusShort: "1H",
+      minute: 35,
+      kickoff: now.toISOString(),
+      venue: "Stadium B",
+      referee: "Ref B",
+      round: "1",
+      season: 2025,
+      updatedAt: Date.now(),
+    });
     liveFixtureId = "1002";
 
     // Finished fixture (cannot predict)
-    await db
-      .insert(footballFixtures)
-      .values({
-        apiFixtureId: 1003,
-        leagueId: "pl",
-        homeTeamId: 50,
-        awayTeamId: 60,
-        homeScore: 2,
-        awayScore: 1,
-        status: "finished",
-        statusShort: "FT",
-        minute: 90,
-        kickoff: new Date(now.getTime() - 60 * 60 * 1000).toISOString(),
-        venue: "Stadium C",
-        referee: "Ref C",
-        round: "1",
-        season: 2025,
-        updatedAt: Date.now(),
-      });
+    await db.insert(footballFixtures).values({
+      apiFixtureId: 1003,
+      leagueId: "pl",
+      homeTeamId: 50,
+      awayTeamId: 60,
+      homeScore: 2,
+      awayScore: 1,
+      status: "finished",
+      statusShort: "FT",
+      minute: 90,
+      kickoff: new Date(now.getTime() - 60 * 60 * 1000).toISOString(),
+      venue: "Stadium C",
+      referee: "Ref C",
+      round: "1",
+      season: 2025,
+      updatedAt: Date.now(),
+    });
     finishedFixtureId = "1003";
   });
 

@@ -138,12 +138,19 @@ const LEAGUE_GROUP_NAMES: Record<string, { name: string; code: string }> = {
   uce: { name: "Conference League", code: "UCEF09" },
 };
 
+// Synthetic identity used by the system to own seeded league groups. It has
+// no Firebase backing — uniqueness on `id` and `email` is enough for FKs and
+// the unique constraints to be satisfied.
+const SYSTEM_USER_ID = "system_scorepion";
+const SYSTEM_USER_EMAIL = "system@scorepion.local";
+
 export async function seedLeagueGroups(): Promise<void> {
   let [systemUser] = await db.select().from(users).where(eq(users.username, "scorepion_system"));
   if (!systemUser) {
     await db.insert(users).values({
+      id: SYSTEM_USER_ID,
       username: "scorepion_system",
-      password: "SYSTEM_NO_LOGIN",
+      email: SYSTEM_USER_EMAIL,
       avatar: "",
     });
     [systemUser] = await db.select().from(users).where(eq(users.username, "scorepion_system"));

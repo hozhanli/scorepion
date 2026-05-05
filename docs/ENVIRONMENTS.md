@@ -56,11 +56,12 @@ for everything else.
 to boot if any of these are missing:
 
 - `DATABASE_URL`
-- `JWT_SECRET`
 - `ADMIN_SECRET`
 - `APP_URL`
 - `FOOTBALL_API_KEY`
 - `EXPO_ACCESS_TOKEN`
+- `FIREBASE_PROJECT_ID`
+- One of: `GOOGLE_APPLICATION_CREDENTIALS` (path) or `FIREBASE_SERVICE_ACCOUNT_JSON` (inline)
 
 And conditionally (if `ENABLE_BILLING=true`):
 
@@ -97,7 +98,7 @@ into the AAB.
 
 ```bash
 cp .env.example .env
-# edit .env with real values (DATABASE_URL, FOOTBALL_API_KEY, JWT_SECRET…)
+# edit .env with real values (DATABASE_URL, FOOTBALL_API_KEY, FIREBASE_PROJECT_ID, GOOGLE_APPLICATION_CREDENTIALS…)
 npm run db:start     # local MySQL
 npm run server:dev   # Express
 npm start            # Metro + Expo client
@@ -109,11 +110,12 @@ Before starting the server in production mode, have these set on the host:
 
 - [ ] `NODE_ENV=production`
 - [ ] `DATABASE_URL` with `?sslmode=require`
-- [ ] `JWT_SECRET` (64-byte hex)
 - [ ] `ADMIN_SECRET` (32-byte hex)
 - [ ] `APP_URL` = public URL of the server
 - [ ] `FOOTBALL_API_KEY`
 - [ ] `EXPO_ACCESS_TOKEN`
+- [ ] `FIREBASE_PROJECT_ID`
+- [ ] `GOOGLE_APPLICATION_CREDENTIALS` (path) or `FIREBASE_SERVICE_ACCOUNT_JSON` (inline)
 - [ ] `ALLOWED_ORIGINS` if your web frontend lives on another domain
 - [ ] `SENTRY_DSN` (optional but recommended)
 - [ ] `LOG_LEVEL=info`
@@ -123,10 +125,10 @@ Before starting the server in production mode, have these set on the host:
 - Every `.env*` file is git-ignored.
 - `credentials/` is git-ignored (keystore + service account JSONs).
 - Never paste secret values into commit messages, PR descriptions, or chat.
-- Rotate `JWT_SECRET` only when you can tolerate logging everyone out — all
-  outstanding tokens become invalid.
-- If `ADMIN_SECRET` leaks: rotate immediately. If `JWT_SECRET` leaks: rotate,
-  and users re-login.
+- If `ADMIN_SECRET` leaks: rotate immediately.
+- If the Firebase service account JSON leaks: revoke the key in Firebase
+  Console → Project Settings → Service accounts and generate a new one.
+  Existing user sessions are unaffected (the key signs nothing user-facing).
 
 ## Relationship to `credentials/`
 

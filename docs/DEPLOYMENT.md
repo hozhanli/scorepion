@@ -13,8 +13,9 @@ Before deploying to production for the first time, verify all items:
 - [ ] `.env` populated with all required variables (see [`OPERATIONS.md`](./OPERATIONS.md) for full list)
 - [ ] `DATABASE_URL` points to a production-grade MySQL (managed service, not local container)
 - [ ] `FOOTBALL_API_KEY` set with Pro plan for live polling (or free for batch-only)
-- [ ] `JWT_SECRET` generated securely (64+ random hex chars)
-- [ ] `ADMIN_SECRET` generated securely (different from JWT_SECRET)
+- [ ] `FIREBASE_PROJECT_ID` set to the production Firebase project
+- [ ] Firebase Admin credentials provided via `GOOGLE_APPLICATION_CREDENTIALS` (file path) or `FIREBASE_SERVICE_ACCOUNT_JSON` (inline). The latter is preferred for containers and CI.
+- [ ] `ADMIN_SECRET` generated securely (32+ random hex chars)
 - [ ] `SENTRY_DSN` set and account verified (two projects: `scorepion-server`, `scorepion-client`)
 - [ ] `STRIPE_SECRET_KEY` and `STRIPE_PUBLISHABLE_KEY` set (if using premium features)
 

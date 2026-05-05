@@ -24,6 +24,7 @@ const MIGRATIONS = [
   "009_missing_tables.sql",
   "010_add_cascades.sql",
   "011_indexes_and_fks.sql",
+  "012_firebase_auth.sql",
 ];
 
 export async function runMigrations(): Promise<void> {

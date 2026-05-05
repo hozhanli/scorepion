@@ -2,7 +2,6 @@ import type { Express } from "express";
 import { createServer, type Server } from "node:http";
 import * as sync from "./services/sync";
 import { apiRouter } from "./routes/index";
-import { cleanupExpiredTokens } from "./services/token.service";
 
 export async function registerRoutes(app: Express): Promise<Server> {
   app.use("/api", apiRouter);
@@ -30,18 +29,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   }
   sync.startCronScheduler();
 
-  // Periodic cleanup of expired/revoked refresh tokens (every 6 hours)
-  setInterval(
-    async () => {
-      try {
-        const count = await cleanupExpiredTokens();
-        if (count > 0) console.log(`[Token] Cleaned up ${count} expired refresh tokens`);
-      } catch (err) {
-        console.error("[Token] Cleanup error:", err);
-      }
-    },
-    6 * 60 * 60 * 1000,
-  );
+  // Refresh-token cleanup is no longer needed — Firebase manages token lifecycle.
 
   const httpServer = createServer(app);
   return httpServer;
