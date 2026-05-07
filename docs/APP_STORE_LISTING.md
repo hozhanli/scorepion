@@ -6,41 +6,63 @@
 
 **Subtitle (iOS 30 chars / Android 80 chars):**
 
-- iOS: "Predict. Compete. Climb."
-- Android: "Predict real matches. Build your streak. Climb the leaderboard."
+- iOS: "Football Predictions with Friends"
+- Android: "Predict real football matches. No gambling — just skill and glory."
 
-**Keywords (iOS only):**
-football, soccer, predictions, prediction game, premier league, laliga, seria a, bundesliga, ligue 1, champions league, uefa, epl, fantasy, scores, live
+**Keywords (iOS only, 100 chars max):**
+score prediction,football predict,match prediction,soccer game,premier league,fantasy football,streak
 
 **Promotional Text (170 chars iOS):**
-Join thousands predicting real football matches. No gambling — just points, streaks, and glory.
+Think you know football? Predict real match scores, build your streak, and prove it on the leaderboard. No money. No gambling. Just you vs. everyone else.
 
 **Description (4000 chars max):**
-Scorepion brings football prediction to life. Every week, predict the outcome of real matches across Europe's top five leagues — Premier League, La Liga, Serie A, Bundesliga, and Ligue 1. Lock in your predictions before kickoff, watch the scoreline unfold live, and earn points based on accuracy.
+You already know who's going to win tonight. Prove it.
 
-Build a winning streak. Every correct prediction extends your current streak; the longer it holds, the higher you climb the leaderboard. Track your performance week by week, compare against friends, and dominate your private groups.
+Scorepion lets you predict the final score of real football matches across the Premier League, La Liga, Serie A, Bundesliga, and Ligue 1. Lock in your prediction before kickoff, watch the match unfold with live score updates, and earn points based on how close you were.
 
-Create a private league with friends and compete in real-time. See predictions, final scores, and rankings all in one place. Whether you're a casual fan or a serious pundit, Scorepion is built for you.
+Nail the exact score? 10 points. Get the result right? 5 points. Your accuracy builds your streak — and your streak climbs the leaderboard.
 
-Features:
+This is not a betting app. No real money. No odds. No deposits. Scorepion is a prediction game built on football knowledge, not luck.
 
-- Real match data from top European leagues
-- Weekly leaderboards and streak mechanics
-- Private group competitions
-- Live score updates
-- Available in 5 languages (English, Spanish, French, Turkish, Portuguese)
-- No gambling. No money involved. Pure prediction.
+CHALLENGE YOUR FRIENDS
 
-Perfect your predictions. Climb the ranks. Become a Scorepion.
+Create a private group, share the invite code, and compete head-to-head all season. See who actually knows football — and who's been bluffing at the pub.
+
+DAILY PREDICTIONS, WEEKLY RANKINGS
+
+Every day brings a curated pack of matches to predict. Your weekly score resets each Monday, so there's always a fresh chance to climb. Track your accuracy, maintain your streak, and progress through tiers from Rookie to Legend.
+
+REAL MATCH DATA
+
+Live scores, lineups, team form, head-to-head records, and league standings — all from Europe's top five leagues. Everything you need to make a smart prediction, in one place.
+
+BUILT FOR FOOTBALL FANS
+
+- Predict scores for 5 European leagues
+- Weekly and all-time leaderboards
+- Private group competitions with friends
+- Live match updates during games
+- Streak tracking with daily packs
+- Tier progression: Rookie to Legend
+- Available in 5 languages
+- No gambling. No money. Pure prediction.
+
+Download Scorepion. Lock in your first prediction tonight.
 
 **What's New (Release Notes):**
-Scorepion 1.0 — Initial release. Predict real football matches across Europe's top five leagues, lock in predictions, track your streak, and climb weekly leaderboards. Create private groups and compete with friends. Available in 5 languages.
+Scorepion 2.0 — Predict real football matches across Europe's top five leagues. Lock in scores, track your streak, climb weekly leaderboards, and compete with friends in private groups. Available in 5 languages.
 
 **Support URL:**
-https://scorepion.example.com/support
+
+<!-- TODO: Replace with actual URL before submission -->
+
+https://scorepion.app/support
 
 **Privacy Policy URL:**
-https://scorepion.example.com/privacy
+
+<!-- TODO: Replace with actual URL before submission -->
+
+https://scorepion.app/privacy
 
 **Age Rating:** 12+
 
@@ -56,35 +78,51 @@ Secondary: Entertainment
 
 **Subtitle (iOS 30 chars / Android 80 chars):**
 
-- iOS: "Predice. Compite. Sube."
-- Android: "Predice partidos reales. Construye tu racha. Sube en la clasificación."
+- iOS: "Predicciones con amigos"
+- Android: "Predice partidos reales de fútbol. Sin apuestas — solo habilidad y gloria."
 
 **Keywords:**
-fútbol, soccer, predicciones, juego de predicciones, premier league, la liga, serie a, bundesliga, ligue 1, champions league, uefa, epl, fantasy, puntuaciones, en directo
+predicción de gol,fútbol,predicciones,premier league,la liga,serie a,bundesliga,juego fútbol,racha
 
 **Promotional Text:**
-Únete a miles prediciendo partidos reales de fútbol. Sin apuestas — solo puntos, rachas y gloria.
+¿Crees que sabes de fútbol? Predice resultados reales, construye tu racha y demuéstralo en la clasificación. Sin dinero. Sin apuestas. Solo tú contra todos.
 
 **Description:**
-Scorepion lleva la predicción de fútbol a la vida. Cada semana, predice el resultado de partidos reales en las cinco principales ligas de Europa: Premier League, La Liga, Serie A, Bundesliga y Ligue 1. Bloquea tus predicciones antes del saque inicial, observa cómo se desarrolla el marcador en directo y gana puntos según tu precisión.
+Ya sabes quién va a ganar esta noche. Demuéstralo.
 
-Construye una racha ganadora. Cada predicción correcta extiende tu racha actual; cuanto más tiempo se mantenga, más subes en la clasificación. Sigue tu rendimiento semana tras semana, compara con amigos y domina tus grupos privados.
+Scorepion te permite predecir el resultado final de partidos reales en la Premier League, La Liga, Serie A, Bundesliga y Ligue 1. Bloquea tu predicción antes del pitido inicial, sigue el marcador en directo y gana puntos según tu precisión.
 
-Crea una liga privada con amigos y compite en tiempo real. Ve predicciones, resultados finales y clasificaciones en un solo lugar. Ya seas un aficionado casual o un crítico serio, Scorepion está diseñado para ti.
+¿Acertaste el resultado exacto? 10 puntos. ¿Acertaste el ganador? 5 puntos. Tu precisión construye tu racha — y tu racha te sube en la clasificación.
 
-Características:
+Esto no es una app de apuestas. Sin dinero real. Sin cuotas. Sin depósitos. Scorepion es un juego de predicción basado en tu conocimiento del fútbol, no en la suerte.
 
-- Datos reales de partidos en las principales ligas europeas
-- Clasificaciones semanales y mecánicas de racha
-- Competencias de grupos privados
-- Actualizaciones de puntuación en directo
-- Disponible en 5 idiomas (inglés, español, francés, turco, portugués)
-- Sin apuestas. Sin dinero involucrado. Pura predicción.
+DESAFÍA A TUS AMIGOS
 
-Perfecciona tus predicciones. Sube en las clasificaciones. Conviértete en un Scorpion.
+Crea un grupo privado, comparte el código de invitación y compite codo a codo durante toda la temporada. Descubre quién realmente sabe de fútbol — y quién solo presume.
+
+PREDICCIONES DIARIAS, RANKINGS SEMANALES
+
+Cada día trae un pack de partidos para predecir. Tu puntuación semanal se reinicia cada lunes, así que siempre hay una nueva oportunidad de escalar. Sigue tu precisión, mantén tu racha y avanza desde Novato hasta Leyenda.
+
+DATOS REALES DE PARTIDOS
+
+Marcadores en directo, alineaciones, estado de forma, historial de enfrentamientos y clasificaciones de liga — todo de las cinco mejores ligas de Europa. Todo lo que necesitas para hacer una predicción inteligente, en un solo lugar.
+
+HECHO PARA FANS DEL FÚTBOL
+
+- Predice resultados en 5 ligas europeas
+- Clasificaciones semanales y de todos los tiempos
+- Competiciones privadas con amigos
+- Actualizaciones en directo durante los partidos
+- Seguimiento de rachas con packs diarios
+- Progresión de nivel: de Novato a Leyenda
+- Disponible en 5 idiomas
+- Sin apuestas. Sin dinero. Pura predicción.
+
+Descarga Scorepion. Bloquea tu primera predicción esta noche.
 
 **What's New:**
-Scorepion 1.0 — Lanzamiento inicial. Predice partidos reales de fútbol en las cinco principales ligas de Europa, bloquea predicciones, sigue tu racha y sube en las clasificaciones semanales. Crea grupos privados y compite con amigos. Disponible en 5 idiomas.
+Scorepion 2.0 — Predice partidos reales de fútbol en las cinco mejores ligas de Europa. Bloquea resultados, sigue tu racha, sube en las clasificaciones semanales y compite con amigos en grupos privados. Disponible en 5 idiomas.
 
 ---
 
@@ -94,35 +132,51 @@ Scorepion 1.0 — Lanzamiento inicial. Predice partidos reales de fútbol en las
 
 **Subtitle (iOS 30 chars / Android 80 chars):**
 
-- iOS: "Prédis. Compete. Monte."
-- Android: "Prédis des matchs réels. Construis ta série. Monte dans le classement."
+- iOS: "Pronostics entre amis"
+- Android: "Pronostique de vrais matchs. Pas de paris — juste du talent et de la gloire."
 
 **Keywords:**
-football, soccer, prédictions, jeu de prédictions, premier league, la liga, serie a, bundesliga, ligue 1, champions league, uefa, epl, fantasy, scores, en direct
+pronostic foot,football,prédictions,premier league,la liga,serie a,bundesliga,ligue 1,scores,classement
 
 **Promotional Text:**
-Rejoins des milliers de personnes en prédisant des vrais matchs de football. Pas de paris — juste des points, des séries et de la gloire.
+Tu penses connaître le foot ? Pronostique des vrais scores, construis ta série et prouve-le au classement. Pas d'argent. Pas de paris. Juste toi contre le reste du monde.
 
 **Description:**
-Scorepion redonne vie à la prédiction de football. Chaque semaine, prédis le résultat de vrais matchs des cinq principales ligues d'Europe : Premier League, La Liga, Série A, Bundesliga et Ligue 1. Bloque tes prédictions avant le coup d'envoi, regarde le score évoluer en direct et gagne des points en fonction de ta précision.
+Tu sais déjà qui va gagner ce soir. Prouve-le.
 
-Construis une série gagnante. Chaque prédiction correcte prolonge ta série actuelle ; plus elle dure longtemps, plus tu montes dans le classement. Suis ta performance semaine après semaine, compare-toi avec des amis et domine tes groupes privés.
+Scorepion te permet de pronostiquer le score final de vrais matchs en Premier League, La Liga, Serie A, Bundesliga et Ligue 1. Verrouille ton pronostic avant le coup d'envoi, suis le match en direct et gagne des points selon ta précision.
 
-Crée une ligue privée avec des amis et compete en temps réel. Vois les prédictions, les résultats finaux et les classements en un seul endroit. Que tu sois un fan occasionnel ou un critique sérieux, Scorepion est fait pour toi.
+Score exact ? 10 points. Bon résultat ? 5 points. Ta précision construit ta série — et ta série te fait grimper au classement.
 
-Caractéristiques :
+Ce n'est pas une appli de paris. Pas d'argent réel. Pas de cotes. Pas de mises. Scorepion est un jeu de pronostics basé sur ta connaissance du foot, pas sur la chance.
 
-- Données réelles des matchs des principales ligues européennes
-- Classements hebdomadaires et mécanique de série
-- Compétitions de groupes privés
-- Mises à jour de score en direct
-- Disponible en 5 langues (anglais, espagnol, français, turc, portugais)
-- Pas de paris. Pas d'argent impliqué. Pur prédiction.
+DÉFIE TES AMIS
 
-Perfectionne tes prédictions. Monte dans les classements. Deviens un Scorpion.
+Crée un groupe privé, partage le code d'invitation et affronte-les tout au long de la saison. Découvre qui connaît vraiment le foot — et qui ne fait que bluffer.
+
+PRONOSTICS QUOTIDIENS, CLASSEMENTS HEBDOMADAIRES
+
+Chaque jour apporte un pack de matchs à pronostiquer. Ton score hebdomadaire est remis à zéro chaque lundi, donc tu as toujours une nouvelle chance de grimper. Suis ta précision, maintiens ta série et progresse de Débutant à Légende.
+
+DONNÉES DE MATCHS RÉELS
+
+Scores en direct, compositions, forme des équipes, historique des confrontations et classements de ligue — le tout des cinq meilleures ligues d'Europe. Tout ce qu'il te faut pour un pronostic intelligent, au même endroit.
+
+FAIT POUR LES FANS DE FOOT
+
+- Pronostique les scores de 5 ligues européennes
+- Classements hebdomadaires et de tous les temps
+- Compétitions privées entre amis
+- Mises à jour en direct pendant les matchs
+- Suivi de séries avec packs quotidiens
+- Progression de niveau : de Débutant à Légende
+- Disponible en 5 langues
+- Pas de paris. Pas d'argent. Pur pronostic.
+
+Télécharge Scorepion. Verrouille ton premier pronostic ce soir.
 
 **What's New:**
-Scorepion 1.0 — Lancement initial. Prédis de vrais matchs de football des cinq principales ligues d'Europe, bloque tes prédictions, suis ta série et monte dans les classements hebdomadaires. Crée des groupes privés et compete avec des amis. Disponible en 5 langues.
+Scorepion 2.0 — Pronostique de vrais matchs de foot des cinq meilleures ligues d'Europe. Verrouille tes scores, suis ta série, grimpe dans les classements hebdomadaires et affronte tes amis en groupes privés. Disponible en 5 langues.
 
 ---
 
@@ -132,80 +186,114 @@ Scorepion 1.0 — Lancement initial. Prédis de vrais matchs de football des cin
 
 **Subtitle (iOS 30 chars / Android 80 chars):**
 
-- iOS: "Tahmin et. Yarış. Tırman."
-- Android: "Gerçek maçları tahmin et. Serini inşa et. Sıralamada tırman."
+- iOS: "Arkadaşlarınla Skor Tahmin Et"
+- Android: "Gerçek maçların skorunu tahmin et. Bahis yok — sadece bilgi ve gurur."
 
 **Keywords:**
-futbol, soccer, tahminler, tahmin oyunu, premier league, la liga, seria a, bundesliga, ligue 1, champions league, uefa, epl, fantasy, skorlar, canlı
+skor tahmini,futbol,tahmin oyunu,premier lig,la liga,serie a,bundesliga,süper lig,canlı skor,maç
 
 **Promotional Text:**
-Gerçek futbol maçlarını tahmin eden binlerce insana katıl. Bahis yok — sadece puanlar, seriler ve şan.
+Futboldan anladığını mı düşünüyorsun? Gerçek maç skorlarını tahmin et, serini koru ve sıralamada kendini kanıtla. Para yok. Bahis yok. Sadece sen ve bilgin.
 
 **Description:**
-Scorepion futbol tahmini yaşamına geçirir. Her hafta, Avrupa'nın en iyi beş liginin gerçek maçlarının sonucunu tahmin et — Premier Lig, La Liga, Serie A, Bundesliga ve Ligue 1. Başlamadan önce tahminlerini kilitle, skor canlı izle ve doğruluğuna göre puan kazan.
+Bu gece kimin kazanacağını zaten biliyorsun. Kanıtla.
 
-Kazanan serinizi inşa edin. Her doğru tahmin, mevcut serinizi uzatır; ne kadar uzun olursa, o kadar sıralamada yükselebilirsiniz. Performansınızı hafta hafta takip edin, arkadaşlarınızla karşılaştırın ve özel gruplarınızda hakim olun.
+Scorepion ile Premier Lig, La Liga, Serie A, Bundesliga ve Ligue 1'deki gerçek maçların final skorunu tahmin edebilirsin. Maç başlamadan tahmini kilitle, skoru canlı takip et ve isabetine göre puan kazan.
 
-Arkadaşlarınızla özel bir lig oluşturun ve gerçek zamanlı olarak yarışın. Tahminleri, nihai puanları ve sıralamayı tek bir yerde görün. İster casual bir taraftar, ister ciddi bir eleştirmen olun, Scorepion senin için tasarlanmıştır.
+Tam skor mu tutturdun? 10 puan. Doğru sonuç mu? 5 puan. Tutarlılığın serini büyütür — serin de sıralamada seni yukarı taşır.
 
-Özellikler:
+Bu bir bahis uygulaması değil. Gerçek para yok. Oran yok. Yatırım yok. Scorepion futbol bilgine dayanan bir tahmin oyunu — şansa değil.
 
-- Avrupa'nın ana liglerindeki gerçek maç verileri
-- Haftalık sıralamalar ve seri mekanikleri
-- Özel grup yarışmaları
-- Canlı skor güncellemeleri
-- 5 dilde kullanılabilir (İngilizce, İspanyolca, Fransızca, Türkçe, Portekizce)
+ARKADAŞLARINI DAVET ET
+
+Özel bir grup oluştur, davet kodunu paylaş ve sezon boyunca kafa kafaya yarış. Kim gerçekten futboldan anlıyor, kim sadece atıp tutuyor — ortaya çıksın.
+
+HER GÜN TAHMİN, HER HAFTA SIRALAMA
+
+Her gün tahmin yapman için bir maç paketi hazırlanır. Haftalık puanın her pazartesi sıfırlanır, yani her hafta yeni bir şans. İsabetini takip et, serini sürdür ve Çaylak'tan Efsane'ye ilerle.
+
+GERÇEK MAÇ VERİLERİ
+
+Canlı skorlar, kadrolar, form durumu, karşılaşma geçmişi ve lig sıralamaları — Avrupa'nın en iyi beş liginden. Akıllıca tahmin yapmak için ihtiyacın olan her şey, tek bir yerde.
+
+FUTBOLSEVERLER İÇİN YAPILDI
+
+- 5 Avrupa liginde skor tahmin et
+- Haftalık ve tüm zamanlar sıralaması
+- Arkadaşlarla özel grup yarışmaları
+- Maç sırasında canlı güncellemeler
+- Günlük paketlerle seri takibi
+- Seviye ilerlemesi: Çaylak'tan Efsane'ye
+- 5 dilde kullanılabilir
 - Bahis yok. Para yok. Saf tahmin.
 
-Tahminlerinizi mükemmelleştirin. Sıralamalar da yükselinin. Bir Scorpion olun.
+Scorepion'u indir. Bu gece ilk tahminini kilitle.
 
 **What's New:**
-Scorepion 1.0 — İlk sürüm. Avrupa'nın en iyi beş liginden gerçek futbol maçlarını tahmin et, tahminleri kilitle, serinizi izle ve haftalık sıralamayı tırman. Özel gruplar oluştur ve arkadaşlarınızla yarış. 5 dilde mevcut.
+Scorepion 2.0 — Avrupa'nın en iyi beş liginden gerçek futbol maçlarını tahmin et. Skorları kilitle, serini takip et, haftalık sıralamada yüksel ve arkadaşlarınla özel gruplarda yarış. 5 dilde mevcut.
 
 ---
 
-## Portuguese (pt)
+## Portuguese (pt-BR)
 
 **App Name:** Scorepion
 
 **Subtitle (iOS 30 chars / Android 80 chars):**
 
-- iOS: "Previne. Compita. Suba."
-- Android: "Previne jogos reais. Construa sua série. Suba no ranking."
+- iOS: "Palpites de futebol com amigos"
+- Android: "Dê palpites em jogos reais. Sem apostas — só conhecimento e glória."
 
 **Keywords:**
-futebol, soccer, previsões, jogo de previsões, premier league, la liga, serie a, bundesliga, ligue 1, champions league, uefa, epl, fantasy, pontuações, ao vivo
+palpite de gol,futebol,previsão,premier league,la liga,serie a,bundesliga,jogo futebol,placar,ranking
 
 **Promotional Text:**
-Junte-se a milhares prevendo jogos reais de futebol. Sem apostas — apenas pontos, sequências e glória.
+Acha que entende de futebol? Dê palpites em placares reais, construa sua sequência e prove no ranking. Sem dinheiro. Sem apostas. Só você contra o mundo.
 
 **Description:**
-Scorepion traz a previsão de futebol para a vida. Toda semana, previna o resultado de jogos reais nas cinco principais ligas da Europa — Premier League, La Liga, Série A, Bundesliga e Ligue 1. Bloqueie suas previsões antes do apito inicial, acompanhe o placar ao vivo e ganhe pontos baseado na sua precisão.
+Você já sabe quem vai ganhar hoje à noite. Prove.
 
-Construa uma sequência vencedora. Cada previsão correta estende sua sequência atual; quanto mais tempo durar, mais você sobe no ranking. Acompanhe seu desempenho semana após semana, compare-se com amigos e domine seus grupos privados.
+O Scorepion permite que você dê palpites no placar final de jogos reais da Premier League, La Liga, Serie A, Bundesliga e Ligue 1. Registre seu palpite antes do apito inicial, acompanhe o placar ao vivo e ganhe pontos com base na sua precisão.
 
-Crie uma liga privada com amigos e compita em tempo real. Veja previsões, placares finais e rankings em um único lugar. Quer você seja um fã ocasional ou um crítico sério, Scorepion foi feito para você.
+Acertou o placar exato? 10 pontos. Acertou o resultado? 5 pontos. Sua precisão constrói sua sequência — e sua sequência te leva pra cima no ranking.
 
-Recursos:
+Isso não é um app de apostas. Sem dinheiro real. Sem odds. Sem depósito. Scorepion é um jogo de palpites baseado no seu conhecimento de futebol, não em sorte.
 
-- Dados reais de jogos das principais ligas europeias
-- Rankings semanais e mecânica de sequência
-- Competições de grupos privados
-- Atualizações de placar ao vivo
-- Disponível em 5 idiomas (inglês, espanhol, francês, turco, português)
-- Sem apostas. Sem dinheiro envolvido. Pura previsão.
+DESAFIE SEUS AMIGOS
 
-Aperfeiçoe suas previsões. Suba nos rankings. Torne-se um Scorpion.
+Crie um grupo privado, compartilhe o código de convite e dispute a temporada inteira. Descubra quem realmente entende de bola — e quem só fala.
+
+PALPITES DIÁRIOS, RANKING SEMANAL
+
+Todo dia tem um pacote de jogos para dar palpites. Sua pontuação semanal zera toda segunda-feira, então sempre tem uma nova chance de subir. Acompanhe sua precisão, mantenha sua sequência e avance de Novato até Lenda.
+
+DADOS REAIS DE JOGOS
+
+Placar ao vivo, escalações, momento dos times, histórico de confrontos e classificação — tudo das cinco maiores ligas da Europa. Tudo que você precisa para dar um palpite inteligente, em um só lugar.
+
+FEITO PARA QUEM AMA FUTEBOL
+
+- Dê palpites em 5 ligas europeias
+- Rankings semanais e de todos os tempos
+- Competições privadas com amigos
+- Atualizações ao vivo durante os jogos
+- Acompanhamento de sequência com pacotes diários
+- Progressão de nível: de Novato a Lenda
+- Disponível em 5 idiomas
+- Sem apostas. Sem dinheiro. Puro palpite.
+
+Baixe o Scorepion. Registre seu primeiro palpite hoje à noite.
 
 **What's New:**
-Scorepion 1.0 — Lançamento inicial. Previna jogos reais de futebol das cinco principais ligas da Europa, bloqueie suas previsões, acompanhe sua sequência e suba nos rankings semanais. Crie grupos privados e compita com amigos. Disponível em 5 idiomas.
+Scorepion 2.0 — Dê palpites em jogos reais de futebol das cinco maiores ligas da Europa. Registre placares, acompanhe sua sequência, suba no ranking semanal e dispute com amigos em grupos privados. Disponível em 5 idiomas.
 
 ---
 
-## Notes for Localization Team
+## Notes for Submission
 
-- **Diacritics:** All translations use native diacritics (ç, é, ñ, ü, ã, etc.). No anglicized substitutions.
-- **Tone:** Friendly, warm, confident. Written as if someone who genuinely enjoys football predictions is speaking.
-- **No marketing jargon:** Avoid corporate language. Keep it personal and conversational.
-- **App URL placeholders:** Replace `https://scorepion.example.com/` with actual domain before submission.
-- **Keywords:** iOS only — Android uses Play Store's natural search. Keywords can be refined based on competitor research.
+- **Diacritics:** All translations use native diacritics. No anglicized substitutions.
+- **Tone:** Confident, direct, second-person ("you"). Written like a friend who takes football seriously, not a marketing team.
+- **Localization strategy:** Each translation uses native football terminology (e.g., "palpite" in Brazilian Portuguese) rather than direct translations of English marketing terms.
+- **URL placeholders:** Replace `https://scorepion.app/` with actual domain before submission.
+- **Keywords:** iOS only — Android uses Play Store natural search. Keywords optimized for purchase-intent search terms, not generic football terms.
+- **Language count:** App supports 5 languages (EN, ES, FR, TR, PT-BR). Update listings if more are added.
+- **"No gambling" positioning:** This is the #1 trust signal identified in user testing. It appears early in the description and again in the feature list. Do not bury it.

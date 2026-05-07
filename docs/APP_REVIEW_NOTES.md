@@ -4,27 +4,27 @@ For Apple (App Store Connect) and Google (Google Play Console) reviewers.
 
 ## Demo Account
 
-**Username:** reviewer
-**Password:** ReviewMe2026
+**Email:** reviewer@scorepion.app
+**Password:** ReviewMe2026!
 
-Please create this account manually in the admin panel before submission, or note that it will be seeded into production at launch.
-
-**Note:** If your team prefers, create a dedicated reviewer account per platform and provide credentials in a separate secure document. The above is a standard demo account.
+<!-- TODO: Seed this account in production before submission. Ensure it has
+     at least 5 historical predictions so the reviewer sees a non-empty
+     leaderboard and streak state. -->
 
 ## Test Flow (5 minutes)
 
-1. **Login:** Use demo credentials above
+1. **Login:** Use demo credentials above (Firebase email/password auth)
 2. **Onboarding:** Accept terms, pick one league (e.g., Premier League)
-3. **Lock a Prediction:** Navigate to Predict tab, select a match, pick an outcome (Home/Draw/Away), confirm
-4. **View Live Scores:** Navigate to Matches tab, see live score updates
-5. **Check Leaderboard:** Navigate to Leaderboard tab, confirm user appears with prediction points
-6. **Verify Profile:** Navigate to Profile, confirm account name and settings visible
+3. **Lock a Prediction:** Navigate to Today tab, tap a match from the Daily Pack, set home/away scores using steppers, tap "Lock In"
+4. **View Live Scores:** Navigate to Matches tab, see live score updates with status badges
+5. **Check Standings:** Navigate to Standings tab, confirm user appears with prediction points and tier badge
+6. **Verify Profile:** Navigate to Profile, confirm account name, tier, stats, and settings visible
 
 ## Key Compliance Notes
 
 ### In-App Purchases & Payments
 
-**Status:** Scorepion v1.0 does NOT include in-app purchases or paid tiers.
+**Status:** Scorepion v2.0 does NOT include in-app purchases or paid tiers.
 
 - No payment processing is active
 - No premium features gated by payment
@@ -50,7 +50,8 @@ This version is fully free-to-play. Monetization strategy is to be decided post-
 
 **Privacy Policy:**
 
-- Published at [https://scorepion.example.com/privacy](https://scorepion.example.com/privacy) (replace with actual URL)
+- Published at [https://scorepion.app/privacy](https://scorepion.app/privacy)
+<!-- TODO: Replace with actual URL before submission -->
 - GDPR-compliant for EU users
 - CCPA-compliant for California users
 
@@ -94,16 +95,18 @@ No other permissions requested.
 
 ## Backend Health
 
-- Database: MySQL, 3 tables (users, predictions, groups)
-- API: Express.js, health check at `/api/health`
-- Stripe: Scaffolded (not activated; returns 404 on billing endpoints)
+- Database: MySQL (Drizzle ORM)
+- API: Express.js + TypeScript, health check at `/api/health`
+- Auth: Firebase Authentication (email/password)
+- Stripe: Scaffolded (not activated; `ENABLE_BILLING=false`)
 - Push Notifications: APNs (iOS) + FCM (Android) configured but optional feature
+- Error Tracking: Sentry (client + server)
 
 ## Contact for Questions
 
-- **Support Email:** support@scorepion.example.com (replace with actual)
+- **Support Email:** support@scorepion.app (replace with actual)
 - **Developer:** Scorepion team
-- **Privacy Contact:** privacy@scorepion.example.com
+- **Privacy Contact:** privacy@scorepion.app
 
 ---
 
@@ -127,7 +130,7 @@ No other permissions requested.
 - **Binary Size:** ~45 MB (within limit)
 - **Frameworks Used:** React Native (Expo), Express.js backend
 - **Third-Party Services:** API-Football (public sports data), optional APNs (push notifications)
-- **New Features Since v1.0:** None; initial release
+- **New Features Since v2.0:** None; initial release
 
 ---
 

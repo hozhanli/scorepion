@@ -29,7 +29,7 @@ Before deploying to production for the first time, verify all items:
 ### Monitoring & Logging
 
 - [ ] Sentry projects created and DSNs verified
-  - Test by triggering a dummy error: `curl -X GET http://localhost:5847/api/health` (before deploy)
+  - Test by triggering a dummy error: `curl -X GET http://localhost:5000/api/health` (before deploy)
 - [ ] Log aggregation configured (DataDog, CloudWatch, Papertrail, etc.)
 - [ ] Health check endpoint monitored (Uptime.com, Pingdom, New Relic, etc.)
 
@@ -65,7 +65,7 @@ Before deploying to production for the first time, verify all items:
 npm run server:build
 ```
 
-This creates `server_dist/index.js` (ESM bundle, optimized for Node).
+This creates `server_dist/index.mjs` (ESM bundle, optimized for Node).
 
 ### 2. Deploy Server
 
@@ -329,3 +329,110 @@ jobs:
 - **Deployment issues**: Check logs and [`INCIDENT_RESPONSE.md`](./INCIDENT_RESPONSE.md)
 - **Database questions**: See [`OPERATIONS.md`](./OPERATIONS.md)
 - **Troubleshooting**: Check Sentry, server logs, and MySQL connectivity
+
+---
+
+## Appendix A — What is an AAB?
+
+### Short version
+
+An **AAB (Android App Bundle)** is a packaging format Google requires for new
+apps on the Play Store. It's `app.aab` instead of the older `app.apk`. You
+upload one AAB, and Google's servers automatically generate optimised APKs for
+each device that downloads it.
+
+### Why Google switched from APK to AAB
+
+A traditional APK is a zip containing code + assets for every device:
+
+- Every screen density (mdpi/hdpi/xhdpi/xxhdpi/xxxhdpi)
+- Every CPU architecture (armeabi-v7a / arm64-v8a / x86_64)
+- Every language's string resources
+- Every code path, regardless of whether a given user's device can use it
+
+For a user with an arm64 phone in Turkey running xxxhdpi, 70% of the APK is
+payload they'll never use — extra megabytes to download and extra storage wasted.
+
+An **AAB contains all of that** (same as an APK), but Google's Play Delivery
+system splits it per-device at download time. That arm64 xxxhdpi Turkish user
+only gets arm64, xxxhdpi, Turkish strings, and the Java/Kotlin code they need.
+Typical download size savings: 30-50%.
+
+### Format + structure
+
+An AAB is a zip with:
+
+- `base/` — the core module (code + resources that every install needs)
+- `feature/` — optional dynamic feature modules (we don't use these)
+- `BundleConfig.pb` — build-time configuration
+- A signed proof-of-integrity block (same signing mechanism as APKs)
+
+You can't install an AAB directly on a phone — only Play Store, Google Play
+Console's internal testing distribution, or the [`bundletool`][bundletool] CLI
+can unpack one into per-device APKs.
+
+[bundletool]: https://developer.android.com/tools/bundletool
+
+### AAB vs APK in practice
+
+|                                       | APK                                       | AAB                                         |
+| ------------------------------------- | ----------------------------------------- | ------------------------------------------- |
+| Format                                | Zip with classes.dex, resources, manifest | Zip with module-split structure             |
+| Who generates final per-device bundle | You                                       | Google Play (from your AAB)                 |
+| Install method                        | Direct install + Play Store               | Play Store (and App Bundle testers)         |
+| Required by Play Store                | No (legacy)                               | **Yes, since Aug 2021 for new apps**        |
+| Signed by                             | You                                       | You (upload key) + Google (app-signing key) |
+| Developer downloads it                | Optional                                  | From EAS artifacts after build              |
+
+### Scorepion's flow
+
+```
+┌───────────────┐       ┌───────────────┐       ┌───────────────┐
+│  Your source  │  →    │   EAS Build   │  →    │    app.aab    │
+│  (this repo)  │       │  (on their    │       │  (signed with │
+│               │       │   Linux VM)   │       │  upload-key)  │
+└───────────────┘       └───────────────┘       └───────┬───────┘
+                                                         │
+                                                         │  you upload
+                                                         ▼
+                                                ┌─────────────────┐
+                                                │  Play Console   │
+                                                │  → re-signs with│
+                                                │  app-signing key│
+                                                └────────┬────────┘
+                                                         │
+                                                         │  per-device
+                                                         ▼
+                                                ┌─────────────────┐
+                                                │ Individual APKs │
+                                                │ downloaded by   │
+                                                │ user phones     │
+                                                └─────────────────┘
+```
+
+Our `eas.json` production profile has `"buildType"` unset, which means EAS
+defaults to AAB output. The `preview` profile explicitly sets
+`"android": { "buildType": "apk" }` because internal testers sideload APKs
+directly — those don't go through Play Delivery, so we need a single
+installable file, not an AAB.
+
+### Relevant commands
+
+```bash
+# Build an AAB for Play Store submission
+eas build --platform android --profile production
+
+# Build an APK for internal sideload testing
+eas build --platform android --profile preview
+
+# If you have an AAB and want to install it locally (requires bundletool):
+bundletool build-apks --bundle=app.aab --output=app.apks \
+  --ks=credentials/upload-key.jks --ks-key-alias=key
+bundletool install-apks --apks=app.apks
+```
+
+### Size impact for Scorepion
+
+Our APK is approximately 45 MB today. After Play's AAB splitting, users
+typically download around 22-28 MB — the exact number depends on their
+language + architecture + density combination.
