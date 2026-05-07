@@ -40,6 +40,119 @@ Configure these in your `.env` file or via your platform's secrets management (F
 
 ---
 
+## Environment Configuration
+
+This section explains how environment variables flow through the system. For the
+full list of production secrets and their descriptions, see the
+[Production Secrets](#production-secrets) table above.
+
+### Two env universes
+
+There are **two independent env universes** in this repo:
+
+- **Server env** — read by the Express backend via `process.env`. Sourced from
+  `.env` locally, or from the hosting platform's secret store in production
+  (Fly.io secrets, Railway variables, etc.).
+- **Client env** — read by the React Native app. Only variables prefixed with
+  `EXPO_PUBLIC_*` are exposed to the bundle, and they are **inlined at build
+  time**, not read at runtime. You cannot change `EXPO_PUBLIC_*` values after
+  the AAB is installed on a user's phone.
+
+The client env in practice has two variables: `EXPO_PUBLIC_DOMAIN` (required) and
+`EXPO_PUBLIC_SENTRY_DSN` (optional). Everything else lives on the server.
+
+### Where values come from
+
+```
+┌────────────────────────────────────────────────────────────────────────────┐
+│                      SERVER                                                │
+├────────────────────────────────────────────────────────────────────────────┤
+│ Local dev       │  .env                                                    │
+│ Production      │  hosting platform secrets (Fly.io / Railway / systemd)   │
+│ CI              │  GitHub Actions secrets                                  │
+└────────────────────────────────────────────────────────────────────────────┘
+
+┌────────────────────────────────────────────────────────────────────────────┐
+│                      CLIENT (Expo)                                         │
+├────────────────────────────────────────────────────────────────────────────┤
+│ Local dev       │  .env (only EXPO_PUBLIC_* vars)                          │
+│ EAS builds      │  eas.json → build.<profile>.env                          │
+│ OTA update      │  same as the build that emitted the JS bundle            │
+└────────────────────────────────────────────────────────────────────────────┘
+```
+
+### Build profiles (`eas.json`)
+
+| Profile       | Distribution | `EXPO_PUBLIC_DOMAIN`          | When to use                                    |
+| ------------- | ------------ | ----------------------------- | ---------------------------------------------- |
+| `development` | internal APK | `localhost:13291` (tunnelled) | Local dev on a real device with `--dev-client` |
+| `preview`     | internal APK | `staging-api.scorepion.fans`  | Internal beta testing against staging          |
+| `production`  | store AAB    | `api.scorepion.fans`          | Play Store releases                            |
+
+The URL is a **bare host** (no `https://` prefix). The client's `getApiUrl()`
+infers the scheme: `http://` for localhost/IP addresses, `https://` for
+everything else.
+
+### Validation at startup (server)
+
+`server/env.ts` runs before Express binds the port. In production it refuses to
+boot if any of these are missing:
+
+- `DATABASE_URL`
+- `ADMIN_SECRET`
+- `APP_URL`
+- `FOOTBALL_API_KEY`
+- `FIREBASE_PROJECT_ID`
+- One of: `GOOGLE_APPLICATION_CREDENTIALS` (path) or `FIREBASE_SERVICE_ACCOUNT_JSON` (inline)
+
+And conditionally (if `ENABLE_BILLING=true`):
+
+- `STRIPE_SECRET_KEY`
+- `STRIPE_WEBHOOK_SECRET`
+- `STRIPE_PRICE_PREMIUM_MONTHLY`
+- `STRIPE_PRICE_PREMIUM_YEARLY`
+
+Missing vars in dev print a warning but don't block boot, so local developers
+can run without Stripe keys. To add a new required var, edit `REQUIRED_IN_PROD`
+in `server/env.ts`.
+
+### Changing the API URL for a release
+
+**Before the build** -- update `eas.json`:
+
+```json
+// eas.json
+"production": {
+  "env": {
+    "EXPO_PUBLIC_DOMAIN": "api.your-new-domain.com"
+  }
+}
+```
+
+Then run `eas build --platform android --profile production`. The URL is baked
+into the AAB.
+
+**After installation:** not possible without shipping a new JS bundle
+(`eas update --channel production`) or a new binary.
+
+### Secrets hygiene
+
+- Every `.env*` file is git-ignored.
+- `credentials/` is git-ignored (keystore + service account JSONs).
+- Never paste secret values into commit messages, PR descriptions, or chat.
+- If `ADMIN_SECRET` leaks: rotate immediately (see [Secrets Rotation](#secrets-rotation) below).
+- If the Firebase service account JSON leaks: revoke the key in Firebase
+  Console and generate a new one. Existing user sessions are unaffected.
+
+### Relationship to `credentials/`
+
+`credentials/` holds artifacts (upload keystore, Firebase service account, Play
+Developer API service account) that are referenced by path, not by env var. They
+are packaged/uploaded by `eas credentials` or `eas submit` -- not read by the
+running server or app. See `credentials/README.md` for details.
+
+---
+
 ## Daily Operations
 
 ### Backup Schedule
@@ -94,7 +207,7 @@ Expected response: `{ "status": "ok" }`
 If the scheduled sync is stuck or behind:
 
 ```bash
-curl -X POST http://server:13291/api/football/sync/full \
+curl -X POST http://localhost:5000/api/sync/full \
   -H "x-admin-secret: $ADMIN_SECRET"
 ```
 
@@ -105,7 +218,7 @@ Logs will show progress.
 ### Check API-Football Quota
 
 ```bash
-curl http://server:13291/api/football/sync/quota \
+curl http://localhost:5000/api/sync/quota \
   -H "x-admin-secret: $ADMIN_SECRET"
 ```
 
@@ -114,16 +227,16 @@ Response:
 ```json
 {
   "used": 2840,
-  "limit": 7500,
-  "resetAt": "2026-04-22T00:00:00Z"
+  "remaining": 4660,
+  "limit": 7500
 }
 ```
 
-If `used >= limit`, quota is exhausted. Wait until `resetAt` or upgrade plan.
+If `remaining` is 0, quota is exhausted. Wait until midnight UTC or upgrade plan.
 
 ### Add a New Language
 
-1. Create translations in `shared/translations.ts` (all 6 languages + English keys)
+1. Create translations in `shared/translations.ts` (all 5 languages + English keys)
 2. Add to `SUPPORTED_LANGUAGES` enum
 3. Ensure diacritics are correct: `npm run i18n:check`
 4. Restart server and rebuild client

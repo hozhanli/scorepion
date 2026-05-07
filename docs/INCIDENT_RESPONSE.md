@@ -134,7 +134,7 @@ fly deploy
 
 ## 2. API-Football Quota Exhausted
 
-**Symptom**: `/api/football/sync/full` fails with quota error. Fixture data is stale.
+**Symptom**: `/api/sync/full` fails with quota error. Fixture data is stale.
 
 **Severity**: High. Users see outdated match data, predictions may be locked.
 
@@ -142,7 +142,7 @@ fly deploy
 
 ```bash
 # Check quota
-curl -X GET http://server:5847/api/football/sync/quota \
+curl -X GET http://localhost:5000/api/sync/quota \
   -H "x-admin-secret: $ADMIN_SECRET"
 
 # Response shows:
@@ -160,7 +160,7 @@ curl -X GET http://server:5847/api/football/sync/quota \
 - Upgrade to Pro plan immediately (~$30–50/month)
 - Update `FOOTBALL_API_KEY` in production
 - Restart server
-- Rerun sync: `curl -X POST http://server:5847/api/football/sync/full ...`
+- Rerun sync: `curl -X POST http://localhost:5000/api/sync/full ...`
 
 #### Caching Not Working
 

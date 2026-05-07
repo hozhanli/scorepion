@@ -2,8 +2,69 @@
 
 Final pre-launch verification before App Store and Play Store submission.
 
-> **Auth-specific items live in [FIREBASE_AUTH_PRODUCTION_CHECKLIST.md](./FIREBASE_AUTH_PRODUCTION_CHECKLIST.md)** —
+> **Auth-specific items live in [FIREBASE_AUTH.md](./FIREBASE_AUTH.md)** —
 > service-account upload, email template, Play Data Safety, deliverability tests, etc.
+
+---
+
+## Critical Blockers — Must Complete Before Release
+
+These three items are the only things standing between the codebase and a live v2.0 on Play Store.
+
+### 1. Backend deployment
+
+**What's needed:**
+
+- Pick a host (Fly.io / Railway / Render / VPS)
+- Provision production MySQL (PlanetScale / RDS / DigitalOcean recommended over self-host)
+- Deploy the Express server
+- Point the chosen domain at it, provision TLS
+- Set every `[R]` variable from `.env.example` via the host's secret manager
+- Run migrations: `npm run db:push` (drizzle-kit) or equivalent
+- Smoke test: `curl https://YOUR-DOMAIN/api/health` → should return a JSON health body
+
+**After it's live:**
+
+- Update `eas.json` → `build.production.env.EXPO_PUBLIC_DOMAIN` to your bare host (e.g. `api.scorepion.fans`)
+- Update `eas.json` → `build.preview.env.EXPO_PUBLIC_DOMAIN` too if you're running a staging environment
+- Commit `eas.json`
+
+### 2. Privacy Policy + Terms at public URLs
+
+**What's needed:**
+
+- Host both as plain HTML or markdown on a public URL (GitHub Pages, Vercel, docs.scorepion.fans, etc.)
+- URLs must be reachable without login
+- Cite them in:
+  - Play Console → App content → Privacy policy
+  - In-app Settings screen (may already be wired; verify)
+  - Data safety form
+
+**Content must cover:**
+
+- Data collected (profile, birth year, predictions, group membership, push tokens)
+- Third-party processors (API-Football, Sentry/GlitchTip, Expo Push)
+- Data retention (account deletion flow at `/api/account DELETE`)
+- GDPR / CCPA rights
+- Under-13 policy (currently: blocked via age gate)
+- Contact email
+
+### 3. Play Console listing refresh
+
+Not code work — done in the Play Console admin UI.
+
+| Item                        | Where                               | Notes                                                                   |
+| --------------------------- | ----------------------------------- | ----------------------------------------------------------------------- |
+| Release notes x 5 languages | Production → Create release         | EN/ES/FR/TR/PT. Can draft in chat if you want help.                     |
+| Phone screenshots           | Store presence → Main store listing | Min 2, ideally 4-8. Current UI (not old app). 1080x1920 or 1080x2400.   |
+| Feature graphic             | Store presence → Main store listing | 1024x500. Reuse old one if brand unchanged.                             |
+| Short description           | Main store listing                  | 80 chars                                                                |
+| Full description            | Main store listing                  | 4000 chars. Mention push, 5 languages, new UI.                          |
+| Data safety form            | App content → Data safety           | **Must re-review** — we added push tokens, birth year, Sentry telemetry |
+| Content rating              | App content → Content rating        | Verify 13+                                                              |
+| Target audience             | App content → Target audience       | 13+                                                                     |
+| Privacy policy URL          | App content → Privacy policy        | From blocker #2                                                         |
+| Support email               | Store presence → Main store listing | Verify it's monitored                                                   |
 
 ---
 
@@ -35,7 +96,7 @@ Final pre-launch verification before App Store and Play Store submission.
 - [ ] Age gate tested: users 18+ see full feature set
 - [ ] Delete account flow tested end-to-end (data fully purged)
 - [ ] Data retention policy documented and enforced
-- [ ] Cookie/tracking disclosure documented (or confirmed no tracking in v1.0)
+- [ ] Cookie/tracking disclosure documented (or confirmed no tracking in v2.0)
 - [ ] Accessibility (WCAG 2.1 AA) baseline tested (button text readable, color contrast OK)
 
 ---
@@ -109,7 +170,7 @@ Final pre-launch verification before App Store and Play Store submission.
 - [ ] Support email set in Play Store
 - [ ] Content rating questionnaire completed
 - [ ] Target audience (age range) set
-- [ ] Data privacy section filled (confirm no data collection in v1.0)
+- [ ] Data privacy section filled (confirm no data collection in v2.0)
 - [ ] Permissions rationale documented (internet, location optional)
 
 ---
@@ -146,7 +207,7 @@ Final pre-launch verification before App Store and Play Store submission.
 - [ ] Leaderboard calculates correctly (streak, total points, ranking)
 - [ ] Private group creation works (users can create, invite, see group leaderboard)
 - [ ] Push notifications functional (if enabled: goals, match start, leaderboard rank change)
-- [ ] Dark mode works across all screens (no unreadable text, proper contrast)
+- [ ] ~~Dark mode~~ Light mode only in v1 (dark mode deferred to v1.1 — see ROADMAP)
 - [ ] Internationalization verified (5 languages, proper diacritics, no broken text)
 - [ ] Offline mode graceful (read-only UI, data syncs on reconnect)
 - [ ] Memory usage under 150 MB (check Instruments on iOS, Android Studio on Android)
@@ -159,10 +220,10 @@ Final pre-launch verification before App Store and Play Store submission.
 1. [ ] Run full TypeScript typecheck: `cd server && npx tsc -p tsconfig.json --noEmit`
 2. [ ] Run i18n diacritic check: `node scripts/check-diacritics.mjs`
 3. [ ] Run unit tests: `npm test` (all passing)
-4. [ ] Run E2E tests on staging: `npm run test:e2e`
-5. [ ] Generate changelog for v1.0
-6. [ ] Create git tag: `git tag v1.0.0`
-7. [ ] Create release branch from main: `git checkout -b release/v1.0`
+4. [ ] Run E2E tests on staging (script not yet created — add to `package.json` when E2E framework is chosen)
+5. [ ] Generate changelog for v2.0
+6. [ ] Create git tag: `git tag v2.0.0`
+7. [ ] Create release branch from main: `git checkout -b release/v2.0`
 8. [ ] Final code review pass (lead engineer sign-off)
 9. [ ] Product sign-off (confirm feature set matches spec)
 10. [ ] Legal sign-off (privacy policy, terms, compliance docs)
@@ -180,6 +241,82 @@ Final pre-launch verification before App Store and Play Store submission.
 - [ ] Confirm no unexpected resource usage spikes (CPU, memory, disk)
 - [ ] Review first 48 hours of analytics (DAU, retention, crash rate)
 - [ ] Hold post-launch retrospective (what went well, what to improve)
+
+---
+
+## Recommended Before Public Rollout
+
+Not strictly required for v1, but strongly recommended before wide release.
+
+### 50-user beta run
+
+Catch real-device issues before mass rollout.
+
+- Play Console → Testing → Internal testing → add email list
+- Run for 7 days minimum
+- Monitor crash-free-sessions %, Sentry/GlitchTip, user feedback channel
+
+### Google Play Developer API service account
+
+Lets `eas submit --platform android` upload AABs automatically. Without it, you drag the AAB into Play Console by hand each release.
+
+1. Play Console → Setup → API access → Create service account (opens Google Cloud)
+2. On GCP: create service account, download JSON key
+3. Back in Play Console: grant "Release manager" or "Admin (all apps)"
+4. Save JSON as `credentials/google-play-service-account.json`
+5. `eas credentials` → Android → production → Google Service Account → Play Store Submissions → upload
+
+Can defer to v1.1. First release is fine via manual upload.
+
+### Sentry / GlitchTip DSN
+
+No crash reporting in prod until this is set. Not a blocker — the server code handles a missing DSN gracefully.
+
+- Free option: sign up for [GlitchTip](https://glitchtip.com) (Sentry-API-compatible) free tier
+- Or: self-host GlitchTip on a $5 VPS
+- Create two projects: `scorepion-server` + `scorepion-client`
+- Set `SENTRY_DSN` (server) and `EXPO_PUBLIC_SENTRY_DSN` (client) on host/eas.json respectively
+
+### Automated backups
+
+Scripts exist in `scripts/backup-db.sh`, `scripts/verify-backup.sh`, `scripts/restore-db.sh`. Not yet automated.
+
+**Minimum viable setup:**
+
+- Cron on the backend host: nightly `./scripts/backup-db.sh` + weekly `./scripts/verify-backup.sh`
+- Pipe each dump to off-site storage (S3 / R2 / B2 — R2 is free egress, cheapest)
+- Healthchecks.io ping on success so you notice if cron dies
+
+Can also defer to v1.1 if the managed MySQL host (PlanetScale/RDS) provides point-in-time recovery.
+
+---
+
+## When You Pick This Back Up
+
+### If the backend is live
+
+```bash
+cd ~/Desktop/scorepion
+
+# 1. Update eas.json with the real production URL, commit
+# "EXPO_PUBLIC_DOMAIN": "api.your-real-domain.com"
+
+# 2. Verify everything still passes
+npm run typecheck
+npx expo-doctor
+
+# 3. First production build
+eas build --platform android --profile production
+```
+
+Build takes ~15-25 minutes on EAS. Outputs a signed AAB. Download it and upload
+to Play Console → Internal testing → Create new release → drop the AAB → fill
+release notes → start rollout to testers.
+
+### If the backend is not live yet
+
+Don't build production. Use `preview` profile pointing at your staging URL, or
+a tunnel (`ngrok http 5000`) for local-device testing with `eas build --profile development`.
 
 ---
 

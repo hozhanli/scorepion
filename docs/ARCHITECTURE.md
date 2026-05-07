@@ -31,11 +31,16 @@ scorepion/
 ├── docs/                   # This folder — all project docs
 │   ├── README.md           # Doc index
 │   ├── ARCHITECTURE.md     # You are here
-│   ├── DESIGN_GUIDE.md
-│   ├── PERSONA_ROLLUP.md
-│   ├── TIMEZONE_AUDIT.md
-│   ├── replit.md
-│   └── archive/            # Historical audits and briefs (read-only)
+│   ├── DESIGN_GUIDE.md     # Emerald Minimalism design system
+│   ├── PERSONA_ROLLUP.md   # 20-persona simulation findings
+│   ├── FIREBASE_AUTH.md    # Auth setup, testing, production checklist
+│   ├── OPERATIONS.md       # Env config, secrets, daily ops, scaling
+│   ├── DEPLOYMENT.md       # Deploy guide + rollback procedures
+│   ├── INCIDENT_RESPONSE.md # Production incident playbooks
+│   ├── LAUNCH_CHECKLIST.md # Pre-launch verification + blockers
+│   ├── APP_STORE_LISTING.md # Store listing copy (5 languages)
+│   ├── APP_REVIEW_NOTES.md # Demo account + reviewer compliance
+│   └── ROADMAP/            # Product gaps by version
 ├── .github/workflows/      # CI: backend.yml, mobile.yml
 ├── app.json                # Expo config (slug, bundle IDs, plugins)
 ├── eas.json                # EAS Build profiles (dev/preview/production)

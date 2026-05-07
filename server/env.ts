@@ -111,7 +111,7 @@ export function checkEnv(): void {
     lines.push("", "Invalid values:");
     invalid.forEach((m) => lines.push(`  • ${m}`));
   }
-  lines.push("", "See .env.example for the full list and docs/ENVIRONMENTS.md for guidance.", "");
+  lines.push("", "See .env.example for the full list and docs/OPERATIONS.md for guidance.", "");
 
   const message = lines.join("\n");
 
