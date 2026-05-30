@@ -1,0 +1,2 @@
+# Keep this directory tracked: the Dockerfile does `COPY patches ./patches`.
+# patch-package runs in postinstall and is a no-op when no .patch files exist.
