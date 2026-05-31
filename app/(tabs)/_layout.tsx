@@ -100,6 +100,12 @@ function ClassicTabLayout() {
         initialRouteName="index"
         screenOptions={{
           headerShown: false,
+          // Perf: only mount a tab on first focus, and freeze (suspend renders +
+          // polling) inactive tabs so the JS thread stays free for smooth tab
+          // switching instead of all 5 heavy screens re-rendering in the
+          // background. freezeOnBlur uses react-native-screens.
+          lazy: true,
+          freezeOnBlur: true,
           tabBarActiveTintColor: accent.primary,
           tabBarInactiveTintColor: textRole.tertiary,
           tabBarStyle: {
