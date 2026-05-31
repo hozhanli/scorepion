@@ -49,7 +49,7 @@ logs/.seeded
 
 # Secrets — Firebase / Google Play / signing material
 google-services.json
-google-service-account.json
+google-play-service-account.json
 firebase-adminsdk-*.json
 credentials/
 *.jks
