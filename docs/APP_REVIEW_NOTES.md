@@ -4,7 +4,7 @@ For Apple (App Store Connect) and Google (Google Play Console) reviewers.
 
 ## Demo Account
 
-**Email:** reviewer@scorepion.app
+**Email:** reviewer@scorepion.fans
 **Password:** ReviewMe2026!
 
 <!-- TODO: Seed this account in production before submission. Ensure it has
@@ -50,7 +50,7 @@ This version is fully free-to-play. Monetization strategy is to be decided post-
 
 **Privacy Policy:**
 
-- Published at [https://scorepion.app/privacy](https://scorepion.app/privacy)
+- Published at [https://scorepion.fans/privacy](https://scorepion.fans/privacy)
 <!-- TODO: Replace with actual URL before submission -->
 - GDPR-compliant for EU users
 - CCPA-compliant for California users
@@ -104,9 +104,9 @@ No other permissions requested.
 
 ## Contact for Questions
 
-- **Support Email:** support@scorepion.app (replace with actual)
+- **Support Email:** support@scorepion.fans (replace with actual)
 - **Developer:** Scorepion team
-- **Privacy Contact:** privacy@scorepion.app
+- **Privacy Contact:** privacy@scorepion.fans
 
 ---
 

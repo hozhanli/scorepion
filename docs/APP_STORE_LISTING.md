@@ -56,13 +56,13 @@ Scorepion 2.0 — Predict real football matches across Europe's top five leagues
 
 <!-- TODO: Replace with actual URL before submission -->
 
-https://scorepion.app/support
+https://scorepion.fans/support
 
 **Privacy Policy URL:**
 
 <!-- TODO: Replace with actual URL before submission -->
 
-https://scorepion.app/privacy
+https://scorepion.fans/privacy
 
 **Age Rating:** 12+
 
@@ -293,7 +293,7 @@ Scorepion 2.0 — Dê palpites em jogos reais de futebol das cinco maiores ligas
 - **Diacritics:** All translations use native diacritics. No anglicized substitutions.
 - **Tone:** Confident, direct, second-person ("you"). Written like a friend who takes football seriously, not a marketing team.
 - **Localization strategy:** Each translation uses native football terminology (e.g., "palpite" in Brazilian Portuguese) rather than direct translations of English marketing terms.
-- **URL placeholders:** Replace `https://scorepion.app/` with actual domain before submission.
+- **URL placeholders:** Replace `https://scorepion.fans/` with actual domain before submission.
 - **Keywords:** iOS only — Android uses Play Store natural search. Keywords optimized for purchase-intent search terms, not generic football terms.
 - **Language count:** App supports 5 languages (EN, ES, FR, TR, PT-BR). Update listings if more are added.
 - **"No gambling" positioning:** This is the #1 trust signal identified in user testing. It appears early in the description and again in the feature list. Do not bury it.
