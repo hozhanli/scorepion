@@ -19,7 +19,7 @@
     },
     "android": {
       "package": "com.coodehub.scorepion",
-      "versionCode": 39,
+      "versionCode": 40,
       "googleServicesFile": "./google-services.json",
       "adaptiveIcon": {
         "backgroundColor": "#060D1F",
