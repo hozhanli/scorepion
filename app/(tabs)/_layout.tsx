@@ -100,11 +100,13 @@ function ClassicTabLayout() {
         initialRouteName="index"
         screenOptions={{
           headerShown: false,
-          // Perf: only mount a tab on first focus, and freeze (suspend renders +
-          // polling) inactive tabs so the JS thread stays free for smooth tab
-          // switching instead of all 5 heavy screens re-rendering in the
-          // background. freezeOnBlur uses react-native-screens.
-          lazy: true,
+          // Perf: pre-mount all tabs once (lazy off) so each screen's data
+          // query fires at startup behind the splash and is warm by the time
+          // it's tapped — the first open is then instant instead of paying a
+          // cold mount + network round-trip on the JS thread at tap-time.
+          // freezeOnBlur (react-native-screens) suspends renders + polling on
+          // inactive tabs, so pre-mounting costs ~0 CPU while they sit frozen.
+          lazy: false,
           freezeOnBlur: true,
           tabBarActiveTintColor: accent.primary,
           tabBarInactiveTintColor: textRole.tertiary,
