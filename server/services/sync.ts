@@ -299,20 +299,42 @@ export async function syncLiveScores(): Promise<number> {
   for (const f of data.response) {
     if (!ourIds.has(f.league.id)) continue;
 
+    const newStatus = api.mapApiStatus(f.fixture.status.short);
+
+    // Read the prior score/status so we only refetch events when something
+    // meaningful changed. Calling getFixtureEvents for every live fixture on
+    // every 30s tick is the single biggest quota drain (1 extra API call per
+    // live match every poll). Events only matter on a goal (scorer/assist) or
+    // at full-time, so gate the fetch on those transitions — scores still
+    // update on every tick regardless.
+    const prev = await db
+      .select({
+        home: footballFixtures.homeScore,
+        away: footballFixtures.awayScore,
+        status: footballFixtures.status,
+      })
+      .from(footballFixtures)
+      .where(eq(footballFixtures.apiFixtureId, f.fixture.id))
+      .limit(1);
+
     await db
       .update(footballFixtures)
       .set({
         homeScore: f.goals.home,
         awayScore: f.goals.away,
-        status: api.mapApiStatus(f.fixture.status.short),
+        status: newStatus,
         statusShort: f.fixture.status.short,
         minute: api.extractMinute(f.fixture.status),
         updatedAt: Date.now(),
       })
       .where(eq(footballFixtures.apiFixtureId, f.fixture.id));
 
-    // Sync events for live match too
-    await syncFixtureEventsById(f.fixture.id);
+    const before = prev[0];
+    const scoreChanged = !before || before.home !== f.goals.home || before.away !== f.goals.away;
+    const becameFinal = newStatus === "finished" && before?.status !== "finished";
+    if (scoreChanged || becameFinal) {
+      await syncFixtureEventsById(f.fixture.id);
+    }
     count++;
   }
 
@@ -1224,14 +1246,35 @@ async function hasLiveFixtures(): Promise<boolean> {
 
 let liveInterval: ReturnType<typeof setInterval> | null = null;
 
+/**
+ * Should the live poller hit the API this tick? True only when a match is
+ * already marked live, or an upcoming fixture's kickoff has passed within the
+ * last 4h (so it should be in progress — catches just-kicked-off matches the
+ * 2h fixtures cron hasn't flipped to "live" yet). This is a DB-only check, so
+ * during dead hours we make ZERO live-API calls instead of one every poll —
+ * the previous `|| api.getLiveFixtures()` fallback fired ~2,880 times/day for
+ * nothing. kickoff is an ISO8601 string, so lexicographic comparison is valid.
+ */
+async function shouldPollLive(): Promise<boolean> {
+  const { pool } = await import("../db");
+  const now = Date.now();
+  const nowIso = new Date(now).toISOString();
+  const windowStartIso = new Date(now - 4 * 60 * 60 * 1000).toISOString();
+  const [rows] = (await pool.query(
+    `SELECT 1 FROM football_fixtures
+      WHERE status = 'live'
+         OR (status = 'upcoming' AND kickoff <= ? AND kickoff >= ?)
+      LIMIT 1`,
+    [nowIso, windowStartIso],
+  )) as any;
+  return rows.length > 0;
+}
+
 export function startLivePolling(intervalMs = 60_000): void {
   if (liveInterval) return;
   liveInterval = setInterval(async () => {
     try {
-      if (
-        (await hasLiveFixtures()) ||
-        (await api.getLiveFixtures().then((d) => (d?.response?.length ?? 0) > 0))
-      ) {
+      if (await shouldPollLive()) {
         const n = await syncLiveScores();
         if (n > 0) await settlePredictions();
       }
@@ -1385,6 +1428,16 @@ export function startCronScheduler(): void {
     `[Cron] Initialising scheduler (${plan.toUpperCase()} plan — ${limit} req/day, ${rate.rpm} rpm)`,
   );
   console.log(`[Cron] Active leagues: ${api.getActiveLeagueIds().join(", ")}`);
+
+  // Liveness heartbeat (no API calls). The health check flags the scheduler
+  // "degraded" if it hasn't seen a sync in 2h, but real data syncs are far
+  // sparser than that (fixtures every 2-12h, live polling only during matches),
+  // so the timestamp was only ever set by the boot sync — making /api/health
+  // report "degraded" forever even when the scheduler is healthy. This proves
+  // the loop is alive every 10 min so the metric reflects scheduler liveness,
+  // while data freshness/quota are reported separately by the apiFootball check.
+  recordSyncTimestamp();
+  cronIntervals.push(setInterval(() => recordSyncTimestamp(), 10 * 60 * 1000));
 
   initTimeout = setTimeout(async () => {
     console.log("[Cron] Running initial sync...");
