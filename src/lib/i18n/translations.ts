@@ -511,7 +511,7 @@ const en = {
     },
     rights: {
       heading: "Your Rights",
-      body: "Depending on your location, you may have the right to access, correct, or delete your personal data, as well as withdraw consent to data processing. You also have the right to data portability and to object to certain processing. To exercise these rights, please contact us at support@scorepion.app.",
+      body: "Depending on your location, you may have the right to access, correct, or delete your personal data, as well as withdraw consent to data processing. You also have the right to data portability and to object to certain processing. To exercise these rights, please contact us at support@scorepion.fans.",
     },
     security: {
       heading: "Security",
@@ -531,7 +531,7 @@ const en = {
     },
     contact: {
       heading: "Contact Us",
-      body: "If you have questions about this Privacy Policy or our privacy practices, please contact us at support@scorepion.app. We'll respond to your inquiry within 30 days.",
+      body: "If you have questions about this Privacy Policy or our privacy practices, please contact us at support@scorepion.fans. We'll respond to your inquiry within 30 days.",
     },
   },
   terms: {
@@ -587,7 +587,7 @@ const en = {
     },
     contact: {
       heading: "Contact Us",
-      body: "If you have questions about these Terms of Service, please contact us at support@scorepion.app. We'll respond to your inquiry within 30 days.",
+      body: "If you have questions about these Terms of Service, please contact us at support@scorepion.fans. We'll respond to your inquiry within 30 days.",
     },
   },
   common: {
@@ -1193,7 +1193,7 @@ const es: TranslationKeys = {
     },
     rights: {
       heading: "Tus Derechos",
-      body: "Dependiendo de tu ubicación, puedes tener derecho a acceder, corregir o eliminar tus datos personales, así como retirar el consentimiento para el procesamiento. También tienes derecho a la portabilidad de datos y a objetar ciertos tratamientos. Contacta con nosotros en support@scorepion.app para ejercer estos derechos.",
+      body: "Dependiendo de tu ubicación, puedes tener derecho a acceder, corregir o eliminar tus datos personales, así como retirar el consentimiento para el procesamiento. También tienes derecho a la portabilidad de datos y a objetar ciertos tratamientos. Contacta con nosotros en support@scorepion.fans para ejercer estos derechos.",
     },
     security: {
       heading: "Seguridad",
@@ -1213,7 +1213,7 @@ const es: TranslationKeys = {
     },
     contact: {
       heading: "Contáctanos",
-      body: "Si tienes preguntas sobre esta Política de Privacidad o nuestras prácticas de privacidad, contáctanos en support@scorepion.app. Responderemos a tu consulta dentro de 30 días.",
+      body: "Si tienes preguntas sobre esta Política de Privacidad o nuestras prácticas de privacidad, contáctanos en support@scorepion.fans. Responderemos a tu consulta dentro de 30 días.",
     },
   },
   terms: {
@@ -1269,7 +1269,7 @@ const es: TranslationKeys = {
     },
     contact: {
       heading: "Contáctanos",
-      body: "Si tienes preguntas sobre estos Términos de Servicio, contáctanos en support@scorepion.app. Responderemos a tu consulta dentro de 30 días.",
+      body: "Si tienes preguntas sobre estos Términos de Servicio, contáctanos en support@scorepion.fans. Responderemos a tu consulta dentro de 30 días.",
     },
   },
   common: {
@@ -1881,7 +1881,7 @@ const fr: TranslationKeys = {
     },
     rights: {
       heading: "Tes Droits",
-      body: "Selon ta localisation, tu peux avoir le droit d'accéder, de corriger ou de supprimer tes données personnelles, ainsi que de retirer le consentement au traitement. Tu as également le droit à la portabilité des données et à t'opposer à certains traitements. Contacte-nous à support@scorepion.app pour exercer ces droits.",
+      body: "Selon ta localisation, tu peux avoir le droit d'accéder, de corriger ou de supprimer tes données personnelles, ainsi que de retirer le consentement au traitement. Tu as également le droit à la portabilité des données et à t'opposer à certains traitements. Contacte-nous à support@scorepion.fans pour exercer ces droits.",
     },
     security: {
       heading: "Sécurité",
@@ -1901,7 +1901,7 @@ const fr: TranslationKeys = {
     },
     contact: {
       heading: "Nous Contacter",
-      body: "Si tu as des questions sur cette Politique de Confidentialité ou nos pratiques de confidentialité, contacte-nous à support@scorepion.app. Nous répondrons à ta demande dans les 30 jours.",
+      body: "Si tu as des questions sur cette Politique de Confidentialité ou nos pratiques de confidentialité, contacte-nous à support@scorepion.fans. Nous répondrons à ta demande dans les 30 jours.",
     },
   },
   terms: {
@@ -1957,7 +1957,7 @@ const fr: TranslationKeys = {
     },
     contact: {
       heading: "Nous Contacter",
-      body: "Si tu as des questions sur ces Conditions d'Utilisation, contacte-nous à support@scorepion.app. Nous répondrons à ta demande dans les 30 jours.",
+      body: "Si tu as des questions sur ces Conditions d'Utilisation, contacte-nous à support@scorepion.fans. Nous répondrons à ta demande dans les 30 jours.",
     },
   },
   common: {
@@ -2564,7 +2564,7 @@ const tr: TranslationKeys = {
     },
     rights: {
       heading: "Haklar",
-      body: "Konumuna bağlı olarak, kişisel verilerine erişme, düzeltme veya silme hakkı, işleme rızasını geri çekme hakkı, veri taşınabilirliği ve belirli işlemlere itiraz hakkına sahip olabilirsin. Bu hakları kullanmak için support@scorepion.app adresinden bize ulaş.",
+      body: "Konumuna bağlı olarak, kişisel verilerine erişme, düzeltme veya silme hakkı, işleme rızasını geri çekme hakkı, veri taşınabilirliği ve belirli işlemlere itiraz hakkına sahip olabilirsin. Bu hakları kullanmak için support@scorepion.fans adresinden bize ulaş.",
     },
     security: {
       heading: "Güvenlik",
@@ -2584,7 +2584,7 @@ const tr: TranslationKeys = {
     },
     contact: {
       heading: "Bize Ulaşın",
-      body: "Bu Gizlilik Politikası veya gizlilik uygulamalarımız hakkında soruların varsa, support@scorepion.app adresinden bize ulaş. 30 gün içinde cevap vereceğiz.",
+      body: "Bu Gizlilik Politikası veya gizlilik uygulamalarımız hakkında soruların varsa, support@scorepion.fans adresinden bize ulaş. 30 gün içinde cevap vereceğiz.",
     },
   },
   terms: {
@@ -2640,7 +2640,7 @@ const tr: TranslationKeys = {
     },
     contact: {
       heading: "Bize Ulaşın",
-      body: "Bu Kullanım Koşulları hakkında sorularınız varsa, support@scorepion.app adresinden bize ulaşın. 30 gün içinde cevap vereceğiz.",
+      body: "Bu Kullanım Koşulları hakkında sorularınız varsa, support@scorepion.fans adresinden bize ulaşın. 30 gün içinde cevap vereceğiz.",
     },
   },
   common: {
@@ -3249,7 +3249,7 @@ const pt: TranslationKeys = {
     },
     rights: {
       heading: "Seus Direitos",
-      body: "Dependendo de sua localização, você pode ter o direito de acessar, corrigir ou excluir seus dados pessoais, bem como retirar o consentimento para o processamento. Você também tem o direito à portabilidade dos dados e a se opor a certos tratamentos. Entre em contato conosco em support@scorepion.app para exercer esses direitos.",
+      body: "Dependendo de sua localização, você pode ter o direito de acessar, corrigir ou excluir seus dados pessoais, bem como retirar o consentimento para o processamento. Você também tem o direito à portabilidade dos dados e a se opor a certos tratamentos. Entre em contato conosco em support@scorepion.fans para exercer esses direitos.",
     },
     security: {
       heading: "Segurança",
@@ -3269,7 +3269,7 @@ const pt: TranslationKeys = {
     },
     contact: {
       heading: "Entre em Contato",
-      body: "Se você tiver dúvidas sobre esta Política de Privacidade ou nossas práticas de privacidade, entre em contato conosco em support@scorepion.app. Responderemos à sua consulta dentro de 30 dias.",
+      body: "Se você tiver dúvidas sobre esta Política de Privacidade ou nossas práticas de privacidade, entre em contato conosco em support@scorepion.fans. Responderemos à sua consulta dentro de 30 dias.",
     },
   },
   terms: {
@@ -3325,7 +3325,7 @@ const pt: TranslationKeys = {
     },
     contact: {
       heading: "Entre em Contato",
-      body: "Se você tiver dúvidas sobre estes Termos de Serviço, entre em contato conosco em support@scorepion.app. Responderemos à sua consulta dentro de 30 dias.",
+      body: "Se você tiver dúvidas sobre estes Termos de Serviço, entre em contato conosco em support@scorepion.fans. Responderemos à sua consulta dentro de 30 dias.",
     },
   },
   common: {
